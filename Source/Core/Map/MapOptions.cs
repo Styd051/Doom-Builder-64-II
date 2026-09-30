@@ -19,13 +19,14 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Globalization;
-using System.Reflection;
-using System.Text;
-using CodeImp.DoomBuilder.IO;
 using System.IO;
-using CodeImp.DoomBuilder.Data;
+using System.Reflection;
 using CodeImp.DoomBuilder.Config;
+using CodeImp.DoomBuilder.Data;
+using CodeImp.DoomBuilder.Geometry;
+using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Plugins;
 
 #endregion
@@ -41,7 +42,7 @@ namespace CodeImp.DoomBuilder.Map
 		#region ================== Variables
 
 		// Map configuration
-		private Configuration mapconfig;
+		private readonly Configuration mapconfig;
 		
 		// Game configuration
 		private string configfile;
@@ -56,8 +57,39 @@ namespace CodeImp.DoomBuilder.Map
 		// Additional resources
 		private DataLocationList resources;
 
-		// Script files opened
-		private List<string> scriptfiles;
+		//mxd. View settings for opened script files, resources and lumps
+		private Dictionary<string, ScriptDocumentSettings> scriptsettings;
+
+		// mxd. Script compiler
+		private string scriptcompiler;
+
+		//mxd. Sector drawing options
+		private string defaultfloortexture;
+		private string defaultceiltexture;
+		private string defaulttoptexture;
+		private string defaultwalltexture;
+		private string defaultbottomtexture;
+		private int custombrightness;
+		private int customfloorheight;
+		private int customceilheight;
+
+		//mxd. Sector drawing overrides
+		private bool overridefloortexture;
+		private bool overrideceiltexture;
+		private bool overridetoptexture;
+		private bool overridemiddletexture;
+		private bool overridebottomtexture;
+		private bool overridefloorheight;
+		private bool overrideceilheight;
+		private bool overridebrightness;
+
+		//mxd.
+		private bool uselongtexturenames;
+		private bool useresourcesinreadonlymode;
+
+		//mxd. Position and scale
+		private readonly Vector2D viewposition;
+		private readonly float viewscale;
 		
 		#endregion
 
@@ -66,7 +98,8 @@ namespace CodeImp.DoomBuilder.Map
 		internal string ConfigFile { get { return configfile; } set { configfile = value; } }
 		internal DataLocationList Resources { get { return resources; } }
 		internal bool StrictPatches { get { return strictpatches; } set { strictpatches = value; } }
-		internal List<string> ScriptFiles { get { return scriptfiles; } set { scriptfiles = value; } }
+		internal Dictionary<string, ScriptDocumentSettings> ScriptDocumentSettings { get { return scriptsettings; } } //mxd
+		internal string ScriptCompiler { get { return scriptcompiler; } set { scriptcompiler = value; } } //mxd
 		internal string PreviousName { get { return previousname; } set { previousname = value; } }
 		internal string CurrentName
 		{
@@ -77,14 +110,45 @@ namespace CodeImp.DoomBuilder.Map
 				// Change the name, but keep previous name
 				if(currentname != value)
 				{
-					if(previousname == "") previousname = currentname;
+					if(string.IsNullOrEmpty(previousname)) previousname = currentname;
 					currentname = value;
 				}
 			}
 		}
+		internal bool LevelNameChanged { get { return (!string.IsNullOrEmpty(previousname) && previousname != currentname); } } //mxd
 
 		public string LevelName { get { return currentname; } }
-		
+		public Dictionary<int, string> TagLabels { get { return tagLabels; } internal set { tagLabels = value; } } //mxd 
+		private Dictionary<int, string> tagLabels;
+
+		//mxd. Sector drawing options
+		public string DefaultTopTexture { get { return defaulttoptexture; } set { defaulttoptexture = value; } }
+		public string DefaultWallTexture { get { return defaultwalltexture; } set { defaultwalltexture = value; } }
+		public string DefaultBottomTexture { get { return defaultbottomtexture; } set { defaultbottomtexture = value; } }
+		public string DefaultFloorTexture { get { return defaultfloortexture; } set { defaultfloortexture = value; } }
+		public string DefaultCeilingTexture { get { return defaultceiltexture; } set { defaultceiltexture = value; } }
+		public int CustomBrightness { get { return custombrightness; } set { custombrightness = value; } }
+		public int CustomFloorHeight { get { return customfloorheight; } set { customfloorheight = value; } }
+		public int CustomCeilingHeight { get { return customceilheight; } set { customceilheight = value; } }
+
+		//mxd. Sector drawing overrides
+		public bool OverrideFloorTexture { get { return overridefloortexture; } set { overridefloortexture = value; } }
+		public bool OverrideCeilingTexture { get { return overrideceiltexture; } set { overrideceiltexture = value; } }
+		public bool OverrideTopTexture { get { return overridetoptexture; } set { overridetoptexture = value; } }
+		public bool OverrideMiddleTexture { get { return overridemiddletexture; } set { overridemiddletexture = value; } }
+		public bool OverrideBottomTexture { get { return overridebottomtexture; } set { overridebottomtexture = value; } }
+		public bool OverrideFloorHeight { get { return overridefloorheight; } set { overridefloorheight = value; } }
+		public bool OverrideCeilingHeight { get { return overrideceilheight; } set { overrideceilheight = value; } }
+		public bool OverrideBrightness { get { return overridebrightness; } set { overridebrightness = value; } }
+
+		//mxd
+		public bool UseLongTextureNames { get { return uselongtexturenames; } set { uselongtexturenames = value; } }
+		public bool UseResourcesInReadonlyMode { get { return useresourcesinreadonlymode; } set { useresourcesinreadonlymode = value; } }
+
+		//mxd. Position and scale
+		public Vector2D ViewPosition { get { return viewposition; } }
+		public float ViewScale { get { return viewscale; } }
+
 		#endregion
 
 		#region ================== Constructor / Disposer
@@ -99,15 +163,20 @@ namespace CodeImp.DoomBuilder.Map
 			this.strictpatches = false;
 			this.resources = new DataLocationList();
 			this.mapconfig = new Configuration(true);
-			this.scriptfiles = new List<string>();
+			this.scriptsettings = new Dictionary<string, ScriptDocumentSettings>(StringComparer.OrdinalIgnoreCase); //mxd
+			this.scriptcompiler = ""; //mxd
+			this.tagLabels = new Dictionary<int, string>(); //mxd
+			this.viewposition = new Vector2D(float.NaN, float.NaN); //mxd
+			this.viewscale = float.NaN; //mxd
+
+			//mxd. Sector drawing options
+			this.custombrightness = 196;
+			this.customceilheight = 128;
 		}
 
 		// Constructor to load from Doom Builder Map Settings Configuration
-		internal MapOptions(Configuration cfg, string mapname)
+		internal MapOptions(Configuration cfg, string mapname, bool longtexturenamessupported)
 		{
-			IDictionary mapinfo, resinfo;
-			DataLocation res;
-			
 			// Initialize
 			this.previousname = "";
 			this.currentname = mapname;
@@ -115,21 +184,76 @@ namespace CodeImp.DoomBuilder.Map
 			this.configfile = cfg.ReadSetting("gameconfig", "");
 			this.resources = new DataLocationList();
 			this.mapconfig = new Configuration(true);
-			this.scriptfiles = new List<string>();
+			this.scriptsettings = new Dictionary<string, ScriptDocumentSettings>(StringComparer.OrdinalIgnoreCase); //mxd
 			
 			// Read map configuration
 			this.mapconfig.Root = cfg.ReadSetting("maps." + mapname, new Hashtable());
+
+			//mxd. Read Tag Labels
+			this.tagLabels = new Dictionary<int, string>();
+			ListDictionary tagLabelsData = (ListDictionary)this.mapconfig.ReadSetting("taglabels", new ListDictionary());
+
+			foreach(DictionaryEntry tagLabelsEntry in tagLabelsData) 
+			{
+				int tag = 0;
+				string label = string.Empty;
+
+				foreach(DictionaryEntry entry in (ListDictionary)tagLabelsEntry.Value) 
+				{
+					switch((string)entry.Key)
+					{
+						case "tag": tag = (int)entry.Value; break;
+						case "label": label = (string)entry.Value; break;
+					}
+				}
+
+				if(tag != 0 && !string.IsNullOrEmpty(label))
+					tagLabels.Add(tag, label);
+			}
+
+			//mxd. Script compiler
+			scriptcompiler = this.mapconfig.ReadSetting("scriptcompiler", string.Empty);
+
+			//mxd. Read Sector drawing options
+			defaultfloortexture = this.mapconfig.ReadSetting("defaultfloortexture", string.Empty);
+			defaultceiltexture = this.mapconfig.ReadSetting("defaultceiltexture", string.Empty);
+			defaulttoptexture = this.mapconfig.ReadSetting("defaulttoptexture", string.Empty);
+			defaultwalltexture = this.mapconfig.ReadSetting("defaultwalltexture", string.Empty);
+			defaultbottomtexture = this.mapconfig.ReadSetting("defaultbottomtexture", string.Empty);
+			custombrightness = General.Clamp(this.mapconfig.ReadSetting("custombrightness", 196), 0, 255);
+			customfloorheight = this.mapconfig.ReadSetting("customfloorheight", 0);
+			customceilheight = this.mapconfig.ReadSetting("customceilheight", 128);
+
+			//mxd. Read Sector drawing overrides
+			overridefloortexture = this.mapconfig.ReadSetting("overridefloortexture", false);
+			overrideceiltexture = this.mapconfig.ReadSetting("overrideceiltexture", false);
+			overridetoptexture = this.mapconfig.ReadSetting("overridetoptexture", false);
+			overridemiddletexture = this.mapconfig.ReadSetting("overridemiddletexture", false);
+			overridebottomtexture = this.mapconfig.ReadSetting("overridebottomtexture", false);
+			overridefloorheight = this.mapconfig.ReadSetting("overridefloorheight", false);
+			overrideceilheight = this.mapconfig.ReadSetting("overrideceilheight", false);
+			overridebrightness = this.mapconfig.ReadSetting("overridebrightness", false);
+
+			//mxd
+			uselongtexturenames = longtexturenamessupported && this.mapconfig.ReadSetting("uselongtexturenames", false);
+			useresourcesinreadonlymode = this.mapconfig.ReadSetting("useresourcesinreadonlymode", false);
+
+			//mxd. Position and scale
+			float vpx = this.mapconfig.ReadSetting("viewpositionx", float.NaN);
+			float vpy = this.mapconfig.ReadSetting("viewpositiony", float.NaN);
+			if(!float.IsNaN(vpx) && !float.IsNaN(vpy)) viewposition = new Vector2D(vpx, vpy);
+			viewscale = this.mapconfig.ReadSetting("viewscale", float.NaN);
 
 			// Resources
 			IDictionary reslist = this.mapconfig.ReadSetting("resources", new Hashtable());
 			foreach(DictionaryEntry mp in reslist)
 			{
 				// Item is a structure?
-				if(mp.Value is IDictionary)
+				IDictionary resinfo = mp.Value as IDictionary;
+				if(resinfo != null)
 				{
 					// Create resource
-					resinfo = (IDictionary)mp.Value;
-					res = new DataLocation();
+					DataLocation res = new DataLocation();
 					
 					// Copy information from Configuration to ResourceLocation
 					if(resinfo.Contains("type") && (resinfo["type"] is int)) res.type = (int)resinfo["type"];
@@ -142,17 +266,18 @@ namespace CodeImp.DoomBuilder.Map
 				}
 			}
 
-			// Scripts
-			IDictionary scplist = this.mapconfig.ReadSetting("scripts", new Hashtable());
-			foreach(DictionaryEntry mp in scplist)
-				scriptfiles.Add(mp.Value.ToString());
-		}
-
-		~MapOptions()
-		{
-			// Clean up
-			this.resources = null;
-			this.scriptfiles = null;
+			//mxd. Read script documents settings
+			IDictionary sflist = this.mapconfig.ReadSetting("scriptdocuments", new Hashtable());
+			foreach(DictionaryEntry mp in sflist)
+			{
+				// Item is a structure?
+				IDictionary scfinfo = mp.Value as IDictionary;
+				if(scfinfo != null)
+				{
+					ScriptDocumentSettings settings = ReadScriptDocumentSettings(scfinfo);
+					if(!string.IsNullOrEmpty(settings.Filename)) scriptsettings[settings.Filename] = settings;
+				}
+			}
 		}
 		
 		#endregion
@@ -160,7 +285,7 @@ namespace CodeImp.DoomBuilder.Map
 		#region ================== Methods
 
 		// This makes the path prefix for the given assembly
-		private string GetPluginPathPrefix(Assembly asm)
+		private static string GetPluginPathPrefix(Assembly asm)
 		{
 			Plugin p = General.Plugins.FindPluginByAssembly(asm);
 			return "plugins." + p.Name.ToLowerInvariant() + ".";
@@ -200,13 +325,68 @@ namespace CodeImp.DoomBuilder.Map
 			// Write resources to config
 			resources.WriteToConfig(mapconfig, "resources");
 
+			//mxd. Save selection groups
+			General.Map.Map.WriteSelectionGroups(mapconfig);
+
+			//mxd. Save Tag Labels
+			if(tagLabels.Count > 0) 
+			{
+				ListDictionary tagLabelsData = new ListDictionary();
+				int counter = 1;
+
+				foreach(KeyValuePair<int, string> group in tagLabels)
+				{
+					ListDictionary data = new ListDictionary();
+					data.Add("tag", group.Key);
+					data.Add("label", group.Value);
+					tagLabelsData.Add("taglabel"+counter, data);
+					counter++;
+				}
+
+				mapconfig.WriteSetting("taglabels", tagLabelsData);
+			}
+
+			//mxd. Write Sector drawing options
+			mapconfig.WriteSetting("defaultfloortexture", defaultfloortexture);
+			mapconfig.WriteSetting("defaultceiltexture", defaultceiltexture);
+			mapconfig.WriteSetting("defaulttoptexture", defaulttoptexture);
+			mapconfig.WriteSetting("defaultwalltexture", defaultwalltexture);
+			mapconfig.WriteSetting("defaultbottomtexture", defaultbottomtexture);
+			mapconfig.WriteSetting("custombrightness", custombrightness);
+			mapconfig.WriteSetting("customfloorheight", customfloorheight);
+			mapconfig.WriteSetting("customceilheight", customceilheight);
+
+			//mxd. Write Sector drawing overrides
+			mapconfig.WriteSetting("overridefloortexture", overridefloortexture);
+			mapconfig.WriteSetting("overrideceiltexture", overrideceiltexture);
+			mapconfig.WriteSetting("overridetoptexture", overridetoptexture);
+			mapconfig.WriteSetting("overridemiddletexture", overridemiddletexture);
+			mapconfig.WriteSetting("overridebottomtexture", overridebottomtexture);
+			mapconfig.WriteSetting("overridefloorheight", overridefloorheight);
+			mapconfig.WriteSetting("overrideceilheight", overrideceilheight);
+			mapconfig.WriteSetting("overridebrightness", overridebrightness);
+
+			//mxd
+			mapconfig.WriteSetting("uselongtexturenames", uselongtexturenames);
+			mapconfig.WriteSetting("useresourcesinreadonlymode", useresourcesinreadonlymode);
+
+			//mxd. Position and scale
+			mapconfig.WriteSetting("viewpositionx", General.Map.Renderer2D.OffsetX);
+			mapconfig.WriteSetting("viewpositiony", General.Map.Renderer2D.OffsetY);
+			mapconfig.WriteSetting("viewscale", General.Map.Renderer2D.Scale);
+
+			//mxd. Write script compiler
+			if(!string.IsNullOrEmpty(scriptcompiler))
+				mapconfig.WriteSetting("scriptcompiler", scriptcompiler);
+
 			// Write grid settings
 			General.Map.Grid.WriteToConfig(mapconfig, "grid");
 
-			// Write scripts to config
-			mapconfig.DeleteSetting("scripts");
-			for(int i = 0; i < scriptfiles.Count; i++)
-				mapconfig.WriteSetting("scripts." + "file" + i.ToString(CultureInfo.InvariantCulture), scriptfiles[i]);
+			//mxd. Write script document settings to config
+			int sdcounter = 0;
+			mapconfig.DeleteSetting("scriptdocuments");
+			foreach(ScriptDocumentSettings settings in scriptsettings.Values)
+				WriteScriptDocumentSettings(mapconfig, "scriptdocuments.document" + (sdcounter++), settings);
 
 			// Load the file or make a new file
 			if(File.Exists(settingsfile))
@@ -224,6 +404,97 @@ namespace CodeImp.DoomBuilder.Map
 
 			// Save file
 			wadcfg.SaveConfiguration(settingsfile);
+		}
+
+		//mxd
+		private static ScriptDocumentSettings ReadScriptDocumentSettings(IDictionary scfinfo)
+		{
+			ScriptDocumentSettings settings = new ScriptDocumentSettings { FoldLevels = new Dictionary<int, HashSet<int>>() };
+
+			// Copy information from Configuration to ScriptDocumentSaveSettings
+			if(scfinfo.Contains("filename") && (scfinfo["filename"] is string)) settings.Filename = (string)scfinfo["filename"];
+			if(scfinfo.Contains("hash"))
+			{
+				// Configuration will parse the value as int if it's inside int type bounds.
+				if(scfinfo["hash"] is int) settings.Hash = (int)scfinfo["hash"];
+				else if(scfinfo["hash"] is long) settings.Hash = (long)scfinfo["hash"];
+			}
+			if(scfinfo.Contains("resource") && (scfinfo["resource"] is string)) settings.ResourceLocation = (string)scfinfo["resource"];
+			if(scfinfo.Contains("tabtype") && (scfinfo["tabtype"] is int)) settings.TabType = (ScriptDocumentTabType)scfinfo["tabtype"];
+			if(scfinfo.Contains("scripttype") && (scfinfo["scripttype"] is int)) settings.ScriptType = (ScriptType)scfinfo["scripttype"];
+			if(scfinfo.Contains("caretposition") && (scfinfo["caretposition"] is int)) settings.CaretPosition = (int)scfinfo["caretposition"];
+			if(scfinfo.Contains("firstvisibleline") && (scfinfo["firstvisibleline"] is int)) settings.FirstVisibleLine = (int)scfinfo["firstvisibleline"];
+			if(scfinfo.Contains("activetab") && (scfinfo["activetab"] is bool)) settings.IsActiveTab = (bool)scfinfo["activetab"];
+			if(scfinfo.Contains("foldlevels") && (scfinfo["foldlevels"] is string))
+			{
+				// 1:12,13,14;2:21,43,36
+				string foldstr = (string)scfinfo["foldlevels"];
+
+				// Convert string to dictionary
+				if(!string.IsNullOrEmpty(foldstr))
+				{
+					//TODO: add all kinds of warnings?
+					string[] foldlevels = foldstr.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+					foreach(string foldlevel in foldlevels)
+					{
+						// 1:12,13,14
+						string[] parts = foldlevel.Split(new[] { ':' }, StringSplitOptions.RemoveEmptyEntries);
+						if(parts.Length != 2) continue;
+
+						int fold;
+						if(!int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out fold)) continue;
+						if(settings.FoldLevels.ContainsKey(fold)) continue;
+
+						string[] linenumbersstr = parts[1].Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+						if(linenumbersstr.Length == 0) continue;
+
+						HashSet<int> linenumbers = new HashSet<int>();
+						foreach(string linenumber in linenumbersstr)
+						{
+							int linenum;
+							if(int.TryParse(linenumber, NumberStyles.Integer, CultureInfo.InvariantCulture, out linenum))
+								linenumbers.Add(linenum);
+						}
+
+						if(linenumbers.Count != linenumbersstr.Length) continue;
+
+						// Add to collection
+						settings.FoldLevels.Add(fold, new HashSet<int>(linenumbers));
+					}
+				}
+			}
+
+			return settings;
+		}
+
+		//mxd
+		private static void WriteScriptDocumentSettings(Configuration mapconfig, string prefix, ScriptDocumentSettings settings)
+		{
+			// Store data
+			ListDictionary data = new ListDictionary();
+			data.Add("filename", settings.Filename);
+			data.Add("hash", settings.Hash);
+			data.Add("resource", settings.ResourceLocation);
+			data.Add("tabtype", (int)settings.TabType);
+			data.Add("scripttype", (int)settings.ScriptType);
+			if(settings.CaretPosition > 0) data.Add("caretposition", settings.CaretPosition);
+			if(settings.FirstVisibleLine > 0) data.Add("firstvisibleline", settings.FirstVisibleLine);
+			if(settings.IsActiveTab) data.Add("activetab", true);
+
+			// Convert dictionary to string
+			List<string> foldlevels = new List<string>();
+			foreach(KeyValuePair<int, HashSet<int>> group in settings.FoldLevels)
+			{
+				List<string> linenums = new List<string>(group.Value.Count);
+				foreach(int i in group.Value) linenums.Add(i.ToString());
+				foldlevels.Add(group.Key + ":" + string.Join(",", linenums.ToArray()));
+			}
+
+			// Add to collection
+			if(foldlevels.Count > 0) data.Add("foldlevels", string.Join(";", foldlevels.ToArray()));
+
+			// Write to config
+			mapconfig.WriteSetting(prefix, data);
 		}
 		
 		// This adds a resource location and returns the index where the item was added
@@ -247,6 +518,14 @@ namespace CodeImp.DoomBuilder.Map
 			// Add to list
 			resources.Add(res);
 			return resources.Count - 1;
+		}
+
+		/// <summary>
+		/// This returns the resource locations as configured.
+		/// </summary>
+		public DataLocationList GetResources()
+		{
+			return new DataLocationList(resources);
 		}
 
 		// This clears all reasource
@@ -276,6 +555,12 @@ namespace CodeImp.DoomBuilder.Map
 		{
 			General.Map.Grid.ReadFromConfig(mapconfig, "grid");
 		}
+
+		//mxd. This reads stored selection groups from the map configuration
+		internal void ReadSelectionGroups() 
+		{
+			General.Map.Map.ReadSelectionGroups(mapconfig);
+		}
 		
 		// This displays the current map name
 		public override string ToString()
@@ -286,10 +571,8 @@ namespace CodeImp.DoomBuilder.Map
 		// This returns the UDMF field type
 		internal int GetUniversalFieldType(string elementname, string fieldname, int defaulttype)
 		{
-			int type;
-			
 			// Check if the field type is set in the game configuration
-			type = General.Map.Config.ReadSetting("universalfields." + elementname + "." + fieldname + ".type", -1);
+			int type = General.Map.Config.ReadSetting("universalfields." + elementname + "." + fieldname + ".type", -1);
 			if(type == -1)
 			{
 				// Read from map configuration

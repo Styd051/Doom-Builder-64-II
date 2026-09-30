@@ -17,17 +17,15 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
 using System.Text;
 using System.IO;
+using CodeImp.DoomBuilder.Data;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.IO
 {
-	public class Lump
+	public class Lump : IDisposable
 	{
 		#region ================== Methods
 
@@ -42,17 +40,17 @@ namespace CodeImp.DoomBuilder.IO
 		private WAD owner;
 		
 		// Data stream
-		private ClippedStream stream;
+		private readonly ClippedStream stream;
 		
 		// Data info
 		private string name;
 		private long longname;
 		private byte[] fixedname;
-		private int offset;
-		private int length;
+		private readonly int offset;
+		private readonly int length;
 
 		// Disposing
-		private bool isdisposed = false;
+		private bool isdisposed;
 
 		#endregion
 
@@ -84,14 +82,14 @@ namespace CodeImp.DoomBuilder.IO
 			// Make name
 			this.name = MakeNormalName(fixedname, WAD.ENCODING).ToUpperInvariant();
 			this.fixedname = MakeFixedName(name, WAD.ENCODING);
-			this.longname = MakeLongName(name);
+			this.longname = MakeLongName(name, false); //mxd
 			
 			// We have no destructor
 			GC.SuppressFinalize(this);
 		}
 
 		// Disposer
-		internal void Dispose()
+		public void Dispose()
 		{
 			// Not already disposed?
 			if(!isdisposed)
@@ -110,7 +108,7 @@ namespace CodeImp.DoomBuilder.IO
 		#region ================== Methods
 
 		// This returns the long value for a 8 byte texture name
-		public static unsafe long MakeLongName(string name)
+		/*public static unsafe long MakeLongName(string name)
 		{
 			long value = 0;
 			byte[] namebytes = Encoding.ASCII.GetBytes(name.Trim().ToUpper());
@@ -123,6 +121,23 @@ namespace CodeImp.DoomBuilder.IO
 			}
 
 			return value;
+		}*/
+
+		//mxd. This returns (hopefully) unique hash value for a texture name of any length
+		public static long MakeLongName(string name)
+		{
+			return MakeLongName(name, General.Map != null && General.Map.Config != null &&  General.Map.Config.UseLongTextureNames);
+		}
+
+		//mxd. This returns (hopefully) unique hash value for a texture name of any length
+		public static long MakeLongName(string name, bool uselongnames)
+		{
+			name = name.Trim().ToUpper();
+			if(!uselongnames && name.Length > DataManager.CLASIC_IMAGE_NAME_LENGTH)
+			{
+				name = name.Substring(0, DataManager.CLASIC_IMAGE_NAME_LENGTH);
+			}
+			return MurmurHash2.Hash(name);
 		}
 		
 		// This makes the normal name from fixed name
@@ -158,10 +173,8 @@ namespace CodeImp.DoomBuilder.IO
 		// This copies lump data to another lump
 		internal void CopyTo(Lump lump)
 		{
-			BinaryReader reader;
-
 			// Create a reader
-			reader = new BinaryReader(stream);
+			BinaryReader reader = new BinaryReader(stream);
 
 			// Copy bytes over
 			stream.Seek(0, SeekOrigin.Begin);

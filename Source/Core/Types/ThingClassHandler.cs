@@ -16,17 +16,8 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Drawing;
-using System.Globalization;
-using System.Text;
 using CodeImp.DoomBuilder.Config;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Data;
-using System.IO;
-using System.Diagnostics;
 using System.Windows.Forms;
 using CodeImp.DoomBuilder.Windows;
 
@@ -64,23 +55,19 @@ namespace CodeImp.DoomBuilder.Types
 			// Find the thing with this class name
 			foreach(ThingTypeInfo t in General.Map.Data.ThingTypes)
 			{
-				if((t.Actor != null) && (string.Compare(t.Actor.ClassName, value, true) == 0))
+				if((string.Compare(t.ClassName, value, true) == 0)) //mxd
 				{
 					tid = t.Index;
 					break;
 				}
 			}
 			
-			//tid = ThingBrowserForm.BrowseThing(parent, tid);
 			ThingBrowserForm f = new ThingBrowserForm(tid);
-			if(f.ShowDialog(Form.ActiveForm) == DialogResult.OK)
+			if(f.ShowDialog(Form.ActiveForm) == DialogResult.OK) 
 			{
 				// Find the class name for this thing
 				ThingTypeInfo t = General.Map.Data.GetThingInfo(f.SelectedType);
-				if(t.Actor != null)
-					this.value = t.Actor.ClassName;
-				else
-					this.value = "";
+				this.value = !string.IsNullOrEmpty(t.ClassName) ? t.ClassName : ""; //mxd
 			}
 			
 			f.Dispose();
@@ -102,6 +89,11 @@ namespace CodeImp.DoomBuilder.Types
 		public override string GetStringValue()
 		{
 			return this.value;
+		}
+
+		public override object GetDefaultValue()
+		{
+			return string.Empty;
 		}
 
 		#endregion

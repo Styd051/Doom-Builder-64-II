@@ -16,15 +16,8 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Text;
+using System.Globalization;
 using System.Windows.Forms;
-using Microsoft.Win32;
-using System.Diagnostics;
-using CodeImp.DoomBuilder.Data;
 using CodeImp.DoomBuilder.Map;
 
 #endregion
@@ -45,11 +38,27 @@ namespace CodeImp.DoomBuilder.Controls
 		{
 			// Vertex info
 			vertexinfo.Text = " Vertex " + v.Index + " ";
-			position.Text = v.Position.x.ToString("0.##") + ", " + v.Position.y.ToString("0.##");
+			position.Text = v.Position.x.ToString(CultureInfo.InvariantCulture) + ", " + v.Position.y.ToString(CultureInfo.InvariantCulture);
 			
+			//mxd. Height offsets
+			if(General.Map.UDMF)
+			{
+				bool haveoffset = !float.IsNaN(v.ZCeiling);
+				zceiling.Text = (haveoffset ? v.ZCeiling.ToString(CultureInfo.InvariantCulture) : "--");
+				zceiling.Enabled = haveoffset;
+				labelzceiling.Enabled = haveoffset;
+
+				haveoffset = !float.IsNaN(v.ZFloor);
+				zfloor.Text = (haveoffset ? v.ZFloor.ToString(CultureInfo.InvariantCulture) : "--");
+				zfloor.Enabled = haveoffset;
+				labelzfloor.Enabled = haveoffset;
+			}
+
+			panelOffsets.Visible = General.Map.UDMF;
+
 			// Show the whole thing
 			this.Show();
-			this.Update();
-		}
-	}
+            //this.Update(); // ano - don't think this is needed, and is slow
+        }
+    }
 }

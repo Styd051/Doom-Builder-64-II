@@ -17,14 +17,12 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.IO;
-using CodeImp.DoomBuilder.Map;
-using System.Reflection;
 using System.Diagnostics;
+using System.Globalization;
+using System.Reflection;
+using CodeImp.DoomBuilder.Map;
+using CodeImp.DoomBuilder.Types;
 
 #endregion
 
@@ -43,6 +41,9 @@ namespace CodeImp.DoomBuilder.IO
 
 		// Map manager
 		protected MapManager manager;
+
+		//mxd
+		protected Dictionary<MapElementType, Dictionary<string, UniversalType>> uifields;
 
 		#endregion
 
@@ -81,20 +82,23 @@ namespace CodeImp.DoomBuilder.IO
 		public abstract int MinBrightness { get; }
 		public abstract int MaxThingType { get; }
 		public abstract int MinThingType { get; }
-		public abstract double MaxCoordinate { get; }
-		public abstract double MinCoordinate { get; }
-        public abstract bool InDoom64Mode { get; }  // villsa
+		public abstract float MaxCoordinate { get; }
+		public abstract float MinCoordinate { get; }
+		public abstract int MaxThingAngle { get; }
+		public abstract int MinThingAngle { get; }
+		public abstract Dictionary<MapElementType, Dictionary<string, UniversalType>> UIFields { get; } //mxd
 		
 		#endregion
 
 		#region ================== Constructor / Disposer
 
 		// Constructor
-		internal MapSetIO(WAD wad, MapManager manager)
+		protected MapSetIO(WAD wad, MapManager manager)
 		{
 			// Initialize
 			this.wad = wad;
 			this.manager = manager;
+			this.uifields = new Dictionary<MapElementType, Dictionary<string, UniversalType>>(); //mxd
 		}
 		
 		#endregion
@@ -110,22 +114,18 @@ namespace CodeImp.DoomBuilder.IO
 		// This returns and instance of the specified IO class
 		public static MapSetIO Create(string classname, WAD wadfile, MapManager manager)
 		{
-			object[] args;
-			MapSetIO result;
-			string fullname;
-			
 			try
 			{
 				// Create arguments
-				args = new object[2];
+				object[] args = new object[2];
 				args[0] = wadfile;
 				args[1] = manager;
 				
 				// Make the full class name
-				fullname = "CodeImp.DoomBuilder.IO." + classname;
+				string fullname = "CodeImp.DoomBuilder.IO." + classname;
 				
 				// Create IO class
-				result = (MapSetIO)General.ThisAssembly.CreateInstance(fullname, false,
+				MapSetIO result = (MapSetIO)General.ThisAssembly.CreateInstance(fullname, false,
 					BindingFlags.Default, null, args, CultureInfo.CurrentCulture, new object[0]);
 				
 				// Check result
@@ -159,6 +159,33 @@ namespace CodeImp.DoomBuilder.IO
 		// Required implementations
 		public abstract MapSet Read(MapSet map, string mapname);
 		public abstract void Write(MapSet map, string mapname, int position);
+
+		//mxd.
+		public string GetElementName(MapElementType elementtype)
+		{
+			switch(elementtype)
+			{
+				case MapElementType.VERTEX:  return "vertex";
+				case MapElementType.LINEDEF: return "linedef";
+				case MapElementType.SIDEDEF: return "sidedef";
+				case MapElementType.SECTOR:  return "sector";
+				case MapElementType.THING:   return "thing";
+				default: throw new NotSupportedException("Tried to get element name of unsupported map element type!");
+			}
+		}
+
+		public MapElementType GetElementType(string elementname)
+		{
+			switch(elementname)
+			{
+				case "vertex":  return MapElementType.VERTEX;
+				case "linedef": return MapElementType.LINEDEF;
+				case "sidedef": return MapElementType.SIDEDEF;
+				case "sector":  return MapElementType.SECTOR;
+				case "thing":   return MapElementType.THING;
+				default: throw new NotSupportedException("Tried to get element type of unsupported map element type!");
+			}
+		}
 		
 		#endregion
 	}

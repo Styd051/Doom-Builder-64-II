@@ -16,16 +16,7 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Rendering;
 using CodeImp.DoomBuilder.Geometry;
@@ -44,7 +35,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 		#region ================== Variables
 
-		protected FindReplaceAttribute attribs;
+		protected readonly FindReplaceAttribute attribs;
 		
 		#endregion
 
@@ -53,6 +44,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		public FindReplaceAttribute Attributes { get { return attribs; } }
 		public virtual Image BrowseImage { get { return null; } }
 		public bool AllowDelete { get { return false; } }
+		public virtual string UsageHint { get { return string.Empty; } } //mxd
 		public virtual Presentation RenderPresentation { get { return Presentation.Standard; } }
 
 		#endregion
@@ -67,11 +59,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			attribs = (FindReplaceAttribute)attrs[0];
 		}
 
-		// Destructor
-		~FindReplaceType()
-		{
-		}
-
 		#endregion
 
 		#region ================== Methods
@@ -81,17 +68,29 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		{
 			return true;
 		}
+
+		// This is called to test if replacing is supported (mxd)
+		public virtual bool CanReplace() 
+		{
+			return true;
+		}
 		
 		// This is called when the browse button is pressed
 		public virtual string Browse(string initialvalue)
 		{
-			return "";
+			return string.Empty;
+		}
+
+		//mxd. This is called when the replace browse button is pressed
+		public virtual string BrowseReplace(string initialvalue)
+		{
+			return Browse(initialvalue);
 		}
 		
 		// This is called to perform a search (and replace)
 		// Must return a list of items to show in the results list
 		// replacewith is null when not replacing
-		public virtual FindReplaceObject[] Find(string value, bool withinselection, string replacewith, bool keepselection)
+		public virtual FindReplaceObject[] Find(string value, bool withinselection, bool replace, string replacewith, bool keepselection)
 		{
 			return new FindReplaceObject[0];
 		}

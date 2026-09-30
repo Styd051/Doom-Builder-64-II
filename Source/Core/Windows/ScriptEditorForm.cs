@@ -17,27 +17,16 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Text;
 using System.Windows.Forms;
-using CodeImp.DoomBuilder.Map;
-using System.IO;
-using CodeImp.DoomBuilder.Data;
 using CodeImp.DoomBuilder.Controls;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.Windows
 {
-	internal partial class ScriptEditorForm : Form
+	internal partial class ScriptEditorForm : DelayedForm
 	{
 		#region ================== Variables
-
-		// Position/size
-		private Point lastposition;
-		private Size lastsize;
 
 		// Closing?
 		private bool appclose;
@@ -56,7 +45,7 @@ namespace CodeImp.DoomBuilder.Windows
 		public ScriptEditorForm()
 		{
 			InitializeComponent();
-			editor.Initialize();
+			editor.Initialize(this);
 		}
 		
 		#endregion
@@ -82,6 +71,24 @@ namespace CodeImp.DoomBuilder.Windows
 			base.Close();
 		}
 
+		//mxd
+		internal void OnReloadResources()
+		{
+			editor.OnReloadResources();
+		}
+
+		//mxd
+		internal void DisplayError(TextResourceErrorItem error)
+		{
+			editor.ShowError(error);
+		}
+
+		//mxd
+		/*internal void DisplayError(TextFileErrorItem error)
+		{
+			editor.ShowError(error);
+		}*/
+
 		#endregion
 		
 		#region ================== Events
@@ -89,22 +96,6 @@ namespace CodeImp.DoomBuilder.Windows
 		// Window is loaded
 		private void ScriptEditorForm_Load(object sender, EventArgs e)
 		{
-			this.SuspendLayout();
-			this.Location = new Point(General.Settings.ReadSetting("scriptswindow.positionx", this.Location.X),
-									  General.Settings.ReadSetting("scriptswindow.positiony", this.Location.Y));
-			this.Size = new Size(General.Settings.ReadSetting("scriptswindow.sizewidth", this.Size.Width),
-								 General.Settings.ReadSetting("scriptswindow.sizeheight", this.Size.Height));
-			this.WindowState = (FormWindowState)General.Settings.ReadSetting("scriptswindow.windowstate", (int)FormWindowState.Normal);
-			this.ResumeLayout(true);
-
-			// Normal windowstate?
-			if(this.WindowState == FormWindowState.Normal)
-			{
-				// Keep last position and size
-				lastposition = this.Location;
-				lastsize = this.Size;
-			}
-
 			// Apply panel settings
 			editor.ApplySettings();
 		}
@@ -119,24 +110,10 @@ namespace CodeImp.DoomBuilder.Windows
 		// Window is closing
 		private void ScriptEditorForm_FormClosing(object sender, FormClosingEventArgs e)
 		{
-			int windowstate;
-
-			// Determine window state to save
-			if(this.WindowState != FormWindowState.Minimized)
-				windowstate = (int)this.WindowState;
-			else
-				windowstate = (int)FormWindowState.Normal;
-
-			// Save window settings
-			General.Settings.WriteSetting("scriptswindow.positionx", lastposition.X);
-			General.Settings.WriteSetting("scriptswindow.positiony", lastposition.Y);
-			General.Settings.WriteSetting("scriptswindow.sizewidth", lastsize.Width);
-			General.Settings.WriteSetting("scriptswindow.sizeheight", lastsize.Height);
-			General.Settings.WriteSetting("scriptswindow.windowstate", windowstate);
 			editor.SaveSettings();
 			
 			// Only when closed by the user
-			if(!appclose)
+			if(!appclose && (e.CloseReason == CloseReason.UserClosing || e.CloseReason == CloseReason.FormOwnerClosing))
 			{
 				// Remember if scipts are changed
 				General.Map.ApplyScriptChanged();
@@ -158,34 +135,10 @@ namespace CodeImp.DoomBuilder.Windows
 			if(!e.Cancel) editor.OnClose();
 		}
 
-		// Window resized
-		private void ScriptEditorForm_ResizeEnd(object sender, EventArgs e)
-		{
-			// Normal windowstate?
-			if(this.WindowState == FormWindowState.Normal)
-			{
-				// Keep last position and size
-				lastposition = this.Location;
-				lastsize = this.Size;
-			}
-		}
-
-		// Window moved
-		private void ScriptEditorForm_Move(object sender, EventArgs e)
-		{
-			// Normal windowstate?
-			if(this.WindowState == FormWindowState.Normal)
-			{
-				// Keep last position and size
-				lastposition = this.Location;
-				lastsize = this.Size;
-			}
-		}
-
 		// Help
 		private void ScriptEditorForm_HelpRequested(object sender, HelpEventArgs hlpevent)
 		{
-			General.ShowHelp("w_scripteditor.html");
+			if(!editor.LaunchKeywordHelp())	General.ShowHelp("w_scripteditor.html"); //mxd
 			hlpevent.Handled = true;
 		}
 		

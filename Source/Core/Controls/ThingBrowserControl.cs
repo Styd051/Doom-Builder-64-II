@@ -18,21 +18,11 @@
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
-using System.Text;
-using System.Windows.Forms;
-using CodeImp.DoomBuilder.Windows;
-using Microsoft.Win32;
-using System.Diagnostics;
-using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Config;
-using CodeImp.DoomBuilder.Types;
-using CodeImp.DoomBuilder.IO;
 using System.Globalization;
-using System.IO;
-using CodeImp.DoomBuilder.Compilers;
+using System.Windows.Forms;
+using CodeImp.DoomBuilder.Config;
+using CodeImp.DoomBuilder.Data;
 
 #endregion
 
@@ -40,6 +30,14 @@ namespace CodeImp.DoomBuilder.Controls
 {
 	public partial class ThingBrowserControl : UserControl
 	{
+		#region ================== Constants
+
+		private const int WARNING_ICON_INDEX = 20; //mxd
+		private const int FOLDER_ICON_OFFSET = 21; //mxd
+		private const int FOLDER_OPEN_ICON_OFFSET = 41; //mxd
+
+		#endregion
+
 		#region ================== Events
 
 		public delegate void TypeChangedDeletegate(ThingTypeInfo value);
@@ -52,17 +50,19 @@ namespace CodeImp.DoomBuilder.Controls
 
 		#region ================== Variables
 
-		private ICollection<Thing> things;
 		private List<TreeNode> nodes;
+		private List<TreeNode> validnodes; //mxd
 		private ThingTypeInfo thinginfo;
 		private bool doupdatenode;
 		private bool doupdatetextbox;
+		private TreeNode doubleclickednode; //mxd
 		
 		#endregion
 
 		#region ================== Properties
 
 		public string TypeStringValue { get { return typeid.Text; } }
+		public bool UseMultiSelection { get { return typelist.SelectionMode == TreeViewSelectionMode.MultiSelectSameLevel; } set { typelist.SelectionMode = (value ? TreeViewSelectionMode.MultiSelectSameLevel : TreeViewSelectionMode.SingleSelect); } }
 
 		#endregion
 
@@ -80,25 +80,70 @@ namespace CodeImp.DoomBuilder.Controls
 			// Go for all predefined categories
 			typelist.Nodes.Clear();
 			nodes = new List<TreeNode>();
-			foreach(ThingCategory tc in General.Map.Data.ThingCategories)
+			validnodes = new List<TreeNode>(); //mxd
+			AddThingCategories(General.Map.Data.ThingCategories, typelist.Nodes); //mxd
+			doupdatenode = true;
+			doupdatetextbox = true;
+		}
+
+		//mxd. This recursively creates thing category tree nodes. Returns true when a thing in this category is obsolete
+		private bool AddThingCategories(ICollection<ThingCategory> categories, TreeNodeCollection collection)
+		{
+			bool containsobsoletethings = false;
+			
+			foreach(ThingCategory tc in categories) 
 			{
 				// Create category
-				TreeNode cn = typelist.Nodes.Add(tc.Name, tc.Title);
-				if((tc.Color >= 0) && (tc.Color < thingimages.Images.Count)) cn.ImageIndex = tc.Color;
-				cn.SelectedImageIndex = cn.ImageIndex;
-				foreach(ThingTypeInfo ti in tc.Things)
+				TreeNode cn = collection.Add(tc.Name, tc.Title);
+
+				// Create subcategories
+				bool isobsolete = AddThingCategories(tc.Children, cn.Nodes);
+
+				// Create things
+				foreach(ThingTypeInfo ti in tc.Things) 
 				{
 					// Create thing
 					TreeNode n = cn.Nodes.Add(ti.Title);
-					if((ti.Color >= 0) && (ti.Color < thingimages.Images.Count)) n.ImageIndex = ti.Color;
-					n.SelectedImageIndex = n.ImageIndex;
 					n.Tag = ti;
+
+					if(ti.IsObsolete)
+					{
+						n.Text += " - OBSOLETE";
+						n.BackColor = Color.MistyRose;
+						n.ToolTipText = ti.ObsoleteMessage;
+
+						// Set warning icon
+						n.ImageIndex = WARNING_ICON_INDEX;
+						n.SelectedImageIndex = WARNING_ICON_INDEX;
+						isobsolete = true;
+					}
+					else
+					{
+						// Set regular icon
+						if((ti.Color > -1) && (ti.Color < WARNING_ICON_INDEX)) n.ImageIndex = ti.Color;
+						n.SelectedImageIndex = n.ImageIndex;
+					}
+
 					nodes.Add(n);
+				}
+
+				// Set category icon
+				containsobsoletethings |= isobsolete;
+				if(isobsolete)
+				{
+					cn.BackColor = Color.MistyRose;
+					cn.ImageIndex = WARNING_ICON_INDEX;
+					cn.SelectedImageIndex = WARNING_ICON_INDEX;
+				}
+				else
+				{
+					cn.ImageIndex = FOLDER_ICON_OFFSET; // Offset to folder icons
+					if((tc.Color > -1) && (tc.Color < WARNING_ICON_INDEX)) cn.ImageIndex += tc.Color;
+					cn.SelectedImageIndex = cn.ImageIndex;
 				}
 			}
 
-			doupdatenode = true;
-			doupdatetextbox = true;
+			return containsobsoletethings;
 		}
 
 		#endregion
@@ -125,7 +170,8 @@ namespace CodeImp.DoomBuilder.Controls
 			doupdatenode = false;
 
 			// Clear selection
-			typelist.SelectedNode = null;
+			typelist.SelectedNodes.Clear(); //mxd
+			validnodes.Clear(); //mxd
 			typeid.Text = "";
 
 			// Collapse nodes
@@ -138,46 +184,135 @@ namespace CodeImp.DoomBuilder.Controls
 		// Result
 		public int GetResult(int original)
 		{
+			//mxd. Get a random ThingTypeInfo from valid nodes?
+			if(typelist.SelectionMode == TreeViewSelectionMode.MultiSelectSameLevel && validnodes.Count > 0) 
+			{
+				return (validnodes[General.Random(0, validnodes.Count - 1)].Tag as ThingTypeInfo).Index;
+			}
+			
 			return typeid.GetResult(original);
+		}
+
+		//mxd
+		public void FocusTextbox()
+		{
+			tbFilter.Focus();
+		}
+
+		//mxd
+		private List<TreeNode> GetValidNodes() 
+		{
+			Dictionary<string, TreeNode> vn = new Dictionary<string, TreeNode>(StringComparer.Ordinal);
+			foreach(TreeNode n in typelist.SelectedNodes) GetValidNodes(n, ref vn);
+			return new List<TreeNode>(vn.Values);
+		}
+
+		private static void GetValidNodes(TreeNode root, ref Dictionary<string, TreeNode> vn)
+		{
+			if(root.Nodes.Count == 0)
+			{
+				if(root.Tag is ThingTypeInfo && !vn.ContainsKey(root.Text)) vn.Add(root.Text, root);
+			}
+			else
+			{
+				foreach(TreeNode n in root.Nodes) GetValidNodes(n, ref vn);
+			}
+		}
+
+		// Update preview image (mxd)
+		private void UpdateThingSprite() 
+		{
+			if(General.Map == null) return;
+			
+			if(thinginfo != null) 
+			{
+				if(thinginfo.Sprite.ToLowerInvariant().StartsWith(DataManager.INTERNAL_PREFIX) &&
+				   (thinginfo.Sprite.Length > DataManager.INTERNAL_PREFIX.Length)) 
+				{
+					spritetex.Image = General.Map.Data.GetSpriteImage(thinginfo.Sprite).GetBitmap();
+					return;
+				} 
+
+				if((thinginfo.Sprite.Length < 9) && (thinginfo.Sprite.Length > 0))
+				{
+					ImageData sprite = General.Map.Data.GetSpriteImage(thinginfo.Sprite);
+					spritetex.Image = sprite.GetPreview();
+					if(!sprite.IsPreviewLoaded) updatetimer.Start();
+					return;
+				}
+			}
+
+			//Show Mixed Things icon?
+			if(validnodes.Count > 1)
+			{
+				spritetex.Image = Properties.Resources.MixedThings;
+				return;
+			}
+
+			spritetex.Image = null;
 		}
 
 		#endregion
 
 		#region ================== Events
 
-		// List double-clicked
-		private void typelist_DoubleClick(object sender, EventArgs e)
+		// List double-clicked. e.Node and typelist.SelectedNodes[0] may contain incorrect node, 
+		// so we set the correct one in typelist_AfterSelect handler (mxd)
+		private void typelist_MouseDoubleClick(object sender, MouseEventArgs e) 
 		{
-			if(typelist.SelectedNode != null)
+			if(typelist.SelectedNodes.Count == 1
+			    && doubleclickednode != null
+			    && doubleclickednode.Nodes.Count == 0
+			    && doubleclickednode.Tag is ThingTypeInfo
+			    && OnTypeDoubleClicked != null
+			    && typeid.Text.Length > 0)
 			{
-				// Node is a child node?
-				TreeNode n = typelist.SelectedNode;
-				if((n.Nodes.Count == 0) && (n.Tag != null) && (n.Tag is ThingTypeInfo))
-				{
-					if((OnTypeDoubleClicked != null) && (typeid.Text.Length > 0)) OnTypeDoubleClicked();
-				}
+				OnTypeDoubleClicked();
 			}
 		}
 		
 		// Thing type selection changed
-		private void typelist_AfterSelect(object sender, TreeViewEventArgs e)
+		private void typelist_SelectionsChanged(object sender, EventArgs e) 
 		{
-			if(doupdatetextbox)
+			doubleclickednode = null; //mxd
+			if(!doupdatetextbox) return;
+
+			//mxd
+			validnodes = GetValidNodes();
+
+			//mxd. Got a valid multiselection? Well, can't show any useful info about that...
+			if(typelist.SelectionMode == TreeViewSelectionMode.MultiSelectSameLevel && validnodes.Count > 1) 
 			{
-				// Anything selected?
-				if(typelist.SelectedNode != null)
+				doupdatenode = false;
+				if(!string.IsNullOrEmpty(typeid.Text))
 				{
-					TreeNode n = typelist.SelectedNode;
-
-					// Node is a child node?
-					if((n.Nodes.Count == 0) && (n.Tag != null) && (n.Tag is ThingTypeInfo))
-					{
-						ThingTypeInfo ti = (n.Tag as ThingTypeInfo);
-
-						// Show info
-						typeid.Text = ti.Index.ToString();
-					}
+					// Event will be raised in typeid_OnTextChanged
+					typeid.Text = "";
 				}
+				else if(OnTypeChanged != null)
+				{
+					// Or raise event here
+					UpdateThingSprite();
+					OnTypeChanged(thinginfo);
+				}
+				doupdatenode = true;
+			}
+			else if(validnodes.Count == 1) //Anything selected?
+			{
+				// Show info
+				doupdatenode = false;
+				typeid.Text = (validnodes[0].Tag as ThingTypeInfo).Index.ToString();
+				doupdatenode = true;
+
+				// Set as double-clicked only if a single child node is selected
+				if(typelist.SelectedNodes.Count == 1 && typelist.SelectedNodes[0].Nodes.Count == 0)
+				{
+					doubleclickednode = validnodes[0]; //mxd
+				}
+			}
+			else
+			{
+				UpdateThingSprite(); //mxd
 			}
 		}
 
@@ -190,7 +325,8 @@ namespace CodeImp.DoomBuilder.Controls
 			if(typeid.Text.Length > 0)
 			{
 				// Get the info
-				thinginfo = General.Map.Data.GetThingInfoEx(typeid.GetResult(0));
+				int typeindex = typeid.GetResult(0);
+				thinginfo = General.Map.Data.GetThingInfoEx(typeindex);
 				if(thinginfo != null)
 				{
 					knownthing = true;
@@ -214,17 +350,21 @@ namespace CodeImp.DoomBuilder.Controls
 				if(doupdatenode)
 				{
 					doupdatetextbox = false;
-					int typeindex = typeid.GetResult(0);
-					typelist.SelectedNode = null;
+					typelist.SelectedNodes.Clear();
+					validnodes.Clear(); //mxd
 					foreach(TreeNode n in nodes)
 					{
 						// Matching node?
 						if((n.Tag as ThingTypeInfo).Index == typeindex)
 						{
 							// Select this
-							n.Parent.Expand();
-							typelist.SelectedNode = n;
-							n.EnsureVisible();
+							if(n.TreeView != null) //mxd. Tree node may've been removed during filtering
+							{
+								if(n.Parent != null) n.Parent.Expand(); // node won't have parent when the list is prefiltered
+								typelist.SelectedNodes.Add(n);
+								n.EnsureVisible();
+								break;
+							}
 						}
 					}
 					doupdatetextbox = true;
@@ -233,7 +373,11 @@ namespace CodeImp.DoomBuilder.Controls
 			else
 			{
 				thinginfo = null;
-				if(doupdatenode) typelist.SelectedNode = null;
+				if(doupdatenode)
+				{
+					typelist.SelectedNodes.Clear();
+					validnodes.Clear(); //mxd
+				}
 			}
 
 			// No known thing?
@@ -244,32 +388,143 @@ namespace CodeImp.DoomBuilder.Controls
 				blockinglabel.Text = "-";
 			}
 
+			//mxd. Update help link
+			bool displayclassname = (thinginfo != null && !string.IsNullOrEmpty(thinginfo.ClassName) && !thinginfo.ClassName.StartsWith("$"));
+			classname.Enabled = (displayclassname && !string.IsNullOrEmpty(General.Map.Config.ThingClassHelp));
+			classname.Text = (displayclassname ? thinginfo.ClassName : "--");
+			labelclassname.Enabled = classname.Enabled;
+
+			// Update icon (mxd)
+			UpdateThingSprite();
+
 			// Raise event
 			if(OnTypeChanged != null) OnTypeChanged(thinginfo);
 		}
 
-		// Layout update!
-		private void ThingBrowserControl_Layout(object sender, LayoutEventArgs e)
+		private void updatetimer_Tick(object sender, EventArgs e) 
 		{
-			ThingBrowserControl_SizeChanged(sender, EventArgs.Empty);
+			updatetimer.Stop();
+			UpdateThingSprite();
 		}
 
+		//mxd
+		private void typelist_MouseEnter(object sender, EventArgs e) 
+		{
+			typelist.Focus();
+		}
+
+		//mxd. Transfer focus to Filter textbox
+		private void typelist_KeyPress(object sender, KeyPressEventArgs e)
+		{
+			tbFilter.Focus();
+			if(e.KeyChar == '\b') // Any better way to check for Backspace?..
+			{
+				if(!string.IsNullOrEmpty(tbFilter.Text) && tbFilter.SelectionStart > 0 && tbFilter.SelectionLength == 0)
+				{
+					int s = tbFilter.SelectionStart - 1;
+					tbFilter.Text = tbFilter.Text.Remove(s, 1);
+					tbFilter.SelectionStart = s;
+				}
+			}
+			else
+			{
+				tbFilter.AppendText(e.KeyChar.ToString(CultureInfo.InvariantCulture));
+			}
+		}
+
+		//mxd
+		private void bClear_Click(object sender, EventArgs e) 
+		{
+			tbFilter.Clear();
+		}
+
+		//mxd
+		private void tbFilter_TextChanged(object sender, EventArgs e) 
+		{
+			typelist.SuspendLayout();
+
+			if(string.IsNullOrEmpty(tbFilter.Text.Trim()))
+			{
+				Setup();
+				typeid_TextChanged(this, EventArgs.Empty);
+			}
+			else
+			{
+				// Go for all predefined categories
+				typelist.SelectedNodes.Clear();
+				typelist.Nodes.Clear();
+				validnodes.Clear();
+
+				string match = tbFilter.Text.ToUpperInvariant();
+				HashSet<string> added = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+				
+				// First add nodes, which titles start with given text
+				foreach(TreeNode node in nodes)
+				{
+					if(node.Text.ToUpperInvariant().StartsWith(match))
+					{
+						typelist.Nodes.Add(node);
+						added.Add(node.Text);
+					}
+				}
+
+				// Then add nodes, which titles contain given text
+				foreach(TreeNode node in nodes)
+				{
+					if(!added.Contains(node.Text) && node.Text.ToUpperInvariant().Contains(match)) 
+						typelist.Nodes.Add(node);
+				}
+
+				doupdatenode = true;
+				doupdatetextbox = true;
+			}
+
+			typelist.ResumeLayout();
+		}
+
+		//mxd. Switch focus to types list?
+		private void tbFilter_KeyUp(object sender, KeyEventArgs e)
+		{
+			if(e.KeyCode == Keys.Down && typelist.Nodes.Count > 0)
+			{
+				typelist.SelectedNodes.Clear();
+				typelist.SelectedNodes.Add(typelist.Nodes[0]);
+				typelist.Focus();
+			}
+		}
+
+		//mxd. Because anchor-based alignment fails when using high-Dpi settings...
 		private void ThingBrowserControl_Resize(object sender, EventArgs e)
 		{
-			ThingBrowserControl_SizeChanged(sender, EventArgs.Empty);
+			infopanel.Top = this.Height - infopanel.Height;
+			infopanel.Width = this.Width;
+			spritepanel.Left = infopanel.Width - spritepanel.Width;
+			typelist.Height = infopanel.Top - typelist.Top;
+			typelist.Width = this.Width;
+			bClear.Left = this.Width - bClear.Width - bClear.Margin.Right;
+			tbFilter.Width = bClear.Left - tbFilter.Left - bClear.Margin.Left;
 		}
 
-		private void ThingBrowserControl_SizeChanged(object sender, EventArgs e)
+		//mxd. If it's clickable, all data is valid.
+		private void classname_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e) 
 		{
-			infopanel.Top = this.ClientSize.Height - infopanel.Height;
-			infopanel.Width = this.ClientSize.Width;
-			typelist.Width = this.ClientSize.Width;
-			typelist.Height = infopanel.Top;
+			General.OpenWebsite(General.Map.Config.ThingClassHelp.Replace("%K", thinginfo.ClassName));
+		}
 
-			blockingcaption.Left = infopanel.Width / 2;
-			blockinglabel.Left = blockingcaption.Right + blockingcaption.Margin.Right;
-			sizecaption.Left = blockingcaption.Right - sizecaption.Width;
-			sizelabel.Left = sizecaption.Right + sizecaption.Margin.Right;
+		//mxd. Switch to Open Folder icon
+		private void typelist_BeforeExpand(object sender, TreeViewCancelEventArgs e)
+		{
+			// Category node?
+			if(e.Node.ImageIndex > WARNING_ICON_INDEX)
+				e.Node.ImageIndex = e.Node.ImageIndex - FOLDER_ICON_OFFSET + FOLDER_OPEN_ICON_OFFSET;
+		}
+
+		//mxd. Switch to Closed Folder icon
+		private void typelist_BeforeCollapse(object sender, TreeViewCancelEventArgs e)
+		{
+			// Category node?
+			if(e.Node.ImageIndex > WARNING_ICON_INDEX)
+				e.Node.ImageIndex = e.Node.ImageIndex - FOLDER_OPEN_ICON_OFFSET + FOLDER_ICON_OFFSET;
 		}
 		
 		#endregion

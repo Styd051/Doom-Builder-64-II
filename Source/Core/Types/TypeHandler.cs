@@ -17,15 +17,7 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Drawing;
-using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Data;
-using System.IO;
-using System.Diagnostics;
 using System.Windows.Forms;
 using CodeImp.DoomBuilder.Config;
 
@@ -67,15 +59,11 @@ namespace CodeImp.DoomBuilder.Types
 		public virtual bool IsLimitedToEnums { get { return false; } }
 		
 		public virtual Image BrowseImage { get { return null; } }
+		public virtual bool DynamicImage { get { return false; } } //mxd. When set to true, the button image will be re-applied after value changes
 
 		#endregion
 
 		#region ================== Constructor
-
-		// Constructor
-		public TypeHandler()
-		{
-		}
 
 		// This sets up the handler for arguments
 		public virtual void SetupArgument(TypeHandlerAttribute attr, ArgumentInfo arginfo)
@@ -106,7 +94,6 @@ namespace CodeImp.DoomBuilder.Types
 		{
 			// Setup
 			this.forargument = false;
-			this.arginfo = arginfo;
 			if(attr != null)
 			{
 				// Set attributes
@@ -133,28 +120,32 @@ namespace CodeImp.DoomBuilder.Types
 		// How the value is actually validated and stored is up to the implementation
 		public abstract void SetValue(object value);
 
+		//mxd. This should replace current value with the default one
+		public virtual void ApplyDefaultValue() { }
+
 		// This must return the value as one of the primitive data types
 		// supported by UDMF: int, string, float or bool
 		public abstract object GetValue();
+
+		//mxd. This should return the default value
+		public abstract object GetDefaultValue();
 		
 		// This must return the value as integer (for arguments)
 		public virtual int GetIntValue()
 		{
-			throw new NotSupportedException("Override this method to support it as integer for arguments");
+			throw new NotImplementedException("Override this method to support it as integer for arguments");
 		}
 
 		// This must return the value as a string for displaying
 		public abstract string GetStringValue();
 
 		// This is called when the user presses the browse button
-		public virtual void Browse(IWin32Window parent)
-		{
-		}
+		public virtual void Browse(IWin32Window parent) { }
 		
 		// This must returns an enum list when IsEnumerable is true
 		public virtual EnumList GetEnumList()
 		{
-			return null;
+			return new EnumList(); //mxd
 		}
 		
 		// String representation

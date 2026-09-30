@@ -17,21 +17,15 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Text;
 using System.Windows.Forms;
-using System.IO;
 using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Rendering;
 using System.Diagnostics;
 using CodeImp.DoomBuilder.Actions;
 using CodeImp.DoomBuilder.Geometry;
 using CodeImp.DoomBuilder.Config;
+using CodeImp.DoomBuilder.Windows;
 
 #endregion
 
@@ -51,10 +45,10 @@ namespace CodeImp.DoomBuilder.Editing
 		#region ================== Variables
 		
 		// Attributes
-		private EditModeAttribute attributes;
+		protected EditModeAttribute attributes; //mxd. private -> protected
 		
 		// Disposing
-		protected bool isdisposed = false;
+		protected bool isdisposed;
 
 		#endregion
 
@@ -78,15 +72,16 @@ namespace CodeImp.DoomBuilder.Editing
 		/// <summary>
 		/// Provides basic user input interface functionality for a Doom Builder editing mode.
 		/// </summary>
-		public EditMode()
+		protected EditMode()
 		{
 			// Fetch attributes
 			object[] attrs = this.GetType().GetCustomAttributes(true);
 			foreach(object a in attrs)
 			{
-				if(a is EditModeAttribute)
+				EditModeAttribute attribute = a as EditModeAttribute;
+				if(attribute != null)
 				{
-					attributes = (EditModeAttribute)a;
+					attributes = attribute;
 					break;
 				}
 			}
@@ -138,6 +133,41 @@ namespace CodeImp.DoomBuilder.Editing
 		
 		#endregion
 
+		#region ================== Methods
+
+		//mxd
+		public virtual void UpdateSelectionInfo()
+		{
+			// Collect info
+			List<string> info = new List<string>();
+
+			if(General.Map.Map.SelectedSectorsCount > 0)
+				info.Add(General.Map.Map.SelectedSectorsCount + (General.Map.Map.SelectedSectorsCount == 1 ? " sector" : " sectors"));
+
+			if(General.Map.Map.SelectedLinedefsCount > 0)
+				info.Add(General.Map.Map.SelectedLinedefsCount + (General.Map.Map.SelectedLinedefsCount == 1 ? " linedef" : " linedefs"));
+
+			if(General.Map.Map.SelectedVerticessCount > 0)
+				info.Add(General.Map.Map.SelectedVerticessCount + (General.Map.Map.SelectedVerticessCount == 1 ? " vertex" : " vertices"));
+
+			if(General.Map.Map.SelectedThingsCount > 0)
+				info.Add(General.Map.Map.SelectedThingsCount + (General.Map.Map.SelectedThingsCount == 1 ? " thing" : " things"));
+
+			// Display results
+			string result = string.Empty;
+			if(info.Count > 0)
+			{
+				result = string.Join(", ", info.ToArray());
+				int pos = result.LastIndexOf(",", StringComparison.Ordinal);
+				if(pos != -1) result = result.Remove(pos, 1).Insert(pos, " and");
+				result += " selected.";
+			}
+
+			General.Interface.DisplayStatus(StatusType.Selection, result);
+		}
+
+		#endregion
+
 		#region ================== Events
 
 		//
@@ -155,6 +185,12 @@ namespace CodeImp.DoomBuilder.Editing
 		{
 			// Bind any methods
 			General.Actions.BindMethods(this);
+
+			//mxd. Show hints for this mode
+			General.Hints.ShowHints(this.GetType(), HintsManager.GENERAL);
+
+			//mxd. Display new mode name
+			General.Interface.HideInfo();
 		}
 
 		// Mode disengages
@@ -189,8 +225,8 @@ namespace CodeImp.DoomBuilder.Editing
 		// Return false to cancel undo action
 		public virtual bool OnUndoBegin() { return true; }
 		public virtual bool OnRedoBegin() { return true; }
-		public virtual void OnUndoEnd() { }
-		public virtual void OnRedoEnd() { }
+		public virtual void OnUndoEnd() { General.Map.Renderer2D.UpdateExtraFloorFlag(); } //mxd
+		public virtual void OnRedoEnd() { General.Map.Renderer2D.UpdateExtraFloorFlag(); } //mxd
 		
 		// Interface events
 		public virtual void OnMouseClick(MouseEventArgs e) { }
@@ -209,12 +245,17 @@ namespace CodeImp.DoomBuilder.Editing
 		public virtual void OnPresentDisplay() { }
 
 		// Processing events
-		public virtual void OnProcess(double deltatime) { }
+		public virtual void OnProcess(long deltatime) { }
+		public virtual void OnClockReset() { } //mxd
 		
 		// Generic events
 		public virtual void OnReloadResources() { }
 		public virtual void OnMapSetChangeBegin() { }
 		public virtual void OnMapSetChangeEnd() { }
+
+		//mxd. map testing events
+		public virtual bool OnMapTestBegin(bool testFromCurrentPosition) { return true; } //called before test map is launched. Returns false if map launch is impossible
+		public virtual void OnMapTestEnd(bool testFromCurrentPosition) { } //called after game engine is closed
 		
 		#endregion
 	}

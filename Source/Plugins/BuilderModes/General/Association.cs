@@ -16,72 +16,140 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Rendering;
 using CodeImp.DoomBuilder.Geometry;
-using System.Drawing;
-using CodeImp.DoomBuilder.Editing;
-using CodeImp.DoomBuilder.Plugins;
 using CodeImp.DoomBuilder.Types;
-using CodeImp.DoomBuilder.Config;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.BuilderModes
 {
-	public struct Association
+	public class Association
 	{
-		public int tag;
-		public UniversalType type;
+		private HashSet<int> tags;
+		private Vector2D center;
+		private UniversalType type;
+		private int directlinktype;
+
+		public HashSet<int> Tags { get { return tags; } }
+		public Vector2D Center { get { return center; } }
+		public UniversalType Type { get { return type; } }
+		public int DirectLinkType { get { return directlinktype; } }
+
+		//mxd. This sets up the association
+		public Association()
+		{
+			this.tags = new HashSet<int> { 0 };
+		}
 
 		// This sets up the association
-		public Association(int tag, int type)
+		public Association(Vector2D center, int tag, int type)
 		{
-			this.tag = tag;
+			this.tags = new HashSet<int> { tag }; //mxd
 			this.type = (UniversalType)type;
+			this.center = center;
 		}
 
 		// This sets up the association
-		public Association(int tag, UniversalType type)
+		public Association(Vector2D center, int tag, UniversalType type)
 		{
-			this.tag = tag;
+			this.tags = new HashSet<int> { tag }; //mxd
 			this.type = type;
+			this.center = center;
 		}
 
-		// This sets up the association
-		public void Set(int tag, int type)
+		//mxd. This also sets up the association
+		public Association(Vector2D center, IEnumerable<int> tags, int type)
 		{
-			this.tag = tag;
+			this.tags = new HashSet<int>(tags); //mxd
 			this.type = (UniversalType)type;
+			this.center = center;
+		}
+
+		//mxd. This also sets up the association
+		public Association(Vector2D center, IEnumerable<int> tags, UniversalType type)
+		{
+			this.tags = new HashSet<int>(tags); //mxd
+			this.type = type;
+			this.center = center;
 		}
 
 		// This sets up the association
-		public void Set(int tag, UniversalType type)
+		public void Set(Vector2D center, int tag, int type)
 		{
-			this.tag = tag;
+			this.Set(center, tag, type, 0);
+		}
+
+		public void Set(Vector2D center, int tag, int type, int directlinktype)
+		{
+			this.tags = new HashSet<int> { tag }; //mxd
+			this.type = (UniversalType)type;
+			this.center = center;
+			this.directlinktype = directlinktype;
+		}
+
+		// This sets up the association
+		public void Set(Vector2D center, int tag, UniversalType type)
+		{
+			this.Set(center, tag, type, 0);
+		}
+
+		public void Set(Vector2D center, int tag, UniversalType type, int directlinktype)
+		{
+			this.tags = new HashSet<int> { tag }; //mxd
 			this.type = type;
+			this.center = center;
+			this.directlinktype = directlinktype;
+		}
+
+		//mxd. This also sets up the association
+		public void Set(Vector2D center, IEnumerable<int> tags, int type)
+		{
+			this.Set(center, tags, (UniversalType)type, 0);
+		}
+
+		//mxd. This also sets up the association
+		public void Set(Vector2D center, IEnumerable<int> tags, UniversalType type)
+		{
+			this.Set(center, tags, type, 0);
+		}
+
+		//mxd. This also sets up the association
+		public void Set(Vector2D center, IEnumerable<int> tags, UniversalType type, int directlinktype)
+		{
+			this.tags = new HashSet<int>(tags); //mxd
+			this.type = type;
+			this.center = center;
+			this.directlinktype = directlinktype;
 		}
 
 		// This compares an association
 		public static bool operator ==(Association a, Association b)
 		{
-			return (a.tag == b.tag) && (a.type == b.type);
+			if(!(a is Association) || !(b is Association)) return false; //mxd
+			return (a.type == b.type) && a.tags.SetEquals(b.tags);
 		}
 
 		// This compares an association
 		public static bool operator !=(Association a, Association b)
 		{
-			return (a.tag != b.tag) || (a.type != b.type);
+			if(!(a is Association) || !(b is Association)) return true; //mxd
+			return (a.type != b.type) || !a.tags.SetEquals(b.tags);
+		}
+
+		//mxd 
+		public override int GetHashCode() 
+		{
+			return base.GetHashCode();
+		}
+
+		//mxd
+		public override bool Equals(object obj) 
+		{
+			if(!(obj is Association)) return false;
+
+			Association b = (Association)obj;
+			return (type == b.type) && tags.SetEquals(b.tags);
 		}
 	}
 }

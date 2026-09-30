@@ -17,11 +17,6 @@
 #region ================== Namespaces
 
 using System;
-using System.IO;
-using System.Text;
-using System.Globalization;
-using System.Collections;
-using System.Collections.Specialized;
 
 #endregion
 
@@ -65,7 +60,13 @@ namespace CodeImp.DoomBuilder.IO
 		// Will throw and exception when it is not
 		public void ValidateType(Type t)
 		{
-			if(value.GetType() != t) throw new Exception("The value of entry '" + key + "' is of incompatible type (expected " + t.Name + ")");
+			if(value.GetType() != t) throw new Exception("The value of entry \"" + key + "\" is of incompatible type (expected " + t.Name + ")");
+		}
+
+		//mxd 
+		public bool IsValidType(Type t) 
+		{
+			return value.GetType() == t;
 		}
 		
 		#endregion

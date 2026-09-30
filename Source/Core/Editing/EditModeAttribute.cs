@@ -17,11 +17,6 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Text;
-using System.Windows.Forms;
 
 #endregion
 
@@ -32,21 +27,22 @@ namespace CodeImp.DoomBuilder.Editing
 	/// Allows automatic binding with an action and a button on the toolbar/menu.
 	/// </summary>
 	[AttributeUsage(AttributeTargets.Class, Inherited = true, AllowMultiple = true)]
-	public class EditModeAttribute : Attribute
+	public sealed class EditModeAttribute : Attribute
 	{
 		#region ================== Variables
 		
 		// Properties
-		private string switchaction = null;
-		private string buttonimage = null;
-		private int buttonorder = 0;
+		private string switchaction;
+		private string buttonimage;
+		private int buttonorder;
 		private string buttongroup = "~none";
 		private bool optional = true;
-		private bool isvolatile = false;
+		private bool isvolatile;
 		private string displayname = "<unnamed mode>";
 		private bool allowcopypaste = true;
-		private bool usebydefault = false;
-		private bool safestartmode = false;
+		private bool usebydefault;
+		private bool safestartmode;
+		private string[] supportedmapformats; //mxd
 		
 		#endregion
 		
@@ -113,7 +109,12 @@ namespace CodeImp.DoomBuilder.Editing
 		/// opening a map. The user can then select this as starting mode in the configuration.
 		/// </summary>
 		public bool SafeStartMode { get { return safestartmode; } set { safestartmode = value; } }
-		
+
+		/// <summary>
+		/// List of map formats this mode can work with. Null means all map formats are supported (mxd)
+		/// </summary>
+		public string[] SupportedMapFormats { get { return supportedmapformats; } set { supportedmapformats = value; } }
+
 		#endregion
 
 		#region ================== Constructor / Disposer

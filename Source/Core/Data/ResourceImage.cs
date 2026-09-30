@@ -17,15 +17,8 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
 using System.Reflection;
-using System.Text;
 using System.Drawing;
-using System.Drawing.Imaging;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.IO;
 using System.IO;
 
 #endregion
@@ -37,8 +30,8 @@ namespace CodeImp.DoomBuilder.Data
 		#region ================== Variables
 
 		// Image source
-		private Assembly assembly;
-		private string resourcename;
+		private readonly Assembly assembly;
+		private readonly string resourcename;
 
 		#endregion
 
@@ -50,6 +43,7 @@ namespace CodeImp.DoomBuilder.Data
 			// Initialize
 			this.assembly = Assembly.GetCallingAssembly();
 			this.resourcename = resourcename;
+			this.AllowUnload = false;
 			SetName(resourcename);
 
 			// Temporarily load resource from memory
@@ -77,15 +71,15 @@ namespace CodeImp.DoomBuilder.Data
 		// This loads the image
 		protected override void LocalLoadImage()
 		{
-			Stream bitmapdata;
-
+			if(IsImageLoaded) return; //mxd. ResourceImages can't be unloaded, so no need to reload them.
+			
 			lock(this)
 			{
-				// No failure checking here. I anything fails here, it is not the user's fault,
+				// No failure checking here. If anything fails here, it is not the user's fault,
 				// because the resources this loads are in the assembly.
 				
 				// Get resource from memory
-				bitmapdata = assembly.GetManifestResourceStream(resourcename);
+				Stream bitmapdata = assembly.GetManifestResourceStream(resourcename);
 				if(bitmap != null) bitmap.Dispose();
 				bitmap = (Bitmap)Image.FromStream(bitmapdata);
 				bitmapdata.Dispose();
@@ -93,6 +87,12 @@ namespace CodeImp.DoomBuilder.Data
 				// Pass on to base
 				base.LocalLoadImage();
 			}
+		}
+
+		//mxd
+		public override Image GetPreview() 
+		{
+			return base.GetBitmap();
 		}
 		
 		#endregion

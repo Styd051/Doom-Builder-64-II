@@ -17,16 +17,8 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Data;
-using System.IO;
-using System.Diagnostics;
-using CodeImp.DoomBuilder.Config;
 using System.Windows.Forms;
 using CodeImp.DoomBuilder.Windows;
 
@@ -43,7 +35,8 @@ namespace CodeImp.DoomBuilder.Types
 
 		#region ================== Variables
 
-		private int value;
+		protected int value;
+		protected Image[] angleicons;
 
 		#endregion
 
@@ -51,11 +44,27 @@ namespace CodeImp.DoomBuilder.Types
 
 		public override bool IsBrowseable { get { return true; } }
 
-		public override Image BrowseImage { get { return Properties.Resources.Angle; } }
-		
+		public override Image BrowseImage { get { return angleicons[General.ClampAngle(value + 22) / 45]; } }
+		public override bool DynamicImage { get { return true; } }
+
 		#endregion
 
 		#region ================== Constructor
+
+		public AngleDegreesHandler()
+		{
+			angleicons = new[]
+			{
+				Properties.Resources.Angle,
+				Properties.Resources.Angle7,
+				Properties.Resources.Angle6,
+				Properties.Resources.Angle5,
+				Properties.Resources.Angle4,
+				Properties.Resources.Angle3,
+				Properties.Resources.Angle2,
+				Properties.Resources.Angle1
+			};
+		}
 
 		#endregion
 
@@ -68,8 +77,6 @@ namespace CodeImp.DoomBuilder.Types
 
 		public override void SetValue(object value)
 		{
-			int result;
-			
 			// Null?
 			if(value == null)
 			{
@@ -84,6 +91,7 @@ namespace CodeImp.DoomBuilder.Types
 			else
 			{
 				// Try parsing as string
+				int result;
 				if(int.TryParse(value.ToString(), NumberStyles.Integer, CultureInfo.CurrentCulture, out result))
 				{
 					this.value = result;
@@ -108,6 +116,11 @@ namespace CodeImp.DoomBuilder.Types
 		public override string GetStringValue()
 		{
 			return this.value.ToString();
+		}
+
+		public override object GetDefaultValue()
+		{
+			return 0;
 		}
 
 		#endregion

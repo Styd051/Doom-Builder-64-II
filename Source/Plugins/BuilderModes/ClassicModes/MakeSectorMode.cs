@@ -17,21 +17,12 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Rendering;
 using CodeImp.DoomBuilder.Geometry;
 using CodeImp.DoomBuilder.Editing;
-using System.Drawing;
-using CodeImp.DoomBuilder.Actions;
 
 #endregion
 
@@ -40,7 +31,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 	[EditMode(DisplayName = "Make Sectors Mode",
 			  SwitchAction = "makesectormode",
 			  ButtonImage = "NewSector2.png",	// Image resource name for the button
-			  ButtonOrder = int.MinValue + 202,	// Position of the button (lower is more to the left)
+			  ButtonOrder = int.MinValue + 302,	// Position of the button (lower is more to the left)
 			  ButtonGroup = "000_editing",
 			  UseByDefault = true)]
 
@@ -48,7 +39,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 	{
 		#region ================== Constants
 
-		private const double FLASH_DURATION = 300.0f;
+		private const float FLASH_DURATION = 300.0f;
 
 		#endregion
 
@@ -63,11 +54,13 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// Flash polygon
 		private FlatVertex[] flashpolygon;
 		private float flashintensity;
-		private double flashstarttime;
+		private long flashstarttime;
 		
 		// Interface
-		protected bool selectpressed;
-		protected bool editpressed;
+		new private bool editpressed;
+
+		//mxd. Used in overlay rendering
+		private Dictionary<Sector, Sector> associates;
 
 		#endregion
 
@@ -104,7 +97,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// This draws the geometry
 		private void DrawGeometry()
 		{
-			Dictionary<Sector, Sector> associates = new Dictionary<Sector, Sector>();
+			associates = new Dictionary<Sector, Sector>();
 			
 			// Render lines and vertices
 			if(renderer.StartPlotter(true))
@@ -161,6 +154,14 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				if((flashpolygon != null) && (flashintensity > 0.0f))
 				{
 					renderer.RenderGeometry(flashpolygon, null, true);
+				} 
+				else if(General.Settings.UseHighlight) //mxd
+				{
+					int color = General.Colors.Indication.WithAlpha(64).ToInt();
+					foreach(Sector s in associates.Keys)
+					{
+						renderer.RenderHighlight(s.FlatVertices, color);
+					}
 				}
 
 				renderer.Finish();
@@ -168,10 +169,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		}
 
 		// This highlights a new region
-		protected void Highlight(bool buttonspressed)
+		private void Highlight(bool buttonspressed)
 		{
-			LinedefSide newnearest;
-
 			// Mouse inside?
 			if(mouseinside)
 			{
@@ -179,17 +178,16 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				Linedef nl = General.Map.Map.NearestLinedef(mousemappos);
 				if(nl != null)
 				{
-					float side = nl.SideOfLine(mousemappos);
-					newnearest = new LinedefSide(nl, (side <= 0.0f));
+					bool front = (nl.SideOfLine(mousemappos) <= 0.0f); //mxd
+					LinedefSide newnearest = new LinedefSide(nl, front);
 					if(newnearest != nearestside)
 					{
 						// Only change when buttons are not pressed
 						if(!buttonspressed || (editside == newnearest))
 						{
 							// Find new sector
-							General.Interface.SetCursor(Cursors.AppStarting);
 							nearestside = newnearest;
-							allsides = Tools.FindPotentialSectorAt(mousemappos);
+							allsides = Tools.FindPotentialSectorAt(nl, front); //mxd
 							if(allsides != null)
 							{
 								alllines = new List<Linedef>(allsides.Count);
@@ -199,7 +197,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 							{
 								alllines = null;
 							}
-							General.Interface.SetCursor(Cursors.Default);
 						}
 						else
 						{
@@ -211,6 +208,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 						// Redraw overlay
 						DrawGeometry();
+						DrawOverlay(); //mxd
 						renderer.Present();
 					}
 				}
@@ -241,7 +239,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			List<Linedef> oldlines = General.Map.Map.GetMarkedLinedefs(true);
 			
 			// Make the sector
-			Sector s = Tools.MakeSector(allsides, oldlines);
+			Sector s = Tools.MakeSector(allsides, oldlines, false);
 			if(s != null)
 			{
 				// Now we go for all the lines along the sector to
@@ -308,7 +306,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			p.AddLayer(new PresentLayer(RendererLayer.Surface, BlendingMode.Mask));
 			p.AddLayer(new PresentLayer(RendererLayer.Grid, BlendingMode.Mask));
 			p.AddLayer(new PresentLayer(RendererLayer.Overlay, BlendingMode.Alpha, 1f, true));
-			p.AddLayer(new PresentLayer(RendererLayer.Things, BlendingMode.Alpha, Presentation.THINGS_BACK_ALPHA, false));
+			p.AddLayer(new PresentLayer(RendererLayer.Things, BlendingMode.Alpha, General.Settings.InactiveThingsAlpha, false));
 			p.AddLayer(new PresentLayer(RendererLayer.Geometry, BlendingMode.Alpha, 1f, true));
 			renderer.SetPresentation(p);
 			General.Map.Map.SelectionType = SelectionType.All;
@@ -320,17 +318,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			base.OnDisengage();
 
 			// Check which mode we are switching to
-			if(General.Editing.NewMode is VerticesMode)
+			if(General.Editing.NewMode is VerticesMode || General.Editing.NewMode is LinedefsMode)
 			{
-				// Convert selection to vertices
-
-				// Clear selected sectors
-				General.Map.Map.ClearSelectedSectors();
-			}
-			else if(General.Editing.NewMode is LinedefsMode)
-			{
-				// Convert selection to linedefs
-
 				// Clear selected sectors
 				General.Map.Map.ClearSelectedSectors();
 			}
@@ -353,8 +342,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			// Render things
 			if(renderer.StartThings(true))
 			{
-				renderer.RenderThingSet(General.Map.ThingsFilter.HiddenThings, Presentation.THINGS_HIDDEN_ALPHA);
-				renderer.RenderThingSet(General.Map.ThingsFilter.VisibleThings, 1.0f);
+				renderer.RenderThingSet(General.Map.ThingsFilter.HiddenThings, General.Settings.HiddenThingsAlpha);
+				renderer.RenderThingSet(General.Map.ThingsFilter.VisibleThings, General.Settings.ActiveThingsAlpha);
 				renderer.Finish();
 			}
 
@@ -392,7 +381,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 						flashpolygon = new FlatVertex[s.FlatVertices.Length];
 						s.FlatVertices.CopyTo(flashpolygon, 0);
 						flashintensity = 1.0f;
-						flashstarttime = General.stopwatch.Elapsed.TotalMilliseconds;
+						flashstarttime = Clock.CurrentTime;
 						General.Interface.EnableProcessing();
 					}
 					
@@ -403,7 +392,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				}
 			}
 
-			selectpressed = false;
 			base.OnSelectEnd();
 		}
 		
@@ -441,7 +429,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 							flashpolygon = new FlatVertex[s.FlatVertices.Length];
 							s.FlatVertices.CopyTo(flashpolygon, 0);
 							flashintensity = 1.0f;
-							flashstarttime = General.stopwatch.Elapsed.TotalMilliseconds;
+							flashstarttime = Clock.CurrentTime;
 							General.Interface.EnableProcessing();
 						}
 						else
@@ -466,9 +454,10 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		public override void OnMouseMove(MouseEventArgs e)
 		{
 			base.OnMouseMove(e);
+			if(panning) return; //mxd. Skip all this jazz while panning
 
 			// Highlight the region
-			Highlight((e.Button != MouseButtons.None));
+			Highlight(e.Button != MouseButtons.None);
 		}
 
 		// Mouse leaves
@@ -507,7 +496,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		}
 
 		// Processing
-		public override void OnProcess(double deltatime)
+		public override void OnProcess(long deltatime)
 		{
 			base.OnProcess(deltatime);
 
@@ -515,8 +504,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			if(flashpolygon != null)
 			{
 				// Determine the intensity of the flash by time elapsed
-				double curtime = General.stopwatch.Elapsed.TotalMilliseconds;
-				flashintensity = 1f - (float)((curtime - flashstarttime) / FLASH_DURATION);
+				flashintensity = 1f - ((Clock.CurrentTime - flashstarttime) / FLASH_DURATION);
 				if(flashintensity > 0.0f)
 				{
 					// Update vertices in polygon
@@ -539,10 +527,5 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		}
 		
 		#endregion
-
-		#region ================== Actions
-
-		#endregion
 	}
 }
-

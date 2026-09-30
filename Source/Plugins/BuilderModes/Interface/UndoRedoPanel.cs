@@ -18,20 +18,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
-using System.Text;
 using System.Windows.Forms;
-using Microsoft.Win32;
-using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.Config;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Controls;
-using CodeImp.DoomBuilder.Windows;
-using System.Reflection;
-using System.Globalization;
-using System.Threading;
 using CodeImp.DoomBuilder.Editing;
 
 #endregion
@@ -74,7 +62,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		}
 		
 		// This refills the list
-		public unsafe void UpdateList()
+		public void UpdateList()
 		{
 			ignoreevents = true;
 			currentselection = -1;
@@ -92,7 +80,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			levels.Reverse();
 			int numundos = levels.Count;
 			levels.AddRange(General.Map.UndoRedo.GetRedoList());
-			int numredos = levels.Count - numundos;
+			//int numredos = levels.Count - numundos;
 			
 			// Determine the offset to show items at
 			int offset = numundos - (MAX_DISPLAY_LEVELS >> 1);

@@ -1,16 +1,17 @@
-﻿using System.Reflection;
-using System.Runtime.CompilerServices;
+using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Resources;
+using CodeImp.DoomBuilder;
 
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("Doom Builder 64 II")]
-[assembly: AssemblyDescription("Doom, Heretic and Hexen map editor")]
+[assembly: AssemblyTitle("3DGE Builder (Bugfix)")]
+[assembly: AssemblyDescription("3DGE map editor (can be used for Vanilla/Boom mapping too!)")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("CodeImp")]
-[assembly: AssemblyProduct("Doom Builder 64 II")]
-[assembly: AssemblyCopyright("Copyright ©  2007")]
+[assembly: AssemblyCompany("CodeImp, MaxED, ZZYZX, Coraline")]
+[assembly: AssemblyProduct("3DGE Builder (Bugfix)")]
+[assembly: AssemblyCopyright("Copyright © 2007, 2017")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -29,4 +30,6 @@ using System.Runtime.InteropServices;
 //      Build Number
 //      Revision
 //
-[assembly: AssemblyVersion("2.1.0.0")]
+[assembly: AssemblyVersion("2.3.0.2910")]
+[assembly: NeutralResourcesLanguageAttribute("en")]
+[assembly: AssemblyHash("0ec1824")]

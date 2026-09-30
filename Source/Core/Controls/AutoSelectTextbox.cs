@@ -17,16 +17,7 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Text;
-using System.Globalization;
 using System.Windows.Forms;
-using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Editing;
 
 #endregion
 
@@ -40,7 +31,7 @@ namespace CodeImp.DoomBuilder.Controls
 
 		#region ================== Variables
 
-		private int eventcount = 0;
+		private int eventcount;
 		
 		#endregion
 
@@ -87,6 +78,14 @@ namespace CodeImp.DoomBuilder.Controls
 		{
 			base.OnKeyDown(e);
 			eventcount++;
+		}
+
+		//mxd
+		new public bool Focus()
+		{
+			bool result = base.Focus();
+			this.Select(0, 0);
+			return result;
 		}
 		
 		#endregion

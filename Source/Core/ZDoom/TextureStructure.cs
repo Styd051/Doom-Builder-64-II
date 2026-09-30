@@ -16,17 +16,9 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Data;
-using System.IO;
-using System.Diagnostics;
-using CodeImp.DoomBuilder.Compilers;
-using CodeImp.DoomBuilder.Rendering;
 
 #endregion
 
@@ -41,20 +33,23 @@ namespace CodeImp.DoomBuilder.ZDoom
 		#region ================== Variables
 
 		// Declaration
-		private string typename;
-		private string name;
-		private int width;
-		private int height;
+		private readonly string typename;
+		private readonly string name;
+		private readonly string virtualpath; //mxd
+		private readonly int width;
+		private readonly int height;
 		
 		// Properties
-		private float xscale;
-		private float yscale;
-		private int xoffset;
-		private int yoffset;
-		private bool worldpanning;
+		private readonly float xscale;
+		private readonly float yscale;
+		private readonly int xoffset;
+		private readonly int yoffset;
+		private readonly bool worldpanning;
+		private readonly bool optional; //mxd
+		private readonly bool nulltexture; //mxd
 		
 		// Patches
-		private List<PatchStructure> patches;
+		private readonly List<PatchStructure> patches;
 		
 		#endregion
 
@@ -68,7 +63,8 @@ namespace CodeImp.DoomBuilder.ZDoom
 		public float YScale { get { return yscale; } }
 		public int XOffset { get { return xoffset; } }
 		public int YOffset { get { return yoffset; } }
-		public bool WorldPanning { get { return worldpanning; } }
+		public bool Optional { get { return optional; } }
+		public bool NullTexture { get { return nulltexture; } }
 		public ICollection<PatchStructure> Patches { get { return patches; } }
 
 		#endregion
@@ -76,12 +72,11 @@ namespace CodeImp.DoomBuilder.ZDoom
 		#region ================== Constructor / Disposer
 
 		// Constructor
-		internal TextureStructure(TexturesParser parser, string typename)
+		internal TextureStructure(TexturesParser parser, string typename, string virtualpath)
 		{
-			string tokenstr;
-			
 			// Initialize
 			this.typename = typename;
+			this.virtualpath = virtualpath;
 			patches = new List<PatchStructure>(4);
 			xscale = 0.0f;
 			yscale = 0.0f;
@@ -89,27 +84,30 @@ namespace CodeImp.DoomBuilder.ZDoom
 			// There should be 3 tokens separated by 2 commas now:
 			// Name, Width, Height
 
-			// First token is the class name
+			// First token is the texture name
 			parser.SkipWhitespace(true);
-			name = parser.StripTokenQuotes(parser.ReadToken());
+			if(!parser.ReadTextureName(out name, typename)) return; //mxd
+
+			//mxd. It can also be "optional" keyword.
+			if(name.ToLowerInvariant() == "optional")
+			{
+				optional = true;
+				parser.SkipWhitespace(true);
+				if(!parser.ReadTextureName(out name, typename)) return; //mxd
+			}
+
 			if(string.IsNullOrEmpty(name))
 			{
-				parser.ReportError("Expected texture or sprite name");
+				parser.ReportError("Expected " + typename + " name");
 				return;
 			}
 
 			// Now we should find a comma
-			parser.SkipWhitespace(true);
-			tokenstr = parser.ReadToken();
-			if(tokenstr != ",")
-			{
-				parser.ReportError("Expected a comma");
-				return;
-			}
+			if(!parser.NextTokenIs(",")) return; //mxd
 
 			// Next is the texture width
 			parser.SkipWhitespace(true);
-			tokenstr = parser.ReadToken();
+			string tokenstr = parser.ReadToken();
 			if(string.IsNullOrEmpty(tokenstr) || !int.TryParse(tokenstr, NumberStyles.Integer, CultureInfo.InvariantCulture, out width))
 			{
 				parser.ReportError("Expected width in pixels");
@@ -117,13 +115,7 @@ namespace CodeImp.DoomBuilder.ZDoom
 			}
 
 			// Now we should find a comma again
-			parser.SkipWhitespace(true);
-			tokenstr = parser.ReadToken();
-			if(tokenstr != ",")
-			{
-				parser.ReportError("Expected a comma");
-				return;
-			}
+			if(!parser.NextTokenIs(",")) return; //mxd
 
 			// Next is the texture height
 			parser.SkipWhitespace(true);
@@ -135,62 +127,62 @@ namespace CodeImp.DoomBuilder.ZDoom
 			}
 
 			// Next token should be the beginning of the texture scope
-			parser.SkipWhitespace(true);
-			tokenstr = parser.ReadToken();
-			if(tokenstr != "{")
+			if(!parser.NextTokenIs("{", false)) //mxd
 			{
 				parser.ReportError("Expected begin of structure");
 				return;
 			}
 
 			// Now parse the contents of texture structure
-			while(parser.SkipWhitespace(true))
+			bool done = false; //mxd
+			while(!done && parser.SkipWhitespace(true))
 			{
 				string token = parser.ReadToken();
 				token = token.ToLowerInvariant();
-				if(token == "xscale")
-				{
-					if(!ReadTokenFloat(parser, token, out xscale)) return;
-				}
-				else if(token == "yscale")
-				{
-					if(!ReadTokenFloat(parser, token, out yscale)) return;
-				}
-				else if(token == "worldpanning")
-				{
-					worldpanning = true;
-				}
-				else if(token == "offset")
-				{
-					// Read x offset
-					if(!ReadTokenInt(parser, token, out xoffset)) return;
 
-					// Now we should find a comma
-					parser.SkipWhitespace(true);
-					tokenstr = parser.ReadToken();
-					if(tokenstr != ",")
-					{
-						parser.ReportError("Expected a comma");
-						return;
-					}
-					
-					// Read y offset
-					if(!ReadTokenInt(parser, token, out yoffset)) return;
-				}
-				else if(token == "patch")
+				switch(token) 
 				{
-					// Read patch structure
-					PatchStructure pt = new PatchStructure(parser);
-					if(parser.HasError) break;
+					case "xscale":
+						if(!ReadTokenFloat(parser, token, out xscale)) return;
+						break;
 
-					// Add the patch
-					patches.Add(pt);
-				}
-				else if(token == "}")
-				{
-					// Actor scope ends here,
-					// break out of this parse loop
-					break;
+					case "yscale":
+						if(!ReadTokenFloat(parser, token, out yscale)) return;
+						break;
+
+					case "worldpanning":
+						worldpanning = true;
+						break;
+
+					case "nulltexture": //mxd
+						nulltexture = true;
+						break;
+
+					case "offset":
+						// Read x offset
+						if(!ReadTokenInt(parser, token, out xoffset)) return;
+
+						// Now we should find a comma
+						if(!parser.NextTokenIs(",")) return; //mxd
+
+						// Read y offset
+						if(!ReadTokenInt(parser, token, out yoffset)) return;
+						break;
+
+					case "patch":
+						// Read patch structure
+						PatchStructure pt = new PatchStructure(parser);
+						if(parser.HasError) break;
+
+						// Add the patch
+						patches.Add(pt);
+						break;
+
+					case "}":
+						// Actor scope ends here,
+						// break out of this parse loop
+						done = true;
+						break;
 				}
 			}
 		}
@@ -200,7 +192,7 @@ namespace CodeImp.DoomBuilder.ZDoom
 		#region ================== Methods
 
 		// This reads the next token and sets a floating point value, returns false when failed
-		private bool ReadTokenFloat(TexturesParser parser, string propertyname, out float value)
+		private static bool ReadTokenFloat(TexturesParser parser, string propertyname, out float value)
 		{
 			// Next token is the property value to set
 			parser.SkipWhitespace(true);
@@ -210,26 +202,22 @@ namespace CodeImp.DoomBuilder.ZDoom
 				// Try parsing as value
 				if(!float.TryParse(strvalue, NumberStyles.Float, CultureInfo.InvariantCulture, out value))
 				{
-					parser.ReportError("Expected numeric value for property '" + propertyname + "'");
+					parser.ReportError("Expected numeric value for property \"" + propertyname + "\"");
 					return false;
 				}
-				else
-				{
-					// Success
-					return true;
-				}
+
+				// Success
+				return true;
 			}
-			else
-			{
-				// Can't find the property value!
-				parser.ReportError("Expected a value for property '" + propertyname + "'");
-				value = 0.0f;
-				return false;
-			}
+
+			// Can't find the property value!
+			parser.ReportError("Expected a value for property \"" + propertyname + "\"");
+			value = 0.0f;
+			return false;
 		}
 
 		// This reads the next token and sets an integral value, returns false when failed
-		private bool ReadTokenInt(TexturesParser parser, string propertyname, out int value)
+		private static bool ReadTokenInt(TexturesParser parser, string propertyname, out int value)
 		{
 			// Next token is the property value to set
 			parser.SkipWhitespace(true);
@@ -239,44 +227,32 @@ namespace CodeImp.DoomBuilder.ZDoom
 				// Try parsing as value
 				if(!int.TryParse(strvalue, NumberStyles.Integer, CultureInfo.InvariantCulture, out value))
 				{
-					parser.ReportError("Expected integral value for property '" + propertyname + "'");
+					parser.ReportError("Expected integral value for property \"" + propertyname + "\"");
 					return false;
 				}
-				else
-				{
-					// Success
-					return true;
-				}
+
+				// Success
+				return true;
 			}
-			else
-			{
-				// Can't find the property value!
-				parser.ReportError("Expected a value for property '" + propertyname + "'");
-				value = 0;
-				return false;
-			}
+
+			// Can't find the property value!
+			parser.ReportError("Expected a value for property \"" + propertyname + "\"");
+			value = 0;
+			return false;
 		}
 
 		// This makes a HighResImage texture for this texture
-		internal HighResImage MakeImage(Dictionary<long, ImageData> textures, Dictionary<long, ImageData> flats)
+		internal TEXTURESImage MakeImage()
 		{
-			float scalex, scaley;
-			
-			// Determine default scale
-			float defaultscale = General.Map.Config.DefaultTextureScale;
-
 			// Determine scale for texture
-			if(xscale == 0.0f) scalex = defaultscale; else scalex = 1f / xscale;
-			if(yscale == 0.0f) scaley = defaultscale; else scaley = 1f / yscale;
+			float scalex = ((xscale == 0.0f) ? General.Map.Config.DefaultTextureScale : 1f / xscale);
+			float scaley = ((yscale == 0.0f) ? General.Map.Config.DefaultTextureScale : 1f / yscale);
 
 			// Make texture
-			HighResImage tex = new HighResImage(name, width, height, scalex, scaley, worldpanning);
+			TEXTURESImage tex = new TEXTURESImage(name, virtualpath, width, height, scalex, scaley, worldpanning, typename == "flat", optional, nulltexture);
 
 			// Add patches
-			foreach(PatchStructure p in patches)
-			{
-				tex.AddPatch(new TexturePatch(p.Name.ToUpperInvariant(), p.OffsetX, p.OffsetY, p.FlipX, p.FlipY, 0, new PixelColor(0, 0, 0, 0), p.Alpha, 0));
-			}
+			foreach(PatchStructure p in patches) tex.AddPatch(new TexturePatch(p));//mxd
 			
 			return tex;
 		}

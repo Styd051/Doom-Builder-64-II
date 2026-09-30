@@ -16,22 +16,6 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using System.Drawing;
-using System.ComponentModel;
-using CodeImp.DoomBuilder.Map;
-using SlimDX.Direct3D9;
-using SlimDX;
-using CodeImp.DoomBuilder.Geometry;
-using System.Drawing.Imaging;
-
 #endregion
 
 namespace CodeImp.DoomBuilder.Rendering
@@ -40,7 +24,7 @@ namespace CodeImp.DoomBuilder.Rendering
 	public struct FlatVertex
 	{
 		// Vertex format
-		public static readonly int Stride = 6 * 4;
+		public const int Stride = 24; //6 * 4
 
 		// Members
 		public float x;

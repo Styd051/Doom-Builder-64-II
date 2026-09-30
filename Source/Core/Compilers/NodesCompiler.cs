@@ -17,11 +17,6 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.IO;
 using CodeImp.DoomBuilder.Config;
@@ -48,7 +43,7 @@ namespace CodeImp.DoomBuilder.Compilers
 		#region ================== Constructor / Disposer
 
 		// Constructor
-		public NodesCompiler(CompilerInfo info) : base(info)
+		public NodesCompiler(CompilerInfo info) : base(info, true)
 		{
 			// Initialize
 
@@ -76,30 +71,33 @@ namespace CodeImp.DoomBuilder.Compilers
 		// This runs the compiler with a file as input.
 		public override bool Run()
 		{
-			ProcessStartInfo processinfo;
-			Process process;
-			TimeSpan deltatime;
-			
 			// Create parameters
 			string args = this.parameters;
 			args = args.Replace("%FI", inputfile);
 			args = args.Replace("%FO", outputfile);
 			
 			// Setup process info
-			processinfo = new ProcessStartInfo();
+			ProcessStartInfo processinfo = new ProcessStartInfo();
 			processinfo.Arguments = args;
-			processinfo.FileName = Path.Combine(this.tempdir.FullName, info.ProgramFile);
-			processinfo.CreateNoWindow = false;
+			//processinfo.FileName = Path.Combine(this.tempdir.FullName, info.ProgramFile);
+			processinfo.FileName = Path.Combine(info.Path, info.ProgramFile); //mxd
+			processinfo.CreateNoWindow = true; //mxd. was false
 			processinfo.ErrorDialog = false;
-			processinfo.UseShellExecute = true;
+			processinfo.UseShellExecute = false; //mxd. was true
 			processinfo.WindowStyle = ProcessWindowStyle.Hidden;
 			processinfo.WorkingDirectory = this.workingdir;
+
+			//mxd
+			processinfo.RedirectStandardError = true;
+			processinfo.RedirectStandardOutput = true;
 			
 			// Output info
 			General.WriteLogLine("Running compiler...");
 			General.WriteLogLine("Program:    " + processinfo.FileName);
 			General.WriteLogLine("Arguments:  " + processinfo.Arguments);
-			
+
+			Process process;
+
 			try
 			{
 				// Start the compiler
@@ -111,12 +109,39 @@ namespace CodeImp.DoomBuilder.Compilers
 				General.ShowErrorMessage("Unable to start the compiler (" + info.Name + "). " + e.GetType().Name + ": " + e.Message, MessageBoxButtons.OK);
 				return false;
 			}
+
+			//mxd
+			string outErr = process.StandardError.ReadToEnd().Trim().Replace("\b", "");
+			string outMsg = process.StandardOutput.ReadToEnd().Trim().Replace("\b", "");
 			
 			// Wait for compiler to complete
 			process.WaitForExit();
-			deltatime = TimeSpan.FromTicks(process.ExitTime.Ticks - process.StartTime.Ticks);
-			General.WriteLogLine("Compiler process has finished.");
+
+			//mxd
+			bool errorsInNormalOurput = (outMsg.Length > 0 && outMsg.ToLowerInvariant().IndexOf("error") != -1);
+			//zdbsp actually writes building process here, not error info
+			bool errorsInErrorOutput = (outErr.Length > 0 && outErr.ToLowerInvariant().IndexOf("error") != -1);
+
+			TimeSpan deltatime = TimeSpan.FromTicks(process.ExitTime.Ticks - process.StartTime.Ticks);
+			General.WriteLogLine("Compiler process has finished" + (errorsInNormalOurput || errorsInErrorOutput ? " with errors." : ".")); //mxd
 			General.WriteLogLine("Compile time: " + deltatime.TotalSeconds.ToString("########0.00") + " seconds");
+
+			//mxd
+			if(process.ExitCode > 0 || errorsInNormalOurput || errorsInErrorOutput) 
+			{
+				if(errorsInNormalOurput) 
+				{
+					ReportError(new CompilerError(outMsg));
+					General.WriteLogLine("Normal output: " + outMsg);
+				}
+				if(errorsInErrorOutput) 
+				{
+					ReportError(new CompilerError(outErr));
+					General.WriteLogLine("Error output: " + outErr);
+				}
+				return false;
+			}
+
 			return true;
 		}
 		

@@ -16,13 +16,7 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using System.IO;
-using System.Drawing.Imaging;
 using CodeImp.DoomBuilder.IO;
 
 #endregion
@@ -38,64 +32,66 @@ namespace CodeImp.DoomBuilder.Data
 		public const int DOOMCOLORMAP = 3;		// Could be Doom Colormap format (raw 8-bit pixel palette mapping)
 		
 		// File format signatures
-		private static readonly int[] PNG_SIGNATURE = new int[] { 137, 80, 78, 71, 13, 10, 26, 10 };
-		private static readonly int[] GIF_SIGNATURE = new int[] { 71, 73, 70 };
-		private static readonly int[] BMP_SIGNATURE = new int[] { 66, 77 };
+		private static readonly int[] PNG_SIGNATURE = new[] { 137, 80, 78, 71, 13, 10, 26, 10 };
+		private static readonly int[] GIF_SIGNATURE = new[] { 71, 73, 70 };
+		private static readonly int[] BMP_SIGNATURE = new[] { 66, 77 }; 
+		private static readonly int[] DDS_SIGNATURE = new[] { 68, 68, 83, 32 };
+		private static readonly int[] JPG_SIGNATURE = new[] { 255, 216, 255 }; //mxd
+		private static readonly int[] PCX_SIGNATURE = new[] { 10, 5, 1, 8 }; //mxd
 
 		// This check image data and returns the appropriate image reader
 		public static IImageReader GetImageReader(Stream data, int guessformat, Playpal palette)
 		{
-			BinaryReader bindata = new BinaryReader(data);
-			DoomPictureReader picreader;
-			DoomFlatReader flatreader;
-			DoomColormapReader colormapreader;
+			if(data == null) return new UnknownImageReader(); //mxd
 			
-			// First check the formats that provide the means to 'ensure' that
-			// it actually is that format. Then guess the Doom image format.
-
 			// Data long enough to check for signatures?
-			if(data.Length > 10)
+			if(data.Length > 10) 
 			{
 				// Check for PNG signature
-				data.Seek(0, SeekOrigin.Begin);
-				if(CheckSignature(data, PNG_SIGNATURE)) return new FileImageReader();
-				
+				if(CheckSignature(data, PNG_SIGNATURE)) return new FileImageReader(DevilImageType.IL_PNG);
+
+				// Check for DDS signature
+				if(CheckSignature(data, DDS_SIGNATURE)) return new FileImageReader(DevilImageType.IL_DDS);
+
+				//mxd. Check for PCX signature
+				if(CheckSignature(data, PCX_SIGNATURE)) return new FileImageReader(DevilImageType.IL_PCX);
+
+				//mxd. Check for JPG signature
+				if(CheckSignature(data, JPG_SIGNATURE)) return new FileImageReader(DevilImageType.IL_JPG);
+
+				//mxd. TGA is VERY special in that it doesn't have a proper signature...
+				if(CheckTgaSignature(data)) return new FileImageReader(DevilImageType.IL_TGA);
+
 				// Check for GIF signature
-				data.Seek(0, SeekOrigin.Begin);
-				if(CheckSignature(data, GIF_SIGNATURE)) return new FileImageReader();
+				if(CheckSignature(data, GIF_SIGNATURE)) return new UnknownImageReader(); //mxd. Not supported by (G)ZDoom
 
 				// Check for BMP signature
-				data.Seek(0, SeekOrigin.Begin);
-				if(CheckSignature(data, BMP_SIGNATURE))
-				{
-					// Check if data size matches the size specified in the data
-					if(bindata.ReadUInt32() <= data.Length) return new FileImageReader();
-				}
+				if(CheckSignature(data, BMP_SIGNATURE)) return new UnknownImageReader(); //mxd. Not supported by (G)ZDoom
 			}
-			
+				
 			// Could it be a doom picture?
-			if(guessformat == DOOMPICTURE)
+			switch(guessformat) 
 			{
-				// Check if data is valid for a doom picture
-				data.Seek(0, SeekOrigin.Begin);
-				picreader = new DoomPictureReader(palette);
-				if(picreader.Validate(data)) return picreader;
-			}
-			// Could it be a doom flat?
-			else if(guessformat == DOOMFLAT)
-			{
-				// Check if data is valid for a doom flat
-				data.Seek(0, SeekOrigin.Begin);
-				flatreader = new DoomFlatReader(palette);
-				if(flatreader.Validate(data)) return flatreader;
-			}
-			// Could it be a doom colormap?
-			else if(guessformat == DOOMCOLORMAP)
-			{
-				// Check if data is valid for a doom colormap
-				data.Seek(0, SeekOrigin.Begin);
-				colormapreader = new DoomColormapReader(palette);
-				if(colormapreader.Validate(data)) return colormapreader;
+				case DOOMPICTURE:
+					// Check if data is valid for a doom picture
+					data.Seek(0, SeekOrigin.Begin);
+					DoomPictureReader picreader = new DoomPictureReader(palette);
+					if(picreader.Validate(data)) return picreader;
+					break;
+
+				case DOOMFLAT:
+					// Check if data is valid for a doom flat
+					data.Seek(0, SeekOrigin.Begin);
+					DoomFlatReader flatreader = new DoomFlatReader(palette);
+					if(flatreader.Validate(data)) return flatreader;
+					break;
+
+				case DOOMCOLORMAP:
+					// Check if data is valid for a doom colormap
+					data.Seek(0, SeekOrigin.Begin);
+					DoomColormapReader colormapreader = new DoomColormapReader(palette);
+					if(colormapreader.Validate(data)) return colormapreader;
+					break;
 			}
 			
 			// Format not supported
@@ -107,18 +103,47 @@ namespace CodeImp.DoomBuilder.Data
 		// signature, and expects the stream to be long enough.
 		private static bool CheckSignature(Stream data, int[] sig)
 		{
-			int b;
+			//mxd. Rewind the data first
+			data.Seek(0, SeekOrigin.Begin);
 			
 			// Go for all bytes
-			for(int i = 0; i < sig.Length; i++)
+			foreach(int s in sig)
 			{
 				// When byte doesnt match the signature, leave
-				b = data.ReadByte();
-				if(b != sig[i]) return false;
+				if(data.ReadByte() != s) return false;
 			}
 
 			// Signature matches
 			return true;
+		}
+
+		//mxd. This tries to guess if a given image is in TGA format...
+		private static bool CheckTgaSignature(Stream data)
+		{
+			// TGA header is 18 bytes long
+			if(data.Length < 18) return false;
+			
+			// Rewind the data first
+			data.Seek(0, SeekOrigin.Begin);
+
+			// Read TGA header
+			int idlength = data.ReadByte(); // Can be 0 or the length of ID string, whatever that is
+			int colormap = data.ReadByte(); // Can be 0 or 1
+			if(colormap != 0 && colormap != 1) return false;
+
+			int imagetype = data.ReadByte(); // Can be 0, 1, 2, 3, 9, 10, 11
+			if((imagetype > 3 && imagetype < 9) || imagetype > 11) return false;
+
+			data.Position += 9; // Skip some stuff...
+
+			int width = data.ReadByte() + (data.ReadByte() << 8);
+			if(width < 0 || width > 8192) return false;
+
+			int height = data.ReadByte() + (data.ReadByte() << 8);
+			if(height < 0 || height > 8192) return false;
+
+			int bitsperpixel = data.ReadByte();  // Can be 8, 16, 24, 32
+			return (bitsperpixel == 8 || bitsperpixel == 16 || bitsperpixel == 24 || bitsperpixel == 32);
 		}
 	}
 }

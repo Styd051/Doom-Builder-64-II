@@ -16,11 +16,7 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 
 #endregion
 
@@ -34,6 +30,7 @@ namespace CodeImp.DoomBuilder.Rendering
 		// Constants for static instances
 		public const float THINGS_BACK_ALPHA = 0.3f;
 		public const float THINGS_HIDDEN_ALPHA = 0.66f;
+		public const float THINGS_ALPHA = 1.0f; //mxd
 		
 		// Static instances
 		private static Presentation standard;
@@ -66,7 +63,7 @@ namespace CodeImp.DoomBuilder.Rendering
 			standard = new Presentation();
 			standard.layers.Add(new PresentLayer(RendererLayer.Background, BlendingMode.Mask, General.Settings.BackgroundAlpha));
 			standard.layers.Add(new PresentLayer(RendererLayer.Surface, BlendingMode.Mask));
-			standard.layers.Add(new PresentLayer(RendererLayer.Things, BlendingMode.Alpha, THINGS_BACK_ALPHA));
+			standard.layers.Add(new PresentLayer(RendererLayer.Things, BlendingMode.Alpha, General.Settings.InactiveThingsAlpha));
 			standard.layers.Add(new PresentLayer(RendererLayer.Grid, BlendingMode.Mask));
 			standard.layers.Add(new PresentLayer(RendererLayer.Geometry, BlendingMode.Alpha, 1f, true));
 			standard.layers.Add(new PresentLayer(RendererLayer.Overlay, BlendingMode.Alpha, 1f, true));
@@ -75,9 +72,10 @@ namespace CodeImp.DoomBuilder.Rendering
 			things = new Presentation();
 			things.layers.Add(new PresentLayer(RendererLayer.Background, BlendingMode.Mask, General.Settings.BackgroundAlpha));
 			things.layers.Add(new PresentLayer(RendererLayer.Surface, BlendingMode.Mask));
+			things.layers.Add(new PresentLayer(RendererLayer.Things, BlendingMode.Alpha, 1f));
 			things.layers.Add(new PresentLayer(RendererLayer.Grid, BlendingMode.Mask));
 			things.layers.Add(new PresentLayer(RendererLayer.Geometry, BlendingMode.Alpha, 1f, true));
-			things.layers.Add(new PresentLayer(RendererLayer.Things, BlendingMode.Alpha, 1f, false));
+			things.layers.Add(new PresentLayer(RendererLayer.Things, BlendingMode.Alpha, 0.5f)); //mxd
 			things.layers.Add(new PresentLayer(RendererLayer.Overlay, BlendingMode.Alpha, 1f, true));
 		}
 	}
@@ -139,7 +137,7 @@ namespace CodeImp.DoomBuilder.Rendering
 	}
 	
 	// The different layers
-	public enum RendererLayer : int
+	public enum RendererLayer
 	{
 		Background,
 		Grid,
@@ -150,7 +148,7 @@ namespace CodeImp.DoomBuilder.Rendering
 	}
 
 	// Blending modes
-	public enum BlendingMode : int
+	public enum BlendingMode
 	{
 		None,
 		Mask,

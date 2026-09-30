@@ -17,20 +17,10 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
 using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Rendering;
-using System.Diagnostics;
 using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Geometry;
 using CodeImp.DoomBuilder.Plugins;
 using CodeImp.DoomBuilder.VisualModes;
 
@@ -64,7 +54,7 @@ namespace CodeImp.DoomBuilder.Editing
 		private bool disengaging;
 
 		// Disposing
-		private bool isdisposed = false;
+		private bool isdisposed;
 		
 		#endregion
 		
@@ -136,6 +126,7 @@ namespace CodeImp.DoomBuilder.Editing
 				General.Actions.UnbindMethods(this);
 				
 				// Clean up
+				foreach(EditModeInfo i in allmodes) i.Dispose(); //mxd
 				
 				// Done
 				isdisposed = true;
@@ -257,10 +248,12 @@ namespace CodeImp.DoomBuilder.Editing
 			{
 				foreach(EditModeInfo emi in allmodes)
 				{
-					// Include the mode when it is listed and enabled
-					// Also include the mode when it is not optional
-					if( (General.Map.ConfigSettings.EditModes.ContainsKey(emi.Type.FullName) &&
-					     General.Map.ConfigSettings.EditModes[emi.Type.FullName]) || !emi.IsOptional )
+					// Include the mode if it supports current map format (mxd)
+					// Also include the mode when it is listed and enabled or when it's not optional
+					if( (emi.Attributes.SupportedMapFormats == null || Array.IndexOf(emi.Attributes.SupportedMapFormats, General.Map.Config.FormatInterface) != -1) &&
+						((General.Map.ConfigSettings.EditModes.ContainsKey(emi.Type.FullName) && 
+						General.Map.ConfigSettings.EditModes[emi.Type.FullName] ) 
+						 || !emi.IsOptional) )
 					{
 						// Add the mode to be used and bind switch action
 						usedmodes.Add(emi);
@@ -277,7 +270,7 @@ namespace CodeImp.DoomBuilder.Editing
 			// Go for all the editing mode groups
 			foreach(string grp in groups)
 			{
-				General.MainWindow.AddEditModeSeperator();
+				General.MainWindow.AddEditModeSeperator(grp);
 				
 				// Go for all used edit modes to add buttons
 				foreach(EditModeInfo emi in usedmodes)
@@ -412,13 +405,13 @@ namespace CodeImp.DoomBuilder.Editing
 		}
 
 		// This returns the type name as string
-		private string TypeNameOrNull(Type type)
+		private static string TypeNameOrNull(Type type)
 		{
 			return (type != null) ? type.Name : "NULL";
 		}
 
 		// This returns the type name as string
-		private string TypeNameOrNull(object obj)
+		private static string TypeNameOrNull(object obj)
 		{
 			return (obj != null) ? obj.GetType().Name : "NULL";
 		}

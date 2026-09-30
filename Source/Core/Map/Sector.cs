@@ -17,27 +17,32 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Geometry;
 using System.Drawing;
 using CodeImp.DoomBuilder.Rendering;
 using System.Collections.ObjectModel;
-using SlimDX.Direct3D9;
 using SlimDX;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.Map
 {
-	public sealed class Sector : SelectableElement
+	public enum SectorFogMode //mxd
+	{
+		NONE,			   // no fog
+		CLASSIC,		   // black fog when sector brightness < 243
+		FOGDENSITY,		   // sector uses "fogdensity" MAPINFO property
+		OUTSIDEFOGDENSITY, // sector uses "outsidefogdensity" MAPINFO property
+		FADE			   // sector uses UDMF "fade" sector property
+	}
+	
+	public sealed class Sector : SelectableElement, IMultiTaggedMapElement
 	{
 		#region ================== Constants
 
-        public const int NUM_COLORS = 5;    // villsa 9/14/11 (builder64)
+		internal const int SLOPE_DECIMALS = 7;
 
 		#endregion
 
@@ -61,16 +66,11 @@ namespace CodeImp.DoomBuilder.Map
 		private long longfloortexname;
 		private long longceiltexname;
 		private int effect;
-		private int tag;
+		private List<int> tags; //mxd
 		private int brightness;
-        private Dictionary<string, bool> flags; // villsa
-        private Lights ceilColor;   // villsa
-        private Lights flrColor;    // villsa
-        private Lights thingColor;  // villsa
-        private Lights topColor;    // villsa
-        private Lights lwrColor;    // villsa
-        private uint hashfloortexname;  // villsa
-        private uint hashceilingtexname;    // villsa
+
+		//mxd. UDMF properties
+		private Dictionary<string, bool> flags;
 
 		// Cloning
 		private Sector clone;
@@ -83,13 +83,23 @@ namespace CodeImp.DoomBuilder.Map
 		private Triangulation triangles;
 		private FlatVertex[] flatvertices;
 		private ReadOnlyCollection<LabelPositionInfo> labels;
-        private SurfaceEntryCollection surfaceentries;
+		private readonly SurfaceEntryCollection surfaceentries;
 
-        #endregion
+		//mxd. Rendering
+		private Color4 fogcolor;
+		private SectorFogMode fogmode;
 
-        #region ================== Properties
+		//mxd. Slopes
+		private Vector3D floorslope;
+		private float flooroffset;
+		private Vector3D ceilslope;
+		private float ceiloffset;
+		
+		#endregion
 
-        public MapSet Map { get { return map; } }
+		#region ================== Properties
+
+		public MapSet Map { get { return map; } }
 		public ICollection<Sidedef> Sidedefs { get { return sidedefs; } }
 
 		/// <summary>
@@ -100,15 +110,12 @@ namespace CodeImp.DoomBuilder.Map
 		public int CeilHeight { get { return ceilheight; } set { BeforePropsChange(); ceilheight = value; } }
 		public string FloorTexture { get { return floortexname; } }
 		public string CeilTexture { get { return ceiltexname; } }
-
-        // villsa
-        public uint HashFloor { get { return hashfloortexname; } set { hashfloortexname = value; } }
-        public uint HashCeiling { get { return hashceilingtexname; } set { hashceilingtexname = value; } }
-
 		public long LongFloorTexture { get { return longfloortexname; } }
 		public long LongCeilTexture { get { return longceiltexname; } }
+		internal Dictionary<string, bool> Flags { get { return flags; } } //mxd
 		public int Effect { get { return effect; } set { BeforePropsChange(); effect = value; } }
-		public int Tag { get { return tag; } set { BeforePropsChange(); tag = value; if((tag < General.Map.FormatInterface.MinTag) || (tag > General.Map.FormatInterface.MaxTag)) throw new ArgumentOutOfRangeException("Tag", "Invalid tag number"); } }
+		public int Tag { get { return tags[0]; } set { BeforePropsChange(); tags[0] = value; if((value < General.Map.FormatInterface.MinTag) || (value > General.Map.FormatInterface.MaxTag)) throw new ArgumentOutOfRangeException("Tag", "Invalid tag number"); } } //mxd
+		public List<int> Tags { get { return tags; } set { BeforePropsChange(); tags = value; } } //mxd
 		public int Brightness { get { return brightness; } set { BeforePropsChange(); brightness = value; updateneeded = true; } }
 		public bool UpdateNeeded { get { return updateneeded; } set { updateneeded |= value; triangulationneeded |= value; } }
 		public RectangleF BBox { get { return bbox; } }
@@ -117,21 +124,26 @@ namespace CodeImp.DoomBuilder.Map
 		public Triangulation Triangles { get { return triangles; } }
 		public FlatVertex[] FlatVertices { get { return flatvertices; } }
 		public ReadOnlyCollection<LabelPositionInfo> Labels { get { return labels; } }
-        internal Dictionary<string, bool> Flags { get { return flags; } } // villsa
-        public Lights CeilColor { get { return ceilColor; } set { BeforePropsChange(); ceilColor = value; updateneeded = true; } } // villsa
-        public Lights FloorColor { get { return flrColor; } set { BeforePropsChange(); flrColor = value; updateneeded = true; } } // villsa
-        public Lights ThingColor { get { return thingColor; } set { BeforePropsChange(); thingColor = value; updateneeded = true; } } // villsa
-        public Lights TopColor { get { return topColor; } set { BeforePropsChange(); topColor = value; updateneeded = true; } } // villsa
-        public Lights LowerColor { get { return lwrColor; } set { BeforePropsChange(); lwrColor = value; updateneeded = true; } } // villsa
 
-        #endregion
+		//mxd. Rednering
+		public Color4 FogColor { get { return fogcolor; } }
+		public SectorFogMode FogMode { get { return fogmode; } }
 
-        #region ================== Constructor / Disposer
+		//mxd. Slopes
+		public Vector3D FloorSlope { get { return floorslope; } set { BeforePropsChange(); floorslope = value; updateneeded = true; } }
+		public float FloorSlopeOffset { get { return flooroffset; } set { BeforePropsChange(); flooroffset = value; updateneeded = true; } }
+		public Vector3D CeilSlope { get { return ceilslope; } set { BeforePropsChange(); ceilslope = value; updateneeded = true; } }
+		public float CeilSlopeOffset { get { return ceiloffset; } set { BeforePropsChange(); ceiloffset = value; updateneeded = true; } }
 
-        // Constructor
-        internal Sector(MapSet map, int listindex, int index)
+		#endregion
+
+		#region ================== Constructor / Disposer
+
+		// Constructor
+		internal Sector(MapSet map, int listindex, int index)
 		{
 			// Initialize
+			this.elementtype = MapElementType.SECTOR; //mxd
 			this.map = map;
 			this.listindex = listindex;
 			this.sidedefs = new LinkedList<Sidedef>();
@@ -140,15 +152,12 @@ namespace CodeImp.DoomBuilder.Map
 			this.ceiltexname = "-";
 			this.longfloortexname = MapSet.EmptyLongName;
 			this.longceiltexname = MapSet.EmptyLongName;
+			this.flags = new Dictionary<string, bool>(StringComparer.Ordinal); //mxd
+			this.tags = new List<int> { 0 }; //mxd
 			this.updateneeded = true;
 			this.triangulationneeded = true;
-            this.surfaceentries = new SurfaceEntryCollection();
-            this.flags = new Dictionary<string, bool>(); // villsa
-            this.ceilColor = new Lights(128, 128, 128, 0); // villsa
-            this.flrColor = new Lights(128, 128, 128, 0); // villsa
-            this.thingColor = new Lights(128, 128, 128, 0); // villsa
-            this.topColor = new Lights(128, 128, 128, 0); // villsa
-            this.lwrColor = new Lights(128, 128, 128, 0); // villsa
+			this.triangles = new Triangulation(); //mxd
+			this.surfaceentries = new SurfaceEntryCollection();
 
 			if(map == General.Map.Map)
 				General.Map.UndoRedo.RecAddSector(this);
@@ -181,13 +190,16 @@ namespace CodeImp.DoomBuilder.Map
 				
 				// Register the index as free
 				map.AddSectorIndexHole(fixedindex);
+				
+				// Free surface entry
+				General.Map.CRenderer2D.Surfaces.FreeSurfaces(surfaceentries);
 
-                // Free surface entry
-                General.Map.CRenderer2D.Surfaces.FreeSurfaces(surfaceentries);
-
-                // Clean up
-                sidedefs = null;
+				// Clean up
+				sidedefs = null;
 				map = null;
+
+				//mxd. Restore isdisposed so base classes can do their disposal job
+				isdisposed = false;
 				
 				// Dispose base
 				base.Dispose();
@@ -206,7 +218,7 @@ namespace CodeImp.DoomBuilder.Map
 		}
 
 		// Serialize / deserialize (passive: this doesn't record)
-		internal void ReadWrite(IReadWriteStream s)
+		new internal void ReadWrite(IReadWriteStream s)
 		{
 			if(!s.IsWriting)
 			{
@@ -216,29 +228,29 @@ namespace CodeImp.DoomBuilder.Map
 			
 			base.ReadWrite(s);
 
-            // villsa
-            if (s.IsWriting)
-            {
-                s.wInt(flags.Count);
+			//mxd
+			if(s.IsWriting)
+			{
+				s.wInt(flags.Count);
 
-                foreach (KeyValuePair<string, bool> f in flags)
-                {
-                    s.wString(f.Key);
-                    s.wBool(f.Value);
-                }
-            }
-            else
-            {
-                int c; s.rInt(out c);
+				foreach(KeyValuePair<string, bool> f in flags)
+				{
+					s.wString(f.Key);
+					s.wBool(f.Value);
+				}
+			}
+			else
+			{
+				int c; s.rInt(out c);
 
-                flags = new Dictionary<string, bool>(c);
-                for (int i = 0; i < c; i++)
-                {
-                    string t; s.rString(out t);
-                    bool b; s.rBool(out b);
-                    flags.Add(t, b);
-                }
-            }
+				flags = new Dictionary<string, bool>(c, StringComparer.Ordinal);
+				for(int i = 0; i < c; i++)
+				{
+					string t; s.rString(out t);
+					bool b; s.rBool(out b);
+					flags.Add(t, b);
+				}
+			}
 
 			s.rwInt(ref fixedindex);
 			s.rwInt(ref floorheight);
@@ -248,17 +260,32 @@ namespace CodeImp.DoomBuilder.Map
 			s.rwLong(ref longfloortexname);
 			s.rwLong(ref longceiltexname);
 			s.rwInt(ref effect);
-			s.rwInt(ref tag);
 			s.rwInt(ref brightness);
-            // villsa
-            if (General.Map.FormatInterface.InDoom64Mode)
-            {
-                s.rwLight(ref ceilColor);
-                s.rwLight(ref flrColor);
-                s.rwLight(ref thingColor);
-                s.rwLight(ref topColor);
-                s.rwLight(ref lwrColor);
-            }
+
+			//mxd. (Re)store tags
+			if(s.IsWriting) 
+			{
+				s.wInt(tags.Count);
+				foreach(int tag in tags) s.wInt(tag);
+			} 
+			else 
+			{
+				int c;
+				s.rInt(out c);
+				tags = new List<int>(c);
+				for(int i = 0; i < c; i++)
+				{
+					int t;
+					s.rInt(out t);
+					tags.Add(t);
+				}
+			}
+
+			//mxd. Slopes
+			s.rwFloat(ref flooroffset);
+			s.rwVector3D(ref floorslope);
+			s.rwFloat(ref ceiloffset);
+			s.rwVector3D(ref ceilslope);
 		}
 		
 		// After deserialization
@@ -282,15 +309,14 @@ namespace CodeImp.DoomBuilder.Map
 			s.floortexname = floortexname;
 			s.longfloortexname = longfloortexname;
 			s.effect = effect;
-			s.tag = tag;
-            s.flags = new Dictionary<string, bool>(flags);  // villsa
+			s.tags = new List<int>(tags); //mxd
+			s.flags = new Dictionary<string, bool>(flags); //mxd
 			s.brightness = brightness;
+			s.flooroffset = flooroffset; //mxd
+			s.floorslope = floorslope; //mxd
+			s.ceiloffset = ceiloffset; //mxd
+			s.ceilslope = ceilslope; //mxd
 			s.updateneeded = true;
-            s.ceilColor = ceilColor;    // villsa
-            s.flrColor = flrColor;    // villsa
-            s.thingColor = thingColor;    // villsa
-            s.topColor = topColor;    // villsa
-            s.lwrColor = lwrColor;    // villsa
 			base.CopyPropertiesTo(s);
 		}
 
@@ -336,12 +362,12 @@ namespace CodeImp.DoomBuilder.Map
 					updateneeded = true;
 					
 					// Make label positions
-					labels = Array.AsReadOnly<LabelPositionInfo>(Tools.FindLabelPositions(this).ToArray());
-
-                    // Number of vertices changed?
-                    if(triangles.Vertices.Count != surfaceentries.totalvertices)
-                        General.Map.CRenderer2D.Surfaces.FreeSurfaces(surfaceentries);
-                }
+					labels = Array.AsReadOnly(Tools.FindLabelPositions(this).ToArray());
+					
+					// Number of vertices changed?
+					if(triangles.Vertices.Count != surfaceentries.totalvertices)
+						General.Map.CRenderer2D.Surfaces.FreeSurfaces(surfaceentries);
+				}
 			}
 		}
 		
@@ -352,28 +378,6 @@ namespace CodeImp.DoomBuilder.Map
 			{
 				// Brightness color
 				int brightint = General.Map.Renderer2D.CalculateBrightness(brightness);
-
-                // villsa
-                switch (General.Map.Renderer2D.ViewMode)
-                {
-                    case ViewMode.FloorColor:
-                        brightint = this.flrColor.color.ToInt();
-                        break;
-                    case ViewMode.CeilingColor:
-                        brightint = this.ceilColor.color.ToInt();
-                        break;
-                    case ViewMode.ThingColor:
-                        brightint = this.thingColor.color.ToInt();
-                        break;
-                    case ViewMode.FloorTextures:
-                        brightint = this.flrColor.color.ToInt();
-                        break;
-                    case ViewMode.CeilingTextures:
-                        brightint = this.ceilColor.color.ToInt();
-                        break;
-                    default:
-                        break;
-                }
 				
 				// Make vertices
 				flatvertices = new FlatVertex[triangles.Vertices.Count];
@@ -389,21 +393,21 @@ namespace CodeImp.DoomBuilder.Map
 
 				// Create bounding box
 				bbox = CreateBBox();
+				
+				// Make update info (this lets the plugin fill in texture coordinates and such)
+				SurfaceUpdate updateinfo = new SurfaceUpdate(flatvertices.Length, true, true);
+				flatvertices.CopyTo(updateinfo.floorvertices, 0);
+				General.Plugins.OnSectorFloorSurfaceUpdate(this, ref updateinfo.floorvertices);
+				flatvertices.CopyTo(updateinfo.ceilvertices, 0);
+				General.Plugins.OnSectorCeilingSurfaceUpdate(this, ref updateinfo.ceilvertices);
+				updateinfo.floortexture = longfloortexname;
+				updateinfo.ceiltexture = longceiltexname;
 
-                // Make update info (this lets the plugin fill in texture coordinates and such)
-                SurfaceUpdate updateinfo = new SurfaceUpdate(flatvertices.Length, true, true);
-                flatvertices.CopyTo(updateinfo.floorvertices, 0);
-                General.Plugins.OnSectorFloorSurfaceUpdate(this, ref updateinfo.floorvertices);
-                flatvertices.CopyTo(updateinfo.ceilvertices, 0);
-                General.Plugins.OnSectorCeilingSurfaceUpdate(this, ref updateinfo.ceilvertices);
-                updateinfo.floortexture = longfloortexname;
-                updateinfo.ceiltexture = longceiltexname;
+				// Update surfaces
+				General.Map.CRenderer2D.Surfaces.UpdateSurfaces(surfaceentries, updateinfo);
 
-                // Update surfaces
-                General.Map.CRenderer2D.Surfaces.UpdateSurfaces(surfaceentries, updateinfo);
-
-                // Updated
-                updateneeded = false;
+				// Updated
+				updateneeded = false;
 			}
 		}
 
@@ -411,16 +415,16 @@ namespace CodeImp.DoomBuilder.Map
 		public void UpdateFloorSurface()
 		{
 			if(flatvertices == null) return;
-
-            // Create floor vertices
-            SurfaceUpdate updateinfo = new SurfaceUpdate(flatvertices.Length, true, false);
-            flatvertices.CopyTo(updateinfo.floorvertices, 0);
-            General.Plugins.OnSectorFloorSurfaceUpdate(this, ref updateinfo.floorvertices);
-            updateinfo.floortexture = longfloortexname;
-
-            // Update entry
-            General.Map.CRenderer2D.Surfaces.UpdateSurfaces(surfaceentries, updateinfo);
-            General.Map.CRenderer2D.Surfaces.UnlockBuffers();
+			
+			// Create floor vertices
+			SurfaceUpdate updateinfo = new SurfaceUpdate(flatvertices.Length, true, false);
+			flatvertices.CopyTo(updateinfo.floorvertices, 0);
+			General.Plugins.OnSectorFloorSurfaceUpdate(this, ref updateinfo.floorvertices);
+			updateinfo.floortexture = longfloortexname;
+			
+			// Update entry
+			General.Map.CRenderer2D.Surfaces.UpdateSurfaces(surfaceentries, updateinfo);
+			General.Map.CRenderer2D.Surfaces.UnlockBuffers();
 		}
 
 		// This updates the ceiling surface
@@ -428,15 +432,15 @@ namespace CodeImp.DoomBuilder.Map
 		{
 			if(flatvertices == null) return;
 
-            // Create ceiling vertices
-            SurfaceUpdate updateinfo = new SurfaceUpdate(flatvertices.Length, false, true);
-            flatvertices.CopyTo(updateinfo.ceilvertices, 0);
-            General.Plugins.OnSectorCeilingSurfaceUpdate(this, ref updateinfo.ceilvertices);
-            updateinfo.ceiltexture = longceiltexname;
-
-            // Update entry
-            General.Map.CRenderer2D.Surfaces.UpdateSurfaces(surfaceentries, updateinfo);
-            General.Map.CRenderer2D.Surfaces.UnlockBuffers();
+			// Create ceiling vertices
+			SurfaceUpdate updateinfo = new SurfaceUpdate(flatvertices.Length, false, true);
+			flatvertices.CopyTo(updateinfo.ceilvertices, 0);
+			General.Plugins.OnSectorCeilingSurfaceUpdate(this, ref updateinfo.ceilvertices);
+			updateinfo.ceiltexture = longceiltexname;
+			
+			// Update entry
+			General.Map.CRenderer2D.Surfaces.UpdateSurfaces(surfaceentries, updateinfo);
+			General.Map.CRenderer2D.Surfaces.UnlockBuffers();
 		}
 		
 		// This updates the sector when changes have been made
@@ -467,68 +471,147 @@ namespace CodeImp.DoomBuilder.Map
 			if(selecteditem.List != null) selecteditem.List.Remove(selecteditem);
 			selecteditem = null;
 		}
+
+		// This removes UDMF stuff (mxd)
+		internal void TranslateFromUDMF() 
+		{
+			// Clear UDMF-related properties (but keep VirtualSectorField!)
+			bool isvirtual = this.Fields.ContainsKey(MapSet.VirtualSectorField);
+			this.Fields.Clear();
+			if(isvirtual) this.Fields.Add(MapSet.VirtualSectorField, MapSet.VirtualSectorValue);
+			this.Flags.Clear();
+			this.fogmode = SectorFogMode.NONE;
+
+			// Reset Slopes
+			floorslope = new Vector3D();
+			flooroffset = 0;
+			ceilslope = new Vector3D();
+			ceiloffset = 0;
+		}
 		
 		#endregion
 		
 		#region ================== Methods
+
+		// This checks and returns a flag without creating it
+		public bool IsFlagSet(string flagname)
+		{
+			return flags.ContainsKey(flagname) && flags[flagname];
+		}
+
+		// This sets a flag
+		public void SetFlag(string flagname, bool value) 
+		{
+			if(!flags.ContainsKey(flagname) || (IsFlagSet(flagname) != value)) 
+			{
+				BeforePropsChange();
+
+				flags[flagname] = value;
+			}
+		}
+
+		// This returns a copy of the flags dictionary
+		public Dictionary<string, bool> GetFlags() 
+		{
+			return new Dictionary<string, bool>(flags);
+		}
+
+		//mxd. This returns enabled flags
+		public HashSet<string> GetEnabledFlags()
+		{
+			HashSet<string> result = new HashSet<string>();
+			foreach(KeyValuePair<string, bool> group in flags)
+				if(group.Value) result.Add(group.Key);
+			return result;
+		} 
+
+		// This clears all flags
+		public void ClearFlags() 
+		{
+			BeforePropsChange();
+			flags.Clear();
+		}
 		
 		// This checks if the given point is inside the sector polygon
-		public bool Intersect(Vector2D p)
+		// See: http://paulbourke.net/geometry/polygonmesh/index.html#insidepoly
+		public bool Intersect(Vector2D p) { return Intersect(p, true); }
+		public bool Intersect(Vector2D p, bool countontopastrue)
 		{
+			//mxd. Check bounding box first
+			if(p.x < bbox.Left || p.x > bbox.Right || p.y < bbox.Top || p.y > bbox.Bottom) return false;
+			
 			uint c = 0;
+			Vector2D v1, v2;
 			
 			// Go for all sidedefs
 			foreach(Sidedef sd in sidedefs)
 			{
 				// Get vertices
-				Vector2D v1 = sd.Line.Start.Position;
-				Vector2D v2 = sd.Line.End.Position;
-				
-				// Determine min/max values
-				float miny = Math.Min(v1.y, v2.y);
-				float maxy = Math.Max(v1.y, v2.y);
-				float maxx = Math.Max(v1.x, v2.x);
-				
+				v1 = sd.Line.Start.Position;
+				v2 = sd.Line.End.Position;
+
+				//mxd. On top of a vertex?
+				if(p == v1 || p == v2) return countontopastrue;
+
 				// Check for intersection
-				if((p.y > miny) && (p.y <= maxy))
-				{
-					if(p.x <= maxx)
-					{
-						if(v1.y != v2.y)
-						{
-							float xint = (p.y - v1.y) * (v2.x - v1.x) / (v2.y - v1.y) + v1.x;
-							if((v1.x == v2.x) || (p.x <= xint)) c++;
-						}
-					}
-				}
+				if(v1.y != v2.y //mxd. If line is not horizontal...
+				  && p.y >  (v1.y < v2.y ? v1.y : v2.y) //mxd. ...And test point y intersects with the line y bounds...
+				  && p.y <= (v1.y > v2.y ? v1.y : v2.y) //mxd
+				  && (p.x < (v1.x < v2.x ? v1.x : v2.x) || (p.x <= (v1.x > v2.x ? v1.x : v2.x) //mxd. ...And test point x is to the left of the line, or is inside line x bounds and intersects it
+						&& (v1.x == v2.x || p.x <= ((p.y - v1.y) * (v2.x - v1.x) / (v2.y - v1.y) + v1.x)))))
+					c++; //mxd. ...Count the line as crossed
 			}
-			
-			// Inside this polygon?
-			return ((c & 0x00000001UL) != 0);
+
+			// Inside this polygon when we crossed odd number of polygon lines
+			return (c % 2 != 0);
 		}
 		
 		// This creates a bounding box rectangle
 		// This requires the sector triangulation to be up-to-date!
 		private RectangleF CreateBBox()
 		{
+			if(sidedefs.Count == 0) return new RectangleF(); //mxd
+			
 			// Setup
 			float left = float.MaxValue;
 			float top = float.MaxValue;
 			float right = float.MinValue;
 			float bottom = float.MinValue;
-			
-			// Go for vertices
-			foreach(Vector2D v in triangles.Vertices)
+
+			HashSet<Vertex> processed = new HashSet<Vertex>(); //mxd
+
+			//mxd. This way bbox will be created even if triangulation failed (sector with 2 or less sidedefs and 2 vertices)
+			foreach(Sidedef s in sidedefs) 
 			{
-				// Update rect
-				if(v.x < left) left = v.x;
-				if(v.y < top) top = v.y;
-				if(v.x > right) right = v.x;
-				if(v.y > bottom) bottom = v.y;
+				//start...
+				if(!processed.Contains(s.Line.Start)) 
+				{
+					if(s.Line.Start.Position.x < left) left = s.Line.Start.Position.x;
+					if(s.Line.Start.Position.x > right) right = s.Line.Start.Position.x;
+					if(s.Line.Start.Position.y < top) top = s.Line.Start.Position.y;
+					if(s.Line.Start.Position.y > bottom) bottom = s.Line.Start.Position.y;
+					processed.Add(s.Line.Start);
+				}
+
+				//end...
+				if(!processed.Contains(s.Line.End)) 
+				{
+					if(s.Line.End.Position.x < left) left = s.Line.End.Position.x;
+					if(s.Line.End.Position.x > right) right = s.Line.End.Position.x;
+					if(s.Line.End.Position.y < top) top = s.Line.End.Position.y;
+					if(s.Line.End.Position.y > bottom) bottom = s.Line.End.Position.y;
+					processed.Add(s.Line.End);
+				}
 			}
 			
 			// Return rectangle
 			return new RectangleF(left, top, right - left, bottom - top);
+		}
+
+		//mxd
+		internal void UpdateBBox()
+		{
+			bbox = CreateBBox();
 		}
 		
 		// This joins the sector with another sector
@@ -553,148 +636,224 @@ namespace CodeImp.DoomBuilder.Map
 			General.Map.IsChanged = true;
 		}
 
+		//mxd
+		public static Geometry.Plane GetFloorPlane(Sector s)
+		{
+			if(General.Map.UDMF)
+			{
+				// UDMF Sector slope?
+				if(s.FloorSlope.GetLengthSq() > 0 && !float.IsNaN(s.FloorSlopeOffset / s.FloorSlope.z)) 
+					return new Geometry.Plane(s.FloorSlope, s.FloorSlopeOffset);
+
+				if(s.sidedefs.Count == 3)
+				{
+					Geometry.Plane floor = new Geometry.Plane(new Vector3D(0, 0, 1), -s.FloorHeight);
+					Vector3D[] verts = new Vector3D[3];
+					bool sloped = false;
+					int index = 0;
+					
+					// Check vertices
+					foreach(Sidedef sd in s.Sidedefs) 
+					{
+						Vertex v = sd.IsFront ? sd.Line.End : sd.Line.Start;
+
+						//create "normal" vertices
+						verts[index] = new Vector3D(v.Position);
+
+						// Check floor
+						if(!float.IsNaN(v.ZFloor)) 
+						{
+							//vertex offset is absolute
+							verts[index].z = v.ZFloor;
+							sloped = true;
+						} 
+						else 
+						{
+							verts[index].z = floor.GetZ(v.Position);
+						}
+
+						index++;
+					}
+
+					// Have slope?
+					return (sloped ? new Geometry.Plane(verts[0], verts[1], verts[2], true) : floor);
+				}
+			}
+
+			// Have line slope?
+			foreach(Sidedef side in s.sidedefs)
+			{
+				// Carbon copy of EffectLineSlope class here...
+				if(side.Line.Action == 181 && ((side.Line.Args[0] == 1 && side == side.Line.Front) || side.Line.Args[0] == 2) && side.Other != null)
+				{
+					Linedef l = side.Line;
+					
+					// Find the vertex furthest from the line
+					Vertex foundv = null;
+					float founddist = -1.0f;
+					foreach(Sidedef sd in s.Sidedefs) 
+					{
+						Vertex v = sd.IsFront ? sd.Line.Start : sd.Line.End;
+						float d = l.DistanceToSq(v.Position, false);
+						if(d > founddist) 
+						{
+							foundv = v;
+							founddist = d;
+						}
+					}
+
+					Vector3D v1 = new Vector3D(l.Start.Position.x, l.Start.Position.y, side.Other.Sector.FloorHeight);
+					Vector3D v2 = new Vector3D(l.End.Position.x, l.End.Position.y, side.Other.Sector.FloorHeight);
+					Vector3D v3 = new Vector3D(foundv.Position.x, foundv.Position.y, s.FloorHeight);
+
+					return (l.SideOfLine(v3) < 0.0f ? new Geometry.Plane(v1, v2, v3, true) : new Geometry.Plane(v2, v1, v3, true));
+				}
+			}
+
+			//TODO: other types of slopes...
+
+			// Normal (flat) floor plane
+			return new Geometry.Plane(new Vector3D(0, 0, 1), -s.FloorHeight);
+		}
+
+		//mxd
+		public static Geometry.Plane GetCeilingPlane(Sector s)
+		{
+			if(General.Map.UDMF) 
+			{
+				// UDMF Sector slope?
+				if(s.CeilSlope.GetLengthSq() > 0 && !float.IsNaN(s.CeilSlopeOffset / s.CeilSlope.z))
+					return new Geometry.Plane(s.CeilSlope, s.CeilSlopeOffset);
+
+				if(s.sidedefs.Count == 3) 
+				{
+					Geometry.Plane ceiling = new Geometry.Plane(new Vector3D(0, 0, -1), s.CeilHeight);
+					Vector3D[] verts = new Vector3D[3];
+					bool sloped = false;
+					int index = 0;
+
+					// Check vertices
+					foreach(Sidedef sd in s.Sidedefs) 
+					{
+						Vertex v = sd.IsFront ? sd.Line.End : sd.Line.Start;
+
+						//create "normal" vertices
+						verts[index] = new Vector3D(v.Position);
+
+						// Check floor
+						if(!float.IsNaN(v.ZCeiling)) 
+						{
+							//vertex offset is absolute
+							verts[index].z = v.ZCeiling;
+							sloped = true;
+						} 
+						else 
+						{
+							verts[index].z = ceiling.GetZ(v.Position);
+						}
+
+						index++;
+					}
+
+					// Have slope?
+					return (sloped ? new Geometry.Plane(verts[0], verts[2], verts[1], false) : ceiling);
+				}
+			}
+
+			// Have line slope?
+			foreach(Sidedef side in s.sidedefs) 
+			{
+				// Carbon copy of EffectLineSlope class here...
+				if(side.Line.Action == 181 && ((side.Line.Args[1] == 1 && side == side.Line.Front) || side.Line.Args[1] == 2) && side.Other != null) 
+				{
+					Linedef l = side.Line;
+
+					// Find the vertex furthest from the line
+					Vertex foundv = null;
+					float founddist = -1.0f;
+					foreach(Sidedef sd in s.Sidedefs) 
+					{
+						Vertex v = sd.IsFront ? sd.Line.Start : sd.Line.End;
+						float d = l.DistanceToSq(v.Position, false);
+						if(d > founddist) 
+						{
+							foundv = v;
+							founddist = d;
+						}
+					}
+
+					Vector3D v1 = new Vector3D(l.Start.Position.x, l.Start.Position.y, side.Other.Sector.CeilHeight);
+					Vector3D v2 = new Vector3D(l.End.Position.x, l.End.Position.y, side.Other.Sector.CeilHeight);
+					Vector3D v3 = new Vector3D(foundv.Position.x, foundv.Position.y, s.CeilHeight);
+
+					return (l.SideOfLine(v3) > 0.0f ? new Geometry.Plane(v1, v2, v3, false) : new Geometry.Plane(v2, v1, v3, false));
+				}
+			}
+
+			//TODO: other types of slopes...
+
+			// Normal (flat) ceiling plane
+			return new Geometry.Plane(new Vector3D(0, 0, -1), s.CeilHeight);
+		}
+
 		// String representation
 		public override string ToString()
 		{
+#if DEBUG
+			return "Sector " + listindex + (marked ? " (marked)" : ""); //mxd
+#else
 			return "Sector " + listindex;
+#endif
 		}
 		
 		#endregion
 
 		#region ================== Changes
 
-		// This updates all properties
-		public void Update(int hfloor, int hceil, string tfloor, string tceil, int effect, int tag, int brightness)
+		//mxd. This updates all properties (Doom/Hexen version)
+		public void Update(int hfloor, int hceil, string tfloor, string tceil, int effect, int tag, int brightness) 
+		{
+			Update(hfloor, hceil, tfloor, tceil, effect, new Dictionary<string, bool>(StringComparer.Ordinal), new List<int> { tag }, brightness, 0, new Vector3D(), 0, new Vector3D());
+		}
+
+		//mxd. This updates all properties (UDMF version)
+		public void Update(int hfloor, int hceil, string tfloor, string tceil, int effect, Dictionary<string, bool> flags, List<int> tags, int brightness, float flooroffset, Vector3D floorslope, float ceiloffset, Vector3D ceilslope)
 		{
 			BeforePropsChange();
 			
 			// Apply changes
 			this.floorheight = hfloor;
 			this.ceilheight = hceil;
-			SetFloorTexture(tfloor);
-			SetCeilTexture(tceil);
 			this.effect = effect;
-			this.tag = tag;
+			this.tags = new List<int>(tags); //mxd
+			this.flags = new Dictionary<string, bool>(flags); //mxd
 			this.brightness = brightness;
+			this.flooroffset = flooroffset; //mxd
+			this.floorslope = floorslope; //mxd
+			this.ceiloffset = ceiloffset; //mxd
+			this.ceilslope = ceilslope; //mxd
+
+			//mxd. Set ceil texture
+			if(string.IsNullOrEmpty(tceil)) tceil = "-";
+			ceiltexname = tceil;
+			longceiltexname = Lump.MakeLongName(ceiltexname);
+
+			//mxd. Set floor texture
+			if(string.IsNullOrEmpty(tfloor)) tfloor = "-"; //mxd
+			floortexname = tfloor;
+			longfloortexname = Lump.MakeLongName(tfloor);
+
+			//mxd. Map is changed
+			General.Map.IsChanged = true;
 			updateneeded = true;
 		}
-
-        // villsa - new overload method
-        private Lights GetLight(int cindex, Lights[] light)
-        {
-            Lights color;
-
-            if (cindex >= 256)
-            {
-                cindex -= 256;
-                color = light[cindex];
-                color.isDirect = false;   // styd: true LIGHTS input, to be preserved as such
-            }
-            else
-            {
-                byte c = (byte)cindex;
-
-                color = new Lights(c, c, c, 0);
-                color.isDirect = true;    // styd: greyscale shortcut
-            }
-
-            color.color.a = 255;
-
-            return color;
-        }
-
-        private Lights GetLight(int color)
-        {
-            PixelColor c;
-
-            c = PixelColor.FromInt(color);
-            return new Lights(c.r, c.g, c.b, 0);
-        }
-
-        // villsa TODO - too many fucking overloads for this. Need to simplify the way lighting is handled...
-        public void Update(Dictionary<string, bool> flags, int hfloor, int hceil,
-            string tfloor, string tceil, int effect, int tag, Lights[] light, int[] cindex)
-        {
-            BeforePropsChange();
-
-            // Apply changes
-            this.flags = new Dictionary<string, bool>(flags);
-            this.floorheight = hfloor;
-            this.ceilheight = hceil;
-            SetFloorTexture(tfloor);
-            SetCeilTexture(tceil);
-            this.effect = effect;
-            this.tag = tag;
-            this.flrColor = GetLight(cindex[0], light);
-            this.ceilColor = GetLight(cindex[1], light);
-            this.thingColor = GetLight(cindex[2], light);
-            this.topColor = GetLight(cindex[3], light);
-            this.lwrColor = GetLight(cindex[4], light);
-            this.brightness = 255;
-            updateneeded = true;
-        }
-
-        public void Update(Dictionary<string, bool> flags, int hfloor, int hceil,
-            string tfloor, string tceil, int effect, int tag, int[] colors)
-        {
-            BeforePropsChange();
-
-            // Apply changes
-            this.flags = new Dictionary<string, bool>(flags);
-            this.floorheight = hfloor;
-            this.ceilheight = hceil;
-            SetFloorTexture(tfloor);
-            SetCeilTexture(tceil);
-            this.effect = effect;
-            this.tag = tag;
-            this.brightness = 255;
-            this.flrColor = GetLight(colors[0]);
-            this.ceilColor = GetLight(colors[1]);
-            this.thingColor = GetLight(colors[2]);
-            this.topColor = GetLight(colors[3]);
-            this.lwrColor = GetLight(colors[4]);
-            updateneeded = true;
-        }
-
-        // [villsa start]
-        // This checks and returns a flag without creating it
-        public bool IsFlagSet(string flagname)
-        {
-            if (flags.ContainsKey(flagname))
-                return flags[flagname];
-            else
-                return false;
-        }
-
-        // This sets a flag
-        public void SetFlag(string flagname, bool value)
-        {
-            if (!flags.ContainsKey(flagname) || (IsFlagSet(flagname) != value))
-            {
-                BeforePropsChange();
-                flags[flagname] = value;
-            }
-        }
-
-        // This returns a copy of the flags dictionary
-        public Dictionary<string, bool> GetFlags()
-        {
-            return new Dictionary<string, bool>(flags);
-        }
-
-        // This clears all flags
-        public void ClearFlags()
-        {
-            flags.Clear();
-        }
-
-        // [villsa end]
 
 		// This sets texture
 		public void SetFloorTexture(string name)
 		{
 			BeforePropsChange();
 			
+			if(string.IsNullOrEmpty(name)) name = "-"; //mxd
 			floortexname = name;
 			longfloortexname = Lump.MakeLongName(name);
 			updateneeded = true;
@@ -706,10 +865,38 @@ namespace CodeImp.DoomBuilder.Map
 		{
 			BeforePropsChange();
 			
+			if(string.IsNullOrEmpty(name)) name = "-"; //mxd
 			ceiltexname = name;
 			longceiltexname = Lump.MakeLongName(name);
 			updateneeded = true;
 			General.Map.IsChanged = true;
+		}
+
+		//mxd
+		public void UpdateFogColor() 
+		{
+			if(General.Map.UDMF && Fields.ContainsKey("fadecolor"))
+			{
+				fogcolor = new Color4((int)Fields["fadecolor"].Value);
+				fogmode = SectorFogMode.FADE;
+			}
+			// Sector uses outisde fog when it's ceiling is sky or Sector_Outside effect (87) is set
+			else if(General.Map.Data.MapInfo.HasOutsideFogColor && 
+				(ceiltexname == General.Map.Config.SkyFlatName || (effect == 87 && General.Map.Config.SectorEffects.ContainsKey(effect))))
+			{
+				fogcolor = General.Map.Data.MapInfo.OutsideFogColor;
+				fogmode = SectorFogMode.OUTSIDEFOGDENSITY;
+			}
+			else if(General.Map.Data.MapInfo.HasFadeColor)
+			{
+				fogcolor = General.Map.Data.MapInfo.FadeColor;
+				fogmode = SectorFogMode.FOGDENSITY;
+			}
+			else
+			{
+				fogcolor = new Color4();
+				fogmode = (brightness < 248 ? SectorFogMode.CLASSIC : SectorFogMode.NONE);
+			}
 		}
 		
 		#endregion

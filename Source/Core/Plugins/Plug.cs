@@ -1,16 +1,11 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using System.IO;
 using System.Windows.Forms;
 using CodeImp.DoomBuilder.Editing;
 using CodeImp.DoomBuilder.Geometry;
 using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Data;
 using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Windows;
 using CodeImp.DoomBuilder.Config;
@@ -35,7 +30,7 @@ namespace CodeImp.DoomBuilder.Plugins
 		private Plugin plugin;
 		
 		// Disposing
-		private bool isdisposed = false;
+		private bool isdisposed;
 
 		#endregion
 		
@@ -56,11 +51,16 @@ namespace CodeImp.DoomBuilder.Plugins
 		public virtual string Name { get { return plugin.Name; } }
 
 		/// <summary>
-		/// Override this to return the minimum revision of the Doom Builder 2 core that is
+		/// Override this to return the minimum revision of the GZDoom Builder core that is
 		/// required to use this plugin. You can find the revision number in the About dialog,
 		/// it is the right most part of the version number.
 		/// </summary>
 		public virtual int MinimumRevision { get { return 0; } }
+
+		/// <summary>
+		/// Set to true to indicate that plugin revision number must match the main module revision number.
+		/// </summary>
+		public virtual bool StrictRevisionMatching { get { return false; } } //mxd
 		
 		#endregion
 
@@ -280,12 +280,12 @@ namespace CodeImp.DoomBuilder.Plugins
 		/// <summary>
 		/// Called when an Action begins.
 		/// </summary>
-		public virtual void OnActionBegin(CodeImp.DoomBuilder.Actions.Action action) { }
+		public virtual void OnActionBegin(Actions.Action action) { }
 
 		/// <summary>
 		/// Called when an Action ends.
 		/// </summary>
-		public virtual void OnActionEnd(CodeImp.DoomBuilder.Actions.Action action) { }
+		public virtual void OnActionEnd(Actions.Action action) { }
 
 		/// <summary>
 		/// Called when an Editing Mode engages
@@ -307,6 +307,13 @@ namespace CodeImp.DoomBuilder.Plugins
 		/// </summary>
 		public virtual void OnEditAccept() { }
 
+		/// <summary>
+		/// Called just after the nodes have been (re)built. This allows a plugin to intervene with
+		/// the nodebuilder output using GetLumpData and SetLumpData. If the map is being saved, this
+		/// is called after the nodes are rebuilt and just before they are stored in the target file.
+		/// </summary>
+		public virtual void OnMapNodesRebuilt() { }
+
 		// Interface events
 		public virtual void OnEditMouseClick(MouseEventArgs e) { }
 		public virtual void OnEditMouseDoubleClick(MouseEventArgs e) { }
@@ -323,6 +330,14 @@ namespace CodeImp.DoomBuilder.Plugins
 		public virtual void OnEditRedrawDisplayBegin() { }
 		public virtual void OnEditRedrawDisplayEnd() { }
 		public virtual void OnPresentDisplayBegin() { }
+
+		//mxd. Highlight events
+		public virtual void OnHighlightSector(Sector s) { }
+		public virtual void OnHighlightLinedef(Linedef l) { }
+		public virtual void OnHighlightThing(Thing t) { }
+		public virtual void OnHighlightVertex(Vertex v) { }
+		public virtual void OnHighlightRefreshed(object o) { }
+		public virtual void OnHighlightLost() { }
 		
 		#endregion
 	}

@@ -17,13 +17,10 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Types;
+using CodeImp.DoomBuilder.Data;
 
 #endregion
 
@@ -31,10 +28,6 @@ namespace CodeImp.DoomBuilder.Map
 {
 	public sealed class Sidedef : MapElement
 	{
-		#region ================== Constants
-
-		#endregion
-
 		#region ================== Variables
 
 		// Map
@@ -59,10 +52,8 @@ namespace CodeImp.DoomBuilder.Map
 		private long longtexnamemid;
 		private long longtexnamelow;
 
-        // villsa
-        private uint hashtexhigh;
-        private uint hashtexmid;
-        private uint hashtexlow;
+		//mxd. UDMF properties
+		private Dictionary<string, bool> flags;
 
 		// Clone
 		private int serializedindex;
@@ -72,11 +63,12 @@ namespace CodeImp.DoomBuilder.Map
 		#region ================== Properties
 
 		public MapSet Map { get { return map; } }
-		public bool IsFront { get { return (linedef != null) ? (this == linedef.Front) : false; } }
+		public bool IsFront { get { return (linedef != null) && (this == linedef.Front); } }
 		public Linedef Line { get { return linedef; } }
-		public Sidedef Other { get { if(this == linedef.Front) return linedef.Back; else return linedef.Front; } }
+		public Sidedef Other { get { return (this == linedef.Front ? linedef.Back : linedef.Front); } }
 		public Sector Sector { get { return sector; } }
-		public float Angle { get { if(IsFront) return linedef.Angle; else return Angle2D.Normalized(linedef.Angle + Angle2D.PI); } }
+		internal Dictionary<string, bool> Flags { get { return flags; } } //mxd
+		public float Angle { get { return (IsFront ? linedef.Angle : Angle2D.Normalized(linedef.Angle + Angle2D.PI)); } }
 		public int OffsetX { get { return offsetx; } set { BeforePropsChange(); offsetx = value; } }
 		public int OffsetY { get { return offsety; } set { BeforePropsChange(); offsety = value; } }
 		public string HighTexture { get { return texnamehigh; } }
@@ -86,11 +78,6 @@ namespace CodeImp.DoomBuilder.Map
 		public long LongMiddleTexture { get { return longtexnamemid; } }
 		public long LongLowTexture { get { return longtexnamelow; } }
 		internal int SerializedIndex { get { return serializedindex; } set { serializedindex = value; } }
-
-        // villsa
-        public uint HashTexHigh { get { return hashtexhigh; } set { hashtexhigh = value; } }
-        public uint HashTexMid { get { return hashtexmid; } set { hashtexmid = value; } }
-        public uint HashTexLow { get { return hashtexlow; } set { hashtexlow = value; } }
 		
 		#endregion
 
@@ -100,6 +87,7 @@ namespace CodeImp.DoomBuilder.Map
 		internal Sidedef(MapSet map, int listindex, Linedef l, bool front, Sector s)
 		{
 			// Initialize
+			this.elementtype = MapElementType.SIDEDEF; //mxd
 			this.map = map;
 			this.listindex = listindex;
 			this.texnamehigh = "-";
@@ -108,6 +96,7 @@ namespace CodeImp.DoomBuilder.Map
 			this.longtexnamehigh = MapSet.EmptyLongName;
 			this.longtexnamemid = MapSet.EmptyLongName;
 			this.longtexnamelow = MapSet.EmptyLongName;
+			this.flags = new Dictionary<string, bool>(StringComparer.Ordinal); //mxd
 			
 			// Attach linedef
 			this.linedef = l;
@@ -156,6 +145,9 @@ namespace CodeImp.DoomBuilder.Map
 				map = null;
 				sector = null;
 
+				//mxd. Restore isdisposed so base classes can do their disposal job
+				isdisposed = false;
+
 				// Dispose base
 				base.Dispose();
 			}
@@ -173,11 +165,38 @@ namespace CodeImp.DoomBuilder.Map
 		}
 		
 		// Serialize / deserialize (passive: this doesn't record)
-		internal void ReadWrite(IReadWriteStream s)
+		new internal void ReadWrite(IReadWriteStream s)
 		{
 			if(!s.IsWriting) BeforePropsChange();
 			
 			base.ReadWrite(s);
+
+			//mxd
+			if(s.IsWriting) 
+			{
+				s.wInt(flags.Count);
+
+				foreach(KeyValuePair<string, bool> f in flags) 
+				{
+					s.wString(f.Key);
+					s.wBool(f.Value);
+				}
+			} 
+			else 
+			{
+				int c;
+				s.rInt(out c);
+
+				flags = new Dictionary<string, bool>(c, StringComparer.Ordinal);
+				for(int i = 0; i < c; i++) 
+				{
+					string t;
+					s.rString(out t);
+					bool b;
+					s.rBool(out b);
+					flags.Add(t, b);
+				}
+			}
 
 			s.rwInt(ref offsetx);
 			s.rwInt(ref offsety);
@@ -203,6 +222,7 @@ namespace CodeImp.DoomBuilder.Map
 			s.longtexnamehigh = longtexnamehigh;
 			s.longtexnamemid = longtexnamemid;
 			s.longtexnamelow = longtexnamelow;
+			s.flags = new Dictionary<string, bool>(flags); //mxd
 			base.CopyPropertiesTo(s);
 		}
 
@@ -219,13 +239,14 @@ namespace CodeImp.DoomBuilder.Map
 		internal void SetSectorP(Sector newsector)
 		{
 			// Detach from sector
-			if(sector != null) sector.DetachSidedefP(sectorlistitem);
+			if(sector != null && !sector.IsDisposed) //mxd
+				sector.DetachSidedefP(sectorlistitem);
 
 			// Change sector
 			sector = newsector;
 
 			// Attach to sector
-			if(sector != null)
+			if(sector != null && !sector.IsDisposed) //mxd
 				sectorlistitem = sector.AttachSidedefP(this);
 
 			General.Map.IsChanged = true;
@@ -250,49 +271,124 @@ namespace CodeImp.DoomBuilder.Map
 		{
 			linedef = ld;
 		}
+
+		//mxd. This translates UDMF fields back into the normal flags and activations
+		internal void TranslateFromUDMF() 
+		{
+			// Try to translate UDMF texture offsets to regular ones
+			if(longtexnamemid != MapSet.EmptyLongName && MiddleRequired()) 
+			{
+				offsetx += (int)UniFields.GetFloat(this.Fields, "offsetx_mid");
+				offsety += (int)UniFields.GetFloat(this.Fields, "offsety_mid");
+			}
+			else if(longtexnamehigh != MapSet.EmptyLongName && HighRequired()) 
+			{
+				offsetx += (int)UniFields.GetFloat(this.Fields, "offsetx_top");
+				offsety += (int)UniFields.GetFloat(this.Fields, "offsety_top");
+			}
+			else if(longtexnamelow != MapSet.EmptyLongName && LowRequired()) 
+			{
+				offsetx += (int)UniFields.GetFloat(this.Fields, "offsetx_bottom");
+				offsety += (int)UniFields.GetFloat(this.Fields, "offsety_bottom");
+			}
+			
+			// Clear UDMF-related properties
+			this.Fields.Clear();
+			this.Flags.Clear();
+		}
 		
 		#endregion
 
 		#region ================== Methods
-		
-		// This removes textures that are not required
-		public void RemoveUnneededTextures(bool removemiddle)
+
+		// This checks and returns a flag without creating it
+		public bool IsFlagSet(string flagname) 
 		{
-			RemoveUnneededTextures(removemiddle, false);
+			return (flags.ContainsKey(flagname) && flags[flagname]);
+		}
+
+		// This sets a flag
+		public void SetFlag(string flagname, bool value) 
+		{
+			if(!flags.ContainsKey(flagname) || (IsFlagSet(flagname) != value)) 
+			{
+				BeforePropsChange();
+				flags[flagname] = value;
+			}
+		}
+
+		// This returns a copy of the flags dictionary
+		public Dictionary<string, bool> GetFlags() 
+		{
+			return new Dictionary<string, bool>(flags);
+		}
+
+		//mxd. This returns enabled flags
+		public HashSet<string> GetEnabledFlags()
+		{
+			HashSet<string> result = new HashSet<string>();
+			foreach(KeyValuePair<string, bool> group in flags)
+				if(group.Value) result.Add(group.Key);
+			return result;
+		} 
+
+		// This clears all flags
+		public void ClearFlags() 
+		{
+			BeforePropsChange();
+			flags.Clear();
 		}
 		
 		// This removes textures that are not required
-		public void RemoveUnneededTextures(bool removemiddle, bool force)
+		public void RemoveUnneededTextures(bool removemiddle) { RemoveUnneededTextures(removemiddle, false, false); }
+		public void RemoveUnneededTextures(bool removemiddle, bool force, bool shiftmiddle)
 		{
-			BeforePropsChange();
-			
-			// The middle texture can be removed regardless of any sector tag or linedef action
-			if(!MiddleRequired() && removemiddle)
-			{
-				this.texnamemid = "-";
-				this.longtexnamemid = MapSet.EmptyLongName;
-				General.Map.IsChanged = true;
-			}
+			bool changed = false; //mxd
 
 			// Check if the line or sectors have no action or tags because
 			// if they do, any texture on this side could be needed
-			if(((linedef.Tag <= 0) && (linedef.Action == 0) && (sector.Tag <= 0) &&
-			    ((Other == null) || (Other.sector.Tag <= 0))) ||
-			   force)
+			if(force || ((linedef.Tag == 0) && (linedef.Action == 0) && (sector.Tag == 0) &&
+				((Other == null) || (Other.sector.Tag == 0))))
 			{
-				if(!HighRequired())
+				if(General.Settings.AutoClearSidedefTextures && !HighRequired())
 				{
+					BeforePropsChange(); //mxd
+					changed = true;
 					this.texnamehigh = "-";
 					this.longtexnamehigh = MapSet.EmptyLongName;
 					General.Map.IsChanged = true;
+				} 
+				else if(shiftmiddle && this.longtexnamehigh == MapSet.EmptyLongName && HighRequired()) //mxd
+				{
+					SetTextureHigh(this.texnamemid);
+					changed = true;
 				}
 
-				if(!LowRequired())
+				if(General.Settings.AutoClearSidedefTextures && !LowRequired())
 				{
+					if(!changed) //mxd
+					{
+						BeforePropsChange();
+						changed = true;
+					}
 					this.texnamelow = "-";
 					this.longtexnamelow = MapSet.EmptyLongName;
 					General.Map.IsChanged = true;
 				}
+				else if(shiftmiddle && this.longtexnamelow == MapSet.EmptyLongName && LowRequired()) //mxd 
+				{
+					SetTextureLow(this.texnamemid);
+					changed = true;
+				}
+			}
+
+			// The middle texture can be removed regardless of any sector tag or linedef action
+			if(!MiddleRequired() && removemiddle) 
+			{
+				if(!changed) BeforePropsChange(); //mxd
+				this.texnamemid = "-";
+				this.longtexnamemid = MapSet.EmptyLongName;
+				General.Map.IsChanged = true;
 			}
 		}
 		
@@ -304,13 +400,49 @@ namespace CodeImp.DoomBuilder.Map
 			// Doublesided?
 			if(Other != null)
 			{
+				//mxd. Check sloped ceilings...
+				if(General.Map.UDMF && this.sector != Other.Sector) 
+				{
+					float thisstartz = this.sector.CeilHeight;
+					float thisendz = this.sector.CeilHeight;
+					float otherstartz = Other.sector.CeilHeight;
+					float otherendz = Other.sector.CeilHeight;
+
+					// Check if this side is affected by UDMF slope (it overrides vertex heights, riiiiiight?..) TODO: check this!
+					if(this.sector.CeilSlope.GetLengthSq() > 0) 
+					{
+						Plane ceil = new Plane(this.sector.CeilSlope, this.sector.CeilSlopeOffset);
+						thisstartz = ceil.GetZ(this.Line.Start.Position);
+						thisendz = ceil.GetZ(this.Line.End.Position);
+					} 
+					else if(this.sector.Sidedefs.Count == 3) // Check vertex heights on this side
+					{
+						if(!float.IsNaN(this.Line.Start.ZCeiling)) thisstartz = this.Line.Start.ZCeiling;
+						if(!float.IsNaN(this.Line.End.ZCeiling)) thisendz = this.Line.End.ZCeiling;
+					}
+
+					// Check if other side is affected by UDMF slope (it overrides vertex heights, riiiiiight?..) TODO: check this!
+					if(Other.sector.CeilSlope.GetLengthSq() > 0) 
+					{
+						Plane ceil = new Plane(Other.sector.CeilSlope, Other.sector.CeilSlopeOffset);
+						otherstartz = ceil.GetZ(this.Line.Start.Position);
+						otherendz = ceil.GetZ(this.Line.End.Position);
+					} 
+					else if(Other.sector.Sidedefs.Count == 3) // Check other line's vertex heights
+					{
+						if(!float.IsNaN(this.Line.Start.ZCeiling)) otherstartz = this.Line.Start.ZCeiling;
+						if(!float.IsNaN(this.Line.End.ZCeiling)) otherendz = this.Line.End.ZCeiling;
+					}
+
+					// Texture is required when our start or end vertex is higher than on the other side.
+					if(thisstartz > otherstartz || thisendz > otherendz) return true;
+				}
+				
 				// Texture is required when ceiling of other side is lower
 				return (Other.sector.CeilHeight < this.sector.CeilHeight);
 			}
-			else
-			{
-				return false;
-			}
+
+			return false;
 		}
 
 		/// <summary>
@@ -330,13 +462,49 @@ namespace CodeImp.DoomBuilder.Map
 			// Doublesided?
 			if(Other != null)
 			{
+				//mxd. Check sloped floors...
+				if(General.Map.UDMF && this.sector != Other.Sector)
+				{
+					float thisstartz = this.sector.FloorHeight;
+					float thisendz = this.sector.FloorHeight;
+					float otherstartz = Other.sector.FloorHeight;
+					float otherendz = Other.sector.FloorHeight;
+
+					// Check if this side is affected by UDMF slope (it overrides vertex heights, riiiiiight?..) TODO: check this!
+					if(this.sector.FloorSlope.GetLengthSq() > 0) 
+					{
+						Plane floor = new Plane(this.sector.FloorSlope, this.sector.FloorSlopeOffset);
+						thisstartz = floor.GetZ(this.Line.Start.Position);
+						thisendz = floor.GetZ(this.Line.End.Position);
+					} 
+					else if(this.sector.Sidedefs.Count == 3) // Check vertex heights on this side
+					{
+						if(!float.IsNaN(this.Line.Start.ZFloor)) thisstartz = this.Line.Start.ZFloor;
+						if(!float.IsNaN(this.Line.End.ZFloor)) thisendz = this.Line.End.ZFloor;
+					}
+					
+					// Check if other side is affected by UDMF slope (it overrides vertex heights, riiiiiight?..) TODO: check this!
+					if(Other.sector.FloorSlope.GetLengthSq() > 0)
+					{
+						Plane floor = new Plane(Other.sector.FloorSlope, Other.sector.FloorSlopeOffset);
+						otherstartz = floor.GetZ(this.Line.Start.Position);
+						otherendz = floor.GetZ(this.Line.End.Position);
+					}
+					else if(Other.sector.Sidedefs.Count == 3) // Check other line's vertex heights
+					{
+						if(!float.IsNaN(this.Line.Start.ZFloor)) otherstartz = this.Line.Start.ZFloor;
+						if(!float.IsNaN(this.Line.End.ZFloor)) otherendz = this.Line.End.ZFloor;
+					}
+
+					// Texture is required when our start or end vertex is lower than on the other side.
+					if(thisstartz < otherstartz || thisendz < otherendz) return true;
+				}
+
 				// Texture is required when floor of other side is higher
 				return (Other.sector.FloorHeight > this.sector.FloorHeight);
 			}
-			else
-			{
-				return false;
-			}
+
+			return false;
 		}
 
 		/// <summary>
@@ -352,10 +520,8 @@ namespace CodeImp.DoomBuilder.Map
 				int height = top - bottom;
 				return (height > 0) ? height : 0;
 			}
-			else
-			{
-				return 0;
-			}
+
+			return 0;
 		}
 
 		/// <summary>
@@ -393,10 +559,8 @@ namespace CodeImp.DoomBuilder.Map
 				int height = top - bottom;
 				return (height > 0) ? height : 0;
 			}
-			else
-			{
-				return 0;
-			}
+
+			return 0;
 		}
 		
 		// This creates a checksum from the sidedef properties
@@ -425,7 +589,7 @@ namespace CodeImp.DoomBuilder.Map
 			s.BeforePropsChange();
 
 			// Upper texture set?
-			if((texnamehigh.Length > 0) && (texnamehigh[0] != '-'))
+			if((texnamehigh.Length > 0) && (texnamehigh != "-"))
 			{
 				// Copy upper texture
 				s.texnamehigh = texnamehigh;
@@ -433,10 +597,19 @@ namespace CodeImp.DoomBuilder.Map
 
 				// Counts as a half coice for copying offsets
 				copyoffsets += 1;
+
+				//mxd. Also copy UDMF offsets and scale
+				if(General.Map.UDMF)
+				{
+					UniFields.SetFloat(s.Fields, "offsetx_top", Fields.GetValue("offsetx_top", 0f), 0f);
+					UniFields.SetFloat(s.Fields, "offsety_top", Fields.GetValue("offsety_top", 0f), 0f);
+					UniFields.SetFloat(s.Fields, "scalex_top",  Fields.GetValue("scalex_top", 1.0f), 1.0f);
+					UniFields.SetFloat(s.Fields, "scaley_top",  Fields.GetValue("scaley_top", 1.0f), 1.0f);
+				}
 			}
 
 			// Middle texture set?
-			if((texnamemid.Length > 0) && (texnamemid[0] != '-'))
+			if((texnamemid.Length > 0) && (texnamemid != "-"))
 			{
 				// Copy middle texture
 				s.texnamemid = texnamemid;
@@ -444,10 +617,19 @@ namespace CodeImp.DoomBuilder.Map
 
 				// Counts for copying offsets
 				copyoffsets += 2;
+
+				//mxd. Also copy UDMF offsets and scale
+				if(General.Map.UDMF)
+				{
+					UniFields.SetFloat(s.Fields, "offsetx_mid", Fields.GetValue("offsetx_mid", 0f), 0f);
+					UniFields.SetFloat(s.Fields, "offsety_mid", Fields.GetValue("offsety_mid", 0f), 0f);
+					UniFields.SetFloat(s.Fields, "scalex_mid",  Fields.GetValue("scalex_mid", 1.0f), 1.0f);
+					UniFields.SetFloat(s.Fields, "scaley_mid",  Fields.GetValue("scaley_mid", 1.0f), 1.0f);
+				}
 			}
 
 			// Lower texture set?
-			if((texnamelow.Length > 0) && (texnamelow[0] != '-'))
+			if((texnamelow.Length > 0) && (texnamelow != "-"))
 			{
 				// Copy middle texture
 				s.texnamelow = texnamelow;
@@ -455,6 +637,15 @@ namespace CodeImp.DoomBuilder.Map
 
 				// Counts as a half coice for copying offsets
 				copyoffsets += 1;
+
+				//mxd. Also copy UDMF offsets and scale
+				if(General.Map.UDMF)
+				{
+					UniFields.SetFloat(s.Fields, "offsetx_bottom", Fields.GetValue("offsetx_bottom", 0f), 0f);
+					UniFields.SetFloat(s.Fields, "offsety_bottom", Fields.GetValue("offsety_bottom", 0f), 0f);
+					UniFields.SetFloat(s.Fields, "scalex_bottom",  Fields.GetValue("scalex_bottom", 1.0f), 1.0f);
+					UniFields.SetFloat(s.Fields, "scaley_bottom",  Fields.GetValue("scaley_bottom", 1.0f), 1.0f);
+				}
 			}
 
 			// Copy offsets also?
@@ -467,22 +658,55 @@ namespace CodeImp.DoomBuilder.Map
 
 			General.Map.IsChanged = true;
 		}
+
+		//mxd. String representation
+		public override string ToString()
+		{
+#if DEBUG
+			return "Sidedef " + listindex + (marked ? " (marked)" : "") + " (Line " + linedef.Index + (linedef.Marked ? " (marked)" : "") + ", Sector " + sector.Index + (sector.Marked ? " (marked)" : "") + ")";
+#else
+			return "Sidedef " + listindex;
+#endif
+		}
+
 		
 		#endregion
 
 		#region ================== Changes
 
 		// This updates all properties
-		public void Update(int offsetx, int offsety, string thigh, string tmid, string tlow)
+		public void Update(int offsetx, int offsety, string thigh, string tmid, string tlow) 
+		{
+			Update(offsetx, offsety, thigh, tmid, tlow, new Dictionary<string, bool>(StringComparer.Ordinal));
+		}
+
+		//mxd. This updates all properties (UDMF version)
+		public void Update(int offsetx, int offsety, string thigh, string tmid, string tlow, Dictionary<string, bool> flags)
 		{
 			BeforePropsChange();
 			
 			// Apply changes
 			this.offsetx = offsetx;
 			this.offsety = offsety;
-			SetTextureHigh(thigh);
-			SetTextureMid(tmid);
-			SetTextureLow(tlow);
+			this.flags = new Dictionary<string, bool>(flags); //mxd
+			//SetTextureMid(tmid);
+			//SetTextureLow(tlow);
+			//SetTextureHigh(thigh);
+
+			//mxd. Set mid texture
+			texnamemid = string.IsNullOrEmpty(tmid) ? "-" : tmid;
+			longtexnamemid = Lump.MakeLongName(tmid);
+
+			//mxd. Set low texture
+			texnamelow = string.IsNullOrEmpty(tlow) ? "-" : tlow;
+			longtexnamelow = Lump.MakeLongName(tlow);
+
+			//mxd. Set high texture
+			texnamehigh = string.IsNullOrEmpty(thigh) ? "-" : thigh;
+			longtexnamehigh = Lump.MakeLongName(texnamehigh);
+
+			//mxd. Map is changed
+			General.Map.IsChanged = true;
 		}
 
 		// This sets texture
@@ -490,7 +714,7 @@ namespace CodeImp.DoomBuilder.Map
 		{
 			BeforePropsChange();
 			
-			texnamehigh = name;
+			texnamehigh = string.IsNullOrEmpty(name) ? "-" : name; //mxd
 			longtexnamehigh = Lump.MakeLongName(name);
 			General.Map.IsChanged = true;
 		}
@@ -500,7 +724,7 @@ namespace CodeImp.DoomBuilder.Map
 		{
 			BeforePropsChange();
 			
-			texnamemid = name;
+			texnamemid = string.IsNullOrEmpty(name) ? "-" : name; //mxd;
 			longtexnamemid = Lump.MakeLongName(name);
 			General.Map.IsChanged = true;
 		}
@@ -510,9 +734,51 @@ namespace CodeImp.DoomBuilder.Map
 		{
 			BeforePropsChange();
 			
-			texnamelow = name;
+			texnamelow = string.IsNullOrEmpty(name) ? "-" : name; //mxd;
 			longtexnamelow = Lump.MakeLongName(name);
 			General.Map.IsChanged = true;
+		}
+
+		// This sets udmf texture offset
+		public void SetUdmfTextureOffsetX(int offset) 
+		{
+			this.Fields.BeforeFieldsChange();
+
+			//top
+			if(longtexnamehigh != MapSet.EmptyLongName && General.Map.Data.GetTextureExists(texnamehigh)) 
+			{
+				ImageData texture = General.Map.Data.GetTextureImage(texnamehigh);
+				float scaleTop = Fields.GetValue("scalex_top", 1.0f);
+
+				float value = Fields.GetValue("offsetx_top", 0f);
+				float result = (float)(Math.Round(value + offset * scaleTop));
+				if(texture.IsImageLoaded) result %= texture.Width;
+				UniFields.SetFloat(Fields, "offsetx_top", result);
+			}
+
+			//middle
+			if(longtexnamemid != MapSet.EmptyLongName && General.Map.Data.GetTextureExists(texnamemid)) 
+			{
+				ImageData texture = General.Map.Data.GetTextureImage(texnamemid);
+				float scaleMid = Fields.GetValue("scalex_mid", 1.0f);
+
+				float value = Fields.GetValue("offsetx_mid", 0f);
+				float result = (float)(Math.Round(value + offset * scaleMid));
+				if(texture.IsImageLoaded) result %= texture.Width;
+				UniFields.SetFloat(Fields, "offsetx_mid", result);
+			}
+
+			//bottom
+			if(longtexnamelow != MapSet.EmptyLongName && General.Map.Data.GetTextureExists(texnamelow)) 
+			{
+				ImageData texture = General.Map.Data.GetTextureImage(texnamelow);
+				float scaleLow = Fields.GetValue("scalex_bottom", 1.0f);
+
+				float value = Fields.GetValue("offsetx_bottom", 0f);
+				float result = (float)(Math.Round(value + offset * scaleLow));
+				if(texture.IsImageLoaded) result %= texture.Width;
+				UniFields.SetFloat(Fields, "offsetx_bottom", result);
+			}
 		}
 		
 		#endregion

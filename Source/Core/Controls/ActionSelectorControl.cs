@@ -18,12 +18,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
-using System.Text;
 using System.Windows.Forms;
-using Microsoft.Win32;
-using System.Drawing.Drawing2D;
 using CodeImp.DoomBuilder.Config;
 
 #endregion
@@ -37,23 +33,24 @@ namespace CodeImp.DoomBuilder.Controls
 		
 		// Variables
 		private List<GeneralizedCategory> generalizedcategories;
-		private bool controlpressed = false;
-        private bool isamacro = false;  // villsa
+		private List<GeneralizedOption> generalizedoptions; //mxd
+		private bool controlpressed;
 		
 		// Constants
 		private const string NUMBER_SEPERATOR = "\t";
 		
 		// Properties
-        public bool Macro { get { return isamacro; } set { isamacro = value; } } // villsa
 		public bool Empty { get { return (number.Text.Length == 0); } set { if(value) number.Text = ""; } }
 		public int Value { get { return GetValue(); } set { number.Text = value.ToString(); } }
 		public List<GeneralizedCategory> GeneralizedCategories { get { return generalizedcategories; } set { generalizedcategories = value; } }
+		public List<GeneralizedOption> GeneralizedOptions { get { return generalizedoptions; } set { generalizedoptions = value; } } //mxd
 		
 		// Constructor
 		public ActionSelectorControl()
 		{
 			// Initialize
 			InitializeComponent();
+			number.MouseWheel += number_OnMouseWheel; //mxd
 		}
 
 		// This returns the numeric value
@@ -67,7 +64,7 @@ namespace CodeImp.DoomBuilder.Controls
 				{
 					val = Convert.ToInt32(number.Text);
 				}
-				catch(Exception e) { }
+				catch(Exception) { }
 			}
 			
 			return val;
@@ -102,12 +99,10 @@ namespace CodeImp.DoomBuilder.Controls
 		// This draws an item in the combobox
 		private void list_DrawItem(object sender, DrawItemEventArgs e)
 		{
-			INumberedTitle item;
 			Brush displaybrush = SystemBrushes.WindowText;
 			Brush backbrush = SystemBrushes.Window;
-			string displayname = "";
-			int intnumber = 0;
-			
+			string displayname = string.Empty;
+
 			// Only when running
 			if(!this.DesignMode)
 			{
@@ -119,6 +114,7 @@ namespace CodeImp.DoomBuilder.Controls
 					backbrush = new SolidBrush(SystemColors.Window);
 
 					// Try getting integral number
+					int intnumber;
 					int.TryParse(number.Text, out intnumber);
 
 					// Check what to display
@@ -126,28 +122,19 @@ namespace CodeImp.DoomBuilder.Controls
 						displayname = "";
 					else if(intnumber == 0)
 						displayname = "None";
-                    /*else if (isamacro == true)  // villsa
-                    {
-                        displayname = "Macro";
-                        number.Text = (intnumber - 255).ToString();
-                    }*/
-                    else if ((generalizedcategories != null) && GameConfiguration.IsGeneralized(intnumber, generalizedcategories))
-                        displayname = "Generalized (" + General.Map.Config.GetGeneralizedActionCategory(intnumber) + ")";
-                    else
-                    {
-                        displayname = "Unknown";
-                    }
+					else if((generalizedcategories != null) && GameConfiguration.IsGeneralized(intnumber, generalizedcategories))
+						displayname = "Generalized (" + General.Map.Config.GetGeneralizedActionCategory(intnumber) + ")";
+					else if((generalizedoptions != null) && GameConfiguration.IsGeneralizedSectorEffect(intnumber, generalizedoptions)) //mxd
+						displayname = General.Map.Config.GetGeneralizedSectorEffectName(intnumber); //mxd
+					else
+						displayname = "Unknown";
 				}
 				// In the display part of the combobox?
 				else if((e.State & DrawItemState.ComboBoxEdit) != 0)
 				{
 					// Show without number
-					item = (INumberedTitle)list.Items[e.Index];
-
-                    /*if (isamacro == true)   // villsa
-                        displayname = "Macro";
-                    else*/
-                        displayname = item.Title.Trim();
+					INumberedTitle item = (INumberedTitle)list.Items[e.Index];
+					displayname = item.Title.Trim();
 
 					// Determine colors to use
 					if(item.Index == 0)
@@ -166,12 +153,8 @@ namespace CodeImp.DoomBuilder.Controls
 				else
 				{
 					// Use number and description
-					item = (INumberedTitle)list.Items[e.Index];
-
-                    /*if (isamacro == true)   // villsa
-                        displayname = "Macro";
-                    else
-                        */displayname = item.Index + NUMBER_SEPERATOR + item.Title;
+					INumberedTitle item = (INumberedTitle)list.Items[e.Index];
+					displayname = item.Index + NUMBER_SEPERATOR + item.Title;
 
 					// Determine colors to use
 					if((e.State & DrawItemState.Focus) != 0)
@@ -185,12 +168,18 @@ namespace CodeImp.DoomBuilder.Controls
 						backbrush = new SolidBrush(SystemColors.Window);
 					}
 				}
-				
 			}
 
 			// Draw item
 			e.Graphics.FillRectangle(backbrush, e.Bounds);
 			e.Graphics.DrawString(displayname, list.Font, displaybrush, e.Bounds.X, e.Bounds.Y);
+
+			//mxd. Dispose brushes
+			if(!this.DesignMode)
+			{
+				backbrush.Dispose();
+				displaybrush.Dispose();
+			}
 		}
 
 		// List closed
@@ -205,8 +194,7 @@ namespace CodeImp.DoomBuilder.Controls
 		private void number_TextChanged(object sender, EventArgs e)
 		{
 			int itemindex = -1;
-			INumberedTitle item;
-			
+
 			// Not nothing?
 			if(number.Text.Length > 0)
 			{
@@ -214,7 +202,7 @@ namespace CodeImp.DoomBuilder.Controls
 				for(int i = 0; i < list.Items.Count; i++)
 				{
 					// This is the item we're looking for?
-					item = (INumberedTitle)list.Items[i];
+					INumberedTitle item = (INumberedTitle)list.Items[i];
 					if(item.Index.ToString() == number.Text)
 					{
 						// Found it
@@ -225,10 +213,19 @@ namespace CodeImp.DoomBuilder.Controls
 			}
 
 			// Select item
-			if(list.SelectedIndex != itemindex) list.SelectedIndex = itemindex;
-			list.Refresh();
-			
+			if(list.SelectedIndex != itemindex)
+			{
+				list.SelectedIndex = itemindex;
+				list.Refresh();
+			}
+			//mxd. This may be generalized effect, and it may've changed
+			else if(itemindex == -1)
+			{
+				list.Refresh();
+			}
+
 			// Raise change event
+			//mxd. This HAS to be raised during Edit form setup, otherwise TypeHandlers in ArgumentBoxes won't be initialized
 			if(ValueChanges != null) ValueChanges(this, EventArgs.Empty);
 		}
 
@@ -239,6 +236,30 @@ namespace CodeImp.DoomBuilder.Controls
 
 			// Allow CTRL+X, CTRL+C and CTRL+V
 			if(controlpressed && ((e.KeyCode == Keys.X) || (e.KeyCode == Keys.C) || (e.KeyCode == Keys.V))) return;
+
+			//mxd. Scroll action list using arrow keys
+			if(e.KeyCode == Keys.Down)
+			{
+				if(list.SelectedIndex > 0)
+				{
+					list.SelectedIndex--;
+					list_SelectionChangeCommitted(list, EventArgs.Empty);
+				}
+				// Cancel this
+				e.Handled = true;
+				return;
+			}
+			if(e.KeyCode == Keys.Up) 
+			{
+				if(list.SelectedIndex < list.Items.Count)
+				{
+					list.SelectedIndex++;
+					list_SelectionChangeCommitted(list, EventArgs.Empty);
+				}
+				// Cancel this
+				e.Handled = true;
+				return;
+			}
 
 			// Not numeric or control key?
 			if(((e.KeyValue < 48) || (e.KeyValue > 57)) &&
@@ -261,6 +282,21 @@ namespace CodeImp.DoomBuilder.Controls
 			{
 				// Cancel this
 				e.Handled = true;
+			}
+		}
+
+		//mxd. Scrolls action list using mouse wheel
+		private void number_OnMouseWheel(object sender, MouseEventArgs e) 
+		{
+			if(e.Delta < 0 && list.SelectedIndex > 0)
+			{
+				list.SelectedIndex--;
+				list_SelectionChangeCommitted(list, EventArgs.Empty);
+			}
+			else if(e.Delta > 0 && list.SelectedIndex < list.Items.Count - 1)
+			{
+				list.SelectedIndex++;
+				list_SelectionChangeCommitted(list, EventArgs.Empty);
 			}
 		}
 		

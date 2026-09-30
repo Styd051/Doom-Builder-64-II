@@ -17,31 +17,29 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
+using System.Drawing;
 using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
+using CodeImp.DoomBuilder.Actions;
+using CodeImp.DoomBuilder.Config;
+using CodeImp.DoomBuilder.Controls;
+using CodeImp.DoomBuilder.Data;
+using CodeImp.DoomBuilder.Editing;
+using CodeImp.DoomBuilder.Geometry;
 using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Editing;
-using CodeImp.DoomBuilder.Actions;
 using CodeImp.DoomBuilder.Types;
-using CodeImp.DoomBuilder.Config;
-using System.Drawing;
-using CodeImp.DoomBuilder.Controls;
+using CodeImp.DoomBuilder.Windows;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.BuilderModes
 {
 	[EditMode(DisplayName = "Edit Selection Mode",
-			  SwitchAction = "editselectionmode",	// Action name used to switch to this mode
+			  SwitchAction = "editselectionmode",
+			  ButtonImage = "Selection3.png",
+			  ButtonOrder = 1,
+			  ButtonGroup = "002_modify",
 			  Volatile = true,
 			  UseByDefault = true,
 			  Optional = false)]
@@ -50,7 +48,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 	{
 		#region ================== Enums
 
-		private enum ModifyMode : int
+		private enum ModifyMode
 		{
 			None,
 			Dragging,
@@ -58,7 +56,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			Rotating
 		}
 
-		private enum Grip : int
+		private enum Grip
 		{
 			None,
 			Main,
@@ -70,6 +68,64 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			RotateRT,
 			RotateRB,
 			RotateLB
+		}
+
+		internal enum HeightAdjustMode
+		{
+			NONE,
+			ADJUST_FLOORS,
+			ADJUST_CEILINGS,
+			ADJUST_BOTH,
+		}
+
+		#endregion
+
+		#region ================== Structs (mxd)
+
+		private struct SectorTextureInfo
+		{
+			public readonly SurfaceTextureInfo Floor;
+			public readonly SurfaceTextureInfo Ceiling;
+
+			public SectorTextureInfo(Sector s)
+			{
+				// Get transform properties
+				Floor.Offset = new Vector2D(UniFields.GetFloat(s.Fields, "xpanningfloor", 0f), UniFields.GetFloat(s.Fields, "ypanningfloor", 0f));
+				Ceiling.Offset = new Vector2D(UniFields.GetFloat(s.Fields, "xpanningceiling", 0f), UniFields.GetFloat(s.Fields, "ypanningceiling", 0f));
+				Floor.Scale = new Vector2D(UniFields.GetFloat(s.Fields, "xscalefloor", 1.0f), -UniFields.GetFloat(s.Fields, "yscalefloor", 1.0f));
+				Ceiling.Scale = new Vector2D(UniFields.GetFloat(s.Fields, "xscaleceiling", 1.0f), -UniFields.GetFloat(s.Fields, "yscaleceiling", 1.0f));
+				Floor.Rotation = Angle2D.DegToRad(UniFields.GetFloat(s.Fields, "rotationfloor", 0f));
+				Ceiling.Rotation = Angle2D.DegToRad(UniFields.GetFloat(s.Fields, "rotationceiling", 0f));
+
+				// Get texture sizes
+				Floor.TextureSize = GetTextureSize(s.LongFloorTexture);
+				Ceiling.TextureSize = GetTextureSize(s.LongCeilTexture);
+
+				// Surface name
+				Floor.Part = "floor";
+				Ceiling.Part = "ceiling";
+			}
+
+			private static Size GetTextureSize(long hash)
+			{
+				ImageData texture = General.Map.Data.GetFlatImage(hash);
+				if((texture == null) || (texture == General.Map.Data.WhiteTexture) ||
+				   (texture.Width <= 0) || (texture.Height <= 0) || !texture.IsImageLoaded) 
+				{
+					return new Size();
+				}
+
+				return new Size((int)Math.Round(texture.ScaledWidth), (int)Math.Round(texture.ScaledHeight));
+			}
+		}
+
+		private struct SurfaceTextureInfo
+		{
+			public Vector2D Offset;
+			public Vector2D Scale;
+			public Size TextureSize;
+			public float Rotation;
+			public string Part;
 		}
 
 		#endregion
@@ -87,9 +143,12 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		#region ================== Variables
 
 		// Modes
-		private bool modealreadyswitching = false;
-		private bool pasting = false;
+		private bool modealreadyswitching;
+		private bool clearselection; //mxd
+		private bool pasting;
+		private bool autodrag; //mxd
 		private PasteOptions pasteoptions;
+		private HeightAdjustMode heightadjustmode; //mxd
 		
 		// Docker
 		private EditSelectionPanel panel;
@@ -102,20 +161,35 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// Selection
 		private ICollection<Vertex> selectedvertices;
 		private ICollection<Thing> selectedthings;
+		private Dictionary<Sector, SectorTextureInfo> selectedsectors; //mxd
+		private List<int> fixedrotationthingtypes; //mxd 
 		private ICollection<Linedef> selectedlines;
 		private List<Vector2D> vertexpos;
 		private List<Vector2D> thingpos;
 		private List<float> thingangle;
 		private ICollection<Vertex> unselectedvertices;
 		private ICollection<Linedef> unselectedlines;
+		private ICollection<Linedef> unstablelines; //mxd
 
 		// Modification
 		private float rotation;
 		private Vector2D offset;
 		private Vector2D size;
+		private Vector2D scale = new Vector2D(1.0f, 1.0f); //mxd
 		private Vector2D baseoffset;
 		private Vector2D basesize;
 		private bool linesflipped;
+		private bool usepreciseposition; //mxd
+
+		//mxd. Texture modification
+		private static bool transformflooroffsets;
+		private static bool transformceiloffsets;
+		private static bool rotateflooroffsets;
+		private static bool rotateceiloffsets;
+		private static bool scaleflooroffsets;
+		private static bool scaleceiloffsets;
+		private Vector2D selectioncenter;
+		private Vector2D selectionbasecenter;
 		
 		// Modifying Modes
 		private ModifyMode mode;
@@ -146,12 +220,23 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 		public override object HighlightedObject { get { return highlighted; } }
 		
-		// Just keep the base mode button checked
-		public override string EditModeButtonName { get { return General.Editing.PreviousStableMode.Name; } }
-
 		public bool Pasting { get { return pasting; } set { pasting = value; } }
 		public PasteOptions PasteOptions { get { return pasteoptions; } set { pasteoptions = value.Copy(); } }
-		
+
+		//mxd. Modification
+		internal bool UsePrecisePosition { get { return usepreciseposition; } set { usepreciseposition = value; } }
+
+		//mxd. Texture offset properties
+		internal bool TransformFloorOffsets { get { return transformflooroffsets; } set { transformflooroffsets = value; UpdateAllChanges(); } }
+		internal bool TransformCeilingOffsets { get { return transformceiloffsets; } set { transformceiloffsets = value; UpdateAllChanges(); } }
+		internal bool RotateFloorOffsets { get { return rotateflooroffsets; } set { rotateflooroffsets = value; UpdateAllChanges(); } }
+		internal bool RotateCeilingOffsets { get { return rotateceiloffsets; } set { rotateceiloffsets = value; UpdateAllChanges(); } }
+		internal bool ScaleFloorOffsets { get { return scaleflooroffsets; } set { scaleflooroffsets = value; UpdateAllChanges(); } }
+		internal bool ScaleCeilingOffsets { get { return scaleceiloffsets; } set { scaleceiloffsets = value; UpdateAllChanges(); } }
+
+		//mxd. Height offset mode
+		internal HeightAdjustMode SectorHeightAdjustMode { get { return heightadjustmode; } set { heightadjustmode = value; } }
+
 		#endregion
 
 		#region ================== Constructor / Disposer
@@ -161,6 +246,14 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		{
 			// Initialize
 			mode = ModifyMode.None;
+		}
+
+		//mxd. Another constructor. Used indirectly from ImportObjAsTerrainMode.OnAccept.
+		public EditSelectionMode(bool pasting)
+		{
+			// Initialize
+			this.pasting = pasting;
+			this.mode = ModifyMode.None;
 		}
 
 		// Disposer
@@ -241,32 +334,22 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		{
 			UpdateGeometry();
 			UpdateRectangleComponents();
+			if(General.Map.UDMF) UpdateTextureTransform(); //mxd
 			General.Map.Map.Update();
 			General.Interface.RedrawDisplay();
 		}
-
-		// This returns the position of the highlighted item
-		private Vector2D GetHighlightedPosition()
-		{
-			if(highlighted is Vertex)
-				return (highlighted as Vertex).Position;
-			else if(highlighted is Thing)
-				return (highlighted as Thing).Position;
-			else
-				throw new Exception("Highlighted element type is not supported.");
-		}
 		
 		// This highlights a new vertex
-		protected void Highlight(MapElement h)
+		private void Highlight(MapElement h)
 		{
 			// Undraw previous highlight
-			if((highlighted != null) && !highlighted.IsDisposed)
+			if(highlighted != null && !highlighted.IsDisposed)
 			{
 				if(highlighted is Vertex)
 				{
 					if(renderer.StartPlotter(false))
 					{
-						renderer.PlotVertex((highlighted as Vertex), renderer.DetermineVertexColor((highlighted as Vertex)));
+						renderer.PlotVertex((Vertex)highlighted, renderer.DetermineVertexColor((Vertex)highlighted));
 						renderer.Finish();
 					}
 				}
@@ -274,7 +357,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				{
 					if(renderer.StartThings(false))
 					{
-						renderer.RenderThing((highlighted as Thing), renderer.DetermineThingColor((highlighted as Thing)), 1.0f);
+						renderer.RenderThing((Thing)highlighted, renderer.DetermineThingColor((Thing)highlighted), General.Settings.ActiveThingsAlpha);
 						renderer.Finish();
 					}
 				}
@@ -284,13 +367,13 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			highlighted = h;
 
 			// Render highlighted item
-			if((highlighted != null) && !highlighted.IsDisposed)
+			if(highlighted != null && !highlighted.IsDisposed)
 			{
 				if(highlighted is Vertex)
 				{
 					if(renderer.StartPlotter(false))
 					{
-						renderer.PlotVertex((highlighted as Vertex), ColorCollection.HIGHLIGHT);
+						renderer.PlotVertex((Vertex)highlighted, ColorCollection.HIGHLIGHT);
 						renderer.Finish();
 					}
 				}
@@ -298,7 +381,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				{
 					if(renderer.StartThings(false))
 					{
-						renderer.RenderThing((highlighted as Thing), General.Colors.Highlight, 1.0f);
+						renderer.RenderThing((Thing)highlighted, General.Colors.Highlight, General.Settings.ActiveThingsAlpha);
 						renderer.Finish();
 					}
 				}
@@ -316,7 +399,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			{
 				// Check what grip the mouse is over
 				// and change cursor accordingly
-				Grip mousegrip = CheckMouseGrip();
+				Grip mousegrip = (autodrag ? Grip.Main : CheckMouseGrip()); //mxd. We only want to move when starting auto-dragging
 				switch(mousegrip)
 				{
 					case Grip.Main:
@@ -363,7 +446,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					case Grip.SizeS:
 					case Grip.SizeW:
 					case Grip.SizeN:
-
 						// Pick the best matching cursor depending on rotation and side
 						float resizeangle = rotation;
 						if((mousegrip == Grip.SizeE) || (mousegrip == Grip.SizeW)) resizeangle += Angle2D.PIHALF;
@@ -398,7 +480,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				{
 					// Dragging
 					case ModifyMode.Dragging:
-
 						// Change offset without snapping
 						offset = mousemappos - dragoffset;
 						
@@ -478,7 +559,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 					// Resizing
 					case ModifyMode.Resizing:
-
 						// Snap to nearest vertex?
 						if(snaptonearest)
 						{
@@ -504,8 +584,15 @@ namespace CodeImp.DoomBuilder.BuilderModes
 						Vector2D oldcorner = corners[stickcorner];
 						
 						// Change size with the scale from the ruler
-						float scale = resizeaxis.GetNearestOnLine(snappedmappos);
-						size = (basesize * resizefilter) * scale + size * (1.0f - resizefilter);
+						float newscale = resizeaxis.GetNearestOnLine(snappedmappos);
+						size = (basesize * resizefilter) * newscale + size * (1.0f - resizefilter);
+
+						//mxd. Update scale
+						newscale = 1f / newscale;
+						if(float.IsInfinity(newscale) || float.IsNaN(newscale)) newscale = 99999f;
+						scale = (newscale * resizefilter) + scale * (1.0f - resizefilter);
+						if(float.IsInfinity(scale.x) || float.IsNaN(scale.x)) scale.x = 99999f;
+						if(float.IsInfinity(scale.y) || float.IsNaN(scale.y)) scale.y = 99999f;
 						
 						// Adjust corner position
 						Vector2D newcorner = TransformedPoint(originalcorners[stickcorner]);
@@ -529,7 +616,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 					// Rotating
 					case ModifyMode.Rotating:
-
 						// Get angle from mouse to center
 						Vector2D center = offset + size * 0.5f;
 						Vector2D delta = snappedmappos - center;
@@ -538,15 +624,16 @@ namespace CodeImp.DoomBuilder.BuilderModes
 						// Snap rotation to grip?
 						if(dosnaptogrid)
 						{
-							// We make 8 vectors that the rotation can snap to
+							// We make 24 vectors that the rotation can snap to
 							float founddistance = float.MaxValue;
 							float foundrotation = rotation;
-							for(int i = 0; i < 8; i++)
+							Vector3D rotvec = Vector2D.FromAngle(rotation);
+							
+							for(int i = 0; i < 24; i++)
 							{
 								// Make the vectors
-								float angle = (float)i * Angle2D.PI * 0.25f;
+								float angle = i * Angle2D.PI * 0.08333333333f; //mxd. 15-degree increments
 								Vector2D gridvec = Vector2D.FromAngle(angle);
-								Vector3D rotvec = Vector2D.FromAngle(rotation);
 								
 								// Check distance
 								float dist = 2.0f - Vector2D.DotProduct(gridvec, rotvec);
@@ -573,26 +660,16 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// This checks and returns the grip the mouse pointer is in
 		private Grip CheckMouseGrip()
 		{
-			if(PointInRectF(resizegrips[0], mousemappos))
-				return Grip.SizeN;
-			else if(PointInRectF(resizegrips[2], mousemappos))
-				return Grip.SizeS;
-			else if(PointInRectF(resizegrips[1], mousemappos))
-				return Grip.SizeE;
-			else if(PointInRectF(resizegrips[3], mousemappos))
-				return Grip.SizeW;
-			else if(PointInRectF(rotategrips[0], mousemappos))
-				return Grip.RotateLT;
-			else if(PointInRectF(rotategrips[1], mousemappos))
-				return Grip.RotateRT;
-			else if(PointInRectF(rotategrips[2], mousemappos))
-				return Grip.RotateRB;
-			else if(PointInRectF(rotategrips[3], mousemappos))
-				return Grip.RotateLB;
-			else if(Tools.PointInPolygon(corners, mousemappos))
-				return Grip.Main;
-			else
-				return Grip.None;
+			if(PointInRectF(resizegrips[0], mousemappos)) return Grip.SizeN;
+			if(PointInRectF(resizegrips[2], mousemappos)) return Grip.SizeS;
+			if(PointInRectF(resizegrips[1], mousemappos)) return Grip.SizeE;
+			if(PointInRectF(resizegrips[3], mousemappos)) return Grip.SizeW;
+			if(PointInRectF(rotategrips[0], mousemappos)) return Grip.RotateLT;
+			if(PointInRectF(rotategrips[1], mousemappos)) return Grip.RotateRT;
+			if(PointInRectF(rotategrips[2], mousemappos)) return Grip.RotateRB;
+			if(PointInRectF(rotategrips[3], mousemappos)) return Grip.RotateLB;
+			if(Tools.PointInPolygon(corners, mousemappos)) return Grip.Main;
+			return Grip.None;
 		}
 		
 		// This applies the current rotation and resize to a point
@@ -612,11 +689,47 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			
 			return p;
 		}
+
+		// This applies the current rotation and resize to a point
+		private Vector2D TransformedPointNoScale(Vector2D p)
+		{
+			// Rotate
+			Vector2D center = baseoffset + size * 0.5f;
+			Vector2D po = p - center;
+			p = po.GetRotated(rotation);
+			p += center;
+
+			// Translate
+			p += offset - baseoffset;
+
+			return p;
+		}
+		
+		// This applies the current rotation and resize to a point
+		private Vector2D TransformedPointNoRotate(Vector2D p)
+		{
+			// Resize
+			p = (p - baseoffset) * (size / basesize) + baseoffset;
+			
+			// Translate
+			p += offset - baseoffset;
+			
+			return p;
+		}
+
+		// This applies the current rotation and resize to a point
+		private Vector2D TransformedPointNoRotateNoScale(Vector2D p)
+		{
+			// Translate
+			p += offset - baseoffset;
+
+			return p;
+		}
 		
 		// This checks if a point is in a rect
-		private bool PointInRectF(RectangleF rect, Vector2D point)
+		private static bool PointInRectF(RectangleF rect, Vector2D point)
 		{
-			return (point.x >= rect.Left) && (point.x <= rect.Right) && (point.y >= rect.Top) && (point.y <= rect.Bottom);
+			return !(point.x < rect.Left || point.x > rect.Right || point.y < rect.Top || point.y > rect.Bottom); //mxd
 		}
 		
 		// This updates the values in the panel
@@ -630,25 +743,213 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// This moves all things and vertices to match the current transformation
 		private void UpdateGeometry()
 		{
-			int index = 0;
-			foreach(Vertex v in selectedvertices)
+			float[] newthingangle = thingangle.ToArray();
+			int index;
+
+			// Flip things horizontally
+			if(size.x < 0.0f)
 			{
-				v.Move(TransformedPoint(vertexpos[index++]));
+				for(index = 0; index < newthingangle.Length; index++)
+				{
+					// Check quadrant
+					if((newthingangle[index] >= 0f) && (newthingangle[index] < Angle2D.PIHALF))
+						newthingangle[index] = newthingangle[index] - (newthingangle[index] * 2);
+					else if((newthingangle[index] >= Angle2D.PIHALF) && (newthingangle[index] <= Angle2D.PI))
+						newthingangle[index] = newthingangle[index] + (Angle2D.PI - newthingangle[index]) * 2;
+					else if((newthingangle[index] >= Angle2D.PI) && (newthingangle[index] <= Angle2D.PI + Angle2D.PIHALF))
+						newthingangle[index] = newthingangle[index] - (newthingangle[index] - Angle2D.PI) * 2;
+					else
+						newthingangle[index] = newthingangle[index] + (Angle2D.PI2 - newthingangle[index]) * 2;
+				}
 			}
-			
-			index = 0;
-			foreach(Thing t in selectedthings)
+
+			// Flip things vertically
+			if(size.y < 0.0f)
 			{
-				t.Rotate(Angle2D.Normalized(thingangle[index] + rotation));
-				t.Move(TransformedPoint(thingpos[index++]));
+				for(index = 0; index < newthingangle.Length; index++)
+				{
+					// Check quadrant
+					if((newthingangle[index] >= 0f) && (newthingangle[index] < Angle2D.PIHALF))
+						newthingangle[index] = newthingangle[index] + (Angle2D.PI - newthingangle[index] * 2);
+					else if((newthingangle[index] >= Angle2D.PIHALF) && (newthingangle[index] <= Angle2D.PI))
+						newthingangle[index] = newthingangle[index] - (newthingangle[index] - Angle2D.PIHALF) * 2;
+					else if((newthingangle[index] >= Angle2D.PI) && (newthingangle[index] <= Angle2D.PI + Angle2D.PIHALF))
+						newthingangle[index] = newthingangle[index] + (Angle2D.PI - (newthingangle[index] - Angle2D.PI) * 2);
+					else
+						newthingangle[index] = newthingangle[index] - (newthingangle[index] - (Angle2D.PI + Angle2D.PIHALF)) * 2;
+				}
+			}
+
+			// We use optimized versions of the TransformedPoint depending on what needs to be done.
+			// This is mainly done because 0.0 rotation and 1.0 scale may still give slight inaccuracies.
+			bool norotate = Math.Abs(rotation) < 0.0001f;
+			bool noscale = Math.Abs(size.x - basesize.x) + Math.Abs(size.y - basesize.y) < 0.0001f;
+			if(norotate && noscale)
+			{
+				index = 0;
+				foreach(Vertex v in selectedvertices)
+				{
+					v.Move(TransformedPointNoRotateNoScale(vertexpos[index++]));
+				}
+				index = 0;
+				foreach(Thing t in selectedthings)
+				{
+					t.Move(TransformedPointNoRotateNoScale(thingpos[index++]));
+				}
+			}
+			else if(norotate)
+			{
+				index = 0;
+				foreach(Vertex v in selectedvertices)
+				{
+					v.Move(TransformedPointNoRotate(vertexpos[index++]));
+				}
+				index = 0;
+				foreach(Thing t in selectedthings)
+				{
+					t.Move(TransformedPointNoRotate(thingpos[index++]));
+				}
+			}
+			else if(noscale)
+			{
+				index = 0;
+				foreach(Vertex v in selectedvertices)
+				{
+					v.Move(TransformedPointNoScale(vertexpos[index++]));
+				}
+				index = 0;
+				foreach(Thing t in selectedthings)
+				{
+					newthingangle[index] = Angle2D.Normalized(newthingangle[index] + rotation);
+					t.Move(TransformedPointNoScale(thingpos[index++]));
+				}
+			}
+			else
+			{
+				index = 0;
+				foreach(Vertex v in selectedvertices)
+				{
+					v.Move(TransformedPoint(vertexpos[index++]));
+				}
+				index = 0;
+				foreach(Thing t in selectedthings)
+				{
+					newthingangle[index] = Angle2D.Normalized(newthingangle[index] + rotation);
+					t.Move(TransformedPoint(thingpos[index++]));
+				}
 			}
 
 			// This checks if the lines should be flipped
 			bool shouldbeflipped = (size.x < 0.0f) ^ (size.y < 0.0f);
 			if(shouldbeflipped != linesflipped) FlipLinedefs();
+
+			// Apply new thing rotations
+			index = 0;
+			foreach(Thing t in selectedthings)
+			{
+				//mxd. Added special Polyobj Anchor handling and Doom angle clamping
+				if(!fixedrotationthingtypes.Contains(t.Type))
+				{
+					int newangle = Angle2D.RealToDoom(Angle2D.Normalized(newthingangle[index]));
+					if(General.Map.Config.DoomThingRotationAngles) newangle = newangle / 45 * 45;
+					t.Rotate(newangle);
+				}
+				
+				index++;
+			}
 			
 			UpdatePanel();
 			General.Map.Map.Update(true, false);
+		}
+
+		//mxd. This updates texture transforms for all sectors
+		private void UpdateTextureTransform() 
+		{
+			foreach(KeyValuePair<Sector, SectorTextureInfo> group in selectedsectors) 
+			{
+				group.Key.Fields.BeforeFieldsChange();
+
+				// Apply transforms
+				UpdateTextureTransform(group.Key.Fields, group.Value.Ceiling, transformceiloffsets, rotateceiloffsets, scaleceiloffsets);
+				UpdateTextureTransform(group.Key.Fields, group.Value.Floor, transformflooroffsets, rotateflooroffsets, scaleflooroffsets);
+
+				// Update cache
+				group.Key.UpdateNeeded = true;
+				group.Key.UpdateCache();
+			}
+
+			// Map was changed
+			General.Map.IsChanged = true;
+		}
+
+		//mxd. This updates texture transforms in given UniFields
+		private void UpdateTextureTransform(UniFields fields, SurfaceTextureInfo si, bool transformoffsets, bool rotateoffsets, bool scaleoffsets)
+		{
+			// Get offset-ready values
+			float texrotation = Angle2D.PI2 - rotation;
+
+			// Update texture offsets
+			if(transformoffsets)
+			{
+				Vector2D toffset = (selectionbasecenter - selectioncenter).GetRotated((texrotation + si.Rotation));
+				Vector2D soffset = si.Offset.GetRotated(texrotation + si.Rotation);
+
+				fields["xpanning" + si.Part] = new UniValue(UniversalType.Float, (float)Math.Round(soffset.x + toffset.x, General.Map.FormatInterface.VertexDecimals) % si.TextureSize.Width);
+				fields["ypanning" + si.Part] = new UniValue(UniversalType.Float, (float)Math.Round(-(soffset.y + toffset.y), General.Map.FormatInterface.VertexDecimals) % si.TextureSize.Height);
+			}
+			// Restore texture offsets
+			else 
+			{
+				fields["xpanning" + si.Part] = new UniValue(UniversalType.Float, si.Offset.x);
+				fields["ypanning" + si.Part] = new UniValue(UniversalType.Float, si.Offset.y);
+			}
+
+			// Update rotation
+			if(rotateoffsets)
+				fields["rotation" + si.Part] = new UniValue(UniversalType.AngleDegreesFloat, General.ClampAngle((float)Math.Round(Angle2D.RadToDeg(si.Rotation + texrotation), General.Map.FormatInterface.VertexDecimals)));
+			// Restore rotation
+			else 
+				fields["rotation" + si.Part] = new UniValue(UniversalType.AngleDegreesFloat, Angle2D.RadToDeg(si.Rotation));
+
+			// Update scale
+			if(scaleoffsets)
+			{
+				fields["xscale" + si.Part] = new UniValue(UniversalType.Float, (float) Math.Round(si.Scale.x * scale.x, General.Map.FormatInterface.VertexDecimals));
+				fields["yscale" + si.Part] = new UniValue(UniversalType.Float, (float) Math.Round(-si.Scale.y * scale.y, General.Map.FormatInterface.VertexDecimals));
+			}
+			// Restore scale
+			else 
+			{
+				fields["xscale" + si.Part] = new UniValue(UniversalType.Float, si.Scale.x);
+				fields["yscale" + si.Part] = new UniValue(UniversalType.Float, -si.Scale.y);
+			}
+		}
+
+		//mxd. This restores texture transforms for all sectors
+		private void RestoreTextureTransform() 
+		{
+			foreach(KeyValuePair<Sector, SectorTextureInfo> group in selectedsectors)
+			{
+				group.Key.Fields.BeforeFieldsChange();
+
+				// Revert transforms
+				RestoreTextureTransform(group.Key.Fields, group.Value.Ceiling);
+				RestoreTextureTransform(group.Key.Fields, group.Value.Floor);
+
+				// Update cache
+				group.Key.UpdateNeeded = true;
+				group.Key.UpdateCache();
+			}
+		}
+
+		//mxd. This restores texture transforms in given UniFields
+		private static void RestoreTextureTransform(UniFields fields, SurfaceTextureInfo si)
+		{
+			fields["rotation" + si.Part] = new UniValue(UniversalType.AngleDegreesFloat, Angle2D.RadToDeg(si.Rotation));
+			fields["xscale" + si.Part]   = new UniValue(UniversalType.Float, si.Scale.x);
+			fields["yscale" + si.Part]   = new UniValue(UniversalType.Float, -si.Scale.y);
+			fields["xpanning" + si.Part] = new UniValue(UniversalType.Float, si.Offset.x);
+			fields["ypanning" + si.Part] = new UniValue(UniversalType.Float, si.Offset.y);
 		}
 		
 		// This updates the selection rectangle components
@@ -725,19 +1026,184 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			rotategrips[3] = new RectangleF(corners[3].x - gripsize * 0.5f,
 											corners[3].y - gripsize * 0.5f,
 											gripsize, gripsize);
+
+			//mxd. Update selection center
+			selectioncenter = new Vector2D(offset.x + size.x * 0.5f, offset.y + size.y * 0.5f);
 		}
 		
 		// This flips all linedefs in the selection (used for mirroring)
 		private void FlipLinedefs()
 		{
+			//mxd. Check if we need to flip sidedefs
+			bool flipsides = false;
+			HashSet<Linedef> selectedlineshash = new HashSet<Linedef>(selectedlines);
+			foreach(Vertex v in selectedvertices)
+			{
+				foreach(Linedef l in v.Linedefs)
+				{
+					if(!selectedlineshash.Contains(l))
+					{
+						flipsides = true;
+						break;
+					}
+				}
+			}
+
 			// Flip linedefs
 			foreach(Linedef ld in selectedlines)
+			{
 				ld.FlipVertices();
+				if(flipsides) ld.FlipSidedefs(); //mxd
+			}
 			
 			// Done
 			linesflipped = !linesflipped;
 		}
 		
+		#endregion
+
+		#region ================== Sector height adjust methods (mxd)
+
+		//x = floor height, y = ceiling height
+		private static Point GetOutsideHeights(HashSet<Sector> sectors)
+		{
+			Sector target = null;
+			Point result = new Point { X = int.MinValue, Y = int.MinValue };
+			foreach(Sector s in sectors)
+			{
+				foreach(Sidedef side in s.Sidedefs)
+				{
+					// Don't compare with our own stuff, among other things
+					if(side.Other == null || side.Other.Sector == null || sectors.Contains(side.Other.Sector)) continue;
+					if(target == null)
+					{
+						target = side.Other.Sector;
+						result.X = target.FloorHeight;
+						result.Y = target.CeilHeight;
+					}
+					else if(target != side.Other.Sector)
+					{
+						// Compare heights
+						if(target.FloorHeight != side.Other.Sector.FloorHeight)
+							result.X = int.MinValue;
+						if(target.CeilHeight != side.Other.Sector.CeilHeight)
+							result.Y = int.MinValue;
+						
+						// We can stop now...
+						if(result.X == int.MinValue && result.Y == int.MinValue)
+							return result;
+					}
+				}
+			}
+
+			return result;
+		}
+
+		private static void AdjustSectorsHeight(HashSet<Sector> toadjust, HeightAdjustMode adjustmode, int oldfloorheight, int oldceilheight)
+		{
+			// Adjust only when selection is inside a single sector
+			if(adjustmode == HeightAdjustMode.NONE || oldfloorheight == int.MinValue || oldceilheight == int.MinValue) return;
+			Point outsideheights = GetOutsideHeights(toadjust);
+			if(outsideheights.X == int.MinValue && outsideheights.Y == int.MinValue) return;
+
+			// Height differences
+			int floorheightdiff = (outsideheights.X == int.MinValue ? int.MinValue : outsideheights.X - oldfloorheight);
+			int ceilheightdiff = (outsideheights.Y == int.MinValue ? int.MinValue : outsideheights.Y - oldceilheight);
+
+			switch(adjustmode)
+			{
+				case HeightAdjustMode.ADJUST_FLOORS:
+					if(floorheightdiff != int.MinValue)
+					{
+						foreach(Sector s in toadjust) AdjustSectorHeight(s, floorheightdiff, int.MinValue);
+					}
+					break;
+
+				case HeightAdjustMode.ADJUST_CEILINGS:
+					if(ceilheightdiff != int.MinValue)
+					{
+						foreach(Sector s in toadjust) AdjustSectorHeight(s, int.MinValue, ceilheightdiff);
+					}
+					break;
+
+				case HeightAdjustMode.ADJUST_BOTH:
+					foreach(Sector s in toadjust) AdjustSectorHeight(s, floorheightdiff, ceilheightdiff);
+					break;
+
+				default:
+					throw new NotImplementedException("Unknown HeightAdjustMode: " + adjustmode);
+			}
+		}
+
+		private static void AdjustSectorHeight(Sector s, int flooroffset, int ceiloffset)
+		{
+			// Adjust floor height
+			if(flooroffset != int.MinValue)
+			{
+				// Adjust regular height
+				s.FloorHeight += flooroffset;
+
+				if(General.Map.UDMF)
+				{
+					// Adjust slope height?
+					if(s.FloorSlope.GetLengthSq() > 0 && !float.IsNaN(s.FloorSlopeOffset / s.FloorSlope.z))
+					{
+						s.FloorSlopeOffset -= flooroffset * (float)Math.Sin(s.FloorSlope.GetAngleZ());
+					}
+					// Adjust vertex height?
+					else if(s.Sidedefs.Count == 3)
+					{
+						// Collect verts
+						HashSet<Vertex> verts = new HashSet<Vertex>();
+						foreach(Sidedef side in s.Sidedefs)
+						{
+							verts.Add(side.Line.Start);
+							verts.Add(side.Line.End);
+						}
+
+						// Offset verts
+						foreach(Vertex v in verts)
+						{
+							if(!float.IsNaN(v.ZFloor)) v.ZFloor += flooroffset;
+						}
+					}
+				}
+			}
+
+			// Adjust ceiling height
+			if(ceiloffset != int.MinValue)
+			{
+				// Adjust regular height
+				s.CeilHeight += ceiloffset;
+
+				if(General.Map.UDMF)
+				{
+					// Adjust slope height?
+					if(s.CeilSlope.GetLengthSq() > 0 && !float.IsNaN(s.CeilSlopeOffset / s.CeilSlope.z))
+					{
+						s.CeilSlopeOffset -= ceiloffset * (float)Math.Sin(s.CeilSlope.GetAngleZ());
+					}
+					// Adjust vertex height?
+					else if(s.Sidedefs.Count == 3)
+					{
+						// Collect verts
+						HashSet<Vertex> verts = new HashSet<Vertex>();
+						foreach(Sidedef side in s.Sidedefs)
+						{
+							verts.Add(side.Line.Start);
+							verts.Add(side.Line.End);
+						}
+
+						// Offset verts
+						foreach(Vertex v in verts)
+						{
+							if(!float.IsNaN(v.ZCeiling)) v.ZCeiling += ceiloffset;
+						}
+					}
+				}
+			}
+		}
+
 		#endregion
 
 		#region ================== Events
@@ -752,16 +1218,23 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		{
 			base.OnEngage();
 			
-			bool autodrag = (pasting && mouseinside && BuilderPlug.Me.AutoDragOnPaste);
+			autodrag = (pasting && mouseinside && BuilderPlug.Me.AutoDragOnPaste);
+			snaptonearest = General.Interface.AutoMerge; //mxd
 			
 			// Add toolbar buttons
+			General.Interface.BeginToolbarUpdate(); //mxd
 			General.Interface.AddButton(BuilderPlug.Me.MenusForm.FlipSelectionH);
 			General.Interface.AddButton(BuilderPlug.Me.MenusForm.FlipSelectionV);
+			General.Interface.EndToolbarUpdate(); //mxd
+
+			//mxd. Get EditPanel-related settings
+			usepreciseposition = General.Settings.ReadPluginSetting("editselectionmode.usepreciseposition", true);
+			heightadjustmode = (HeightAdjustMode)General.Settings.ReadPluginSetting("editselectionmode.heightadjustmode", (int)HeightAdjustMode.NONE);
 			
 			// Add docker
 			panel = new EditSelectionPanel(this);
 			docker = new Docker("editselection", "Edit Selection", panel);
-			General.Interface.AddDocker(docker);
+			General.Interface.AddDocker(docker, true);
 			General.Interface.SelectDocker(docker);
 			
 			// We don't want to record this for undoing while we move the geometry around.
@@ -776,8 +1249,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			General.Map.Map.MarkSelectedSectors(true, true);
 			ICollection<Vertex> verts = General.Map.Map.GetVerticesFromLinesMarks(true);
 			foreach(Vertex v in verts) v.Marked = true;
-			ICollection<Sector> sects = General.Map.Map.GetSelectedSectors(true);
-			foreach(Sector s in sects)
+			ICollection<Sector> sectors = General.Map.Map.GetSelectedSectors(true); //mxd
+			selectedsectors = new Dictionary<Sector, SectorTextureInfo>(); //mxd
+			foreach(Sector s in sectors)
 			{
 				foreach(Sidedef sd in s.Sidedefs)
 				{
@@ -785,6 +1259,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					sd.Line.Start.Marked = true;
 					sd.Line.End.Marked = true;
 				}
+
+				if(General.Map.UDMF) selectedsectors.Add(s, new SectorTextureInfo(s));
 			}
 			selectedvertices = General.Map.Map.GetMarkedVertices(true);
 			selectedthings = General.Map.Map.GetMarkedThings(true);
@@ -796,11 +1272,13 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			foreach(Linedef l in markedlines) l.Selected = true;
 			selectedlines = General.Map.Map.LinedefsFromMarkedVertices(false, true, false);
 			unselectedlines = General.Map.Map.LinedefsFromMarkedVertices(true, false, false);
+			unstablelines = (pasting ? new List<Linedef>() : General.Map.Map.LinedefsFromMarkedVertices(false, false, true)); //mxd
 			
 			// Array to keep original coordinates
 			vertexpos = new List<Vector2D>(selectedvertices.Count);
 			thingpos = new List<Vector2D>(selectedthings.Count);
 			thingangle = new List<float>(selectedthings.Count);
+			fixedrotationthingtypes = new List<int>(); //mxd
 
 			// A selection must be made!
 			if((selectedvertices.Count > 0) || (selectedthings.Count > 0))
@@ -832,6 +1310,12 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					if((t.Position.x + t.Size) > right.x) right.x = t.Position.x + t.Size;
 					if((t.Position.y + t.Size) > right.y) right.y = t.Position.y + t.Size;
 
+					if(!fixedrotationthingtypes.Contains(t.Type)) //mxd
+					{
+						ThingTypeInfo tti = General.Map.Data.GetThingInfoEx(t.Type);
+						if(tti != null && tti.FixedRotation) fixedrotationthingtypes.Add(t.Type);
+					}
+
 					// Keep original coordinates
 					thingpos.Add(t.Position);
 					thingangle.Add(t.Angle);
@@ -855,6 +1339,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				
 				basesize = size;
 				baseoffset = offset;
+				selectionbasecenter = new Vector2D(offset.x + size.x * 0.5f, offset.y + size.y * 0.5f); //mxd 
 				
 				// When pasting, we want to move the geometry so it is visible
 				if(pasting)
@@ -870,11 +1355,13 @@ namespace CodeImp.DoomBuilder.BuilderModes
 						offset = viewmappos - size / 2;
 					}
 
+					if(General.Interface.SnapToGrid) //mxd
+						offset = General.Map.Grid.SnappedToGrid(offset); 
+
 					UpdateGeometry();
 					General.Map.Data.UpdateUsedTextures();
 
-					if(!autodrag)
-						General.Map.Map.Update();
+					if(!autodrag) General.Map.Map.Update();
 				}
 				
 				// Set presentation
@@ -885,16 +1372,23 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				
 				// Update
 				panel.ShowOriginalValues(baseoffset, basesize);
+				panel.SetTextureTransformSettings(General.Map.UDMF); //mxd
+				panel.SetHeightAdjustMode(heightadjustmode, sectors.Count > 0); //mxd
 				UpdateRectangleComponents();
 				UpdatePanel();
 				Update();
 				
 				// When pasting and mouse is in screen, drag selection immediately
-				if(autodrag) OnSelectBegin();
+				if(autodrag)
+				{
+					OnSelectBegin();
+					autodrag = false; //mxd. Don't need this any more
+				}
 			}
 			else
 			{
 				General.Interface.MessageBeep(MessageBeepType.Default);
+				General.Interface.DisplayStatus(StatusType.Info, "A selection is required for this action.");
 				
 				// Cancel now
 				General.Editing.CancelMode();
@@ -912,14 +1406,13 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				// Resume normal undo/redo recording
 				General.Map.UndoRedo.IgnorePropChanges = false;
 				
-				// Remove the geometry
-				int index = 0;
-				foreach(Vertex v in selectedvertices)
-					v.Dispose();
+				General.Map.Map.BeginAddRemove(); //mxd
 
-				index = 0;
-				foreach(Thing t in selectedthings)
-					t.Dispose();
+				// Remove the geometry
+				foreach(Vertex v in selectedvertices) v.Dispose();
+				foreach(Thing t in selectedthings) t.Dispose();
+
+				General.Map.Map.EndAddRemove(); //mxd
 				
 				// Withdraw the undo
 				if(General.Map.UndoRedo.NextUndo != null)
@@ -938,6 +1431,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					t.Rotate(thingangle[index]);
 					t.Move(thingpos[index++]);
 				}
+
+				//mxd. Reset texture offsets to original values
+				if(General.Map.UDMF) RestoreTextureTransform();
 				
 				// Resume normal undo/redo recording
 				General.Map.UndoRedo.IgnorePropChanges = false;
@@ -960,47 +1456,49 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				Vector2D tl = new Vector2D(General.Map.Config.RightBoundary, General.Map.Config.BottomBoundary);
 				Vector2D br = new Vector2D(General.Map.Config.LeftBoundary, General.Map.Config.RightBoundary);
 
-				foreach (Vertex v in selectedvertices)
+				foreach(Vertex v in selectedvertices)
 				{
-					if (v.Position.x < tl.x) tl.x = (int)v.Position.x;
-					if (v.Position.x > br.x) br.x = (int)v.Position.x;
-					if (v.Position.y > tl.y) tl.y = (int)v.Position.y;
-					if (v.Position.y < br.y) br.y = (int)v.Position.y;
+					if(v.Position.x < tl.x) tl.x = (int)v.Position.x;
+					if(v.Position.x > br.x) br.x = (int)v.Position.x;
+					if(v.Position.y > tl.y) tl.y = (int)v.Position.y;
+					if(v.Position.y < br.y) br.y = (int)v.Position.y;
 				}
 
-				foreach (Thing t in selectedthings)
+				foreach(Thing t in selectedthings)
 				{
-					if (t.Position.x < tl.x) tl.x = (int)t.Position.x;
-					if (t.Position.x > br.x) br.x = (int)t.Position.x;
-					if (t.Position.y > tl.y) tl.y = (int)t.Position.y;
-					if (t.Position.y < br.y) br.y = (int)t.Position.y;
+					if(t.Position.x < tl.x) tl.x = (int)t.Position.x;
+					if(t.Position.x > br.x) br.x = (int)t.Position.x;
+					if(t.Position.y > tl.y) tl.y = (int)t.Position.y;
+					if(t.Position.y < br.y) br.y = (int)t.Position.y;
 				}
 
 				// Check if the selection is outside the map boundaries
-				if (tl.x < General.Map.Config.LeftBoundary || br.x > General.Map.Config.RightBoundary ||
+				if(tl.x < General.Map.Config.LeftBoundary || br.x > General.Map.Config.RightBoundary ||
 					tl.y > General.Map.Config.TopBoundary || br.y < General.Map.Config.BottomBoundary)
 				{
 					General.Interface.DisplayStatus(StatusType.Warning, "Error: selection out of map boundaries.");
 
 					// If we're in the process of switching to another mode, reset to selection
 					// to its old position
-					if (modealreadyswitching == true)
+					if(modealreadyswitching)
 					{
 						// Reset geometry in original position
 						int index = 0;
-						foreach (Vertex v in selectedvertices)
+						foreach(Vertex v in selectedvertices)
 							v.Move(vertexpos[index++]);
 
 						index = 0;
-						foreach (Thing t in selectedthings)
+						foreach(Thing t in selectedthings)
 						{
 							t.Rotate(thingangle[index]);
 							t.Move(thingpos[index++]);
 						}
 
+						//mxd. Reset texture offsets to their original position
+						if(General.Map.UDMF) RestoreTextureTransform();
+
 						// Resume normal undo/redo recording
 						General.Map.UndoRedo.IgnorePropChanges = false;
-
 						General.Map.Map.Update(true, true);
 					}
 
@@ -1023,6 +1521,10 @@ namespace CodeImp.DoomBuilder.BuilderModes
 						t.Rotate(thingangle[index]);
 						t.Move(thingpos[index++]);
 					}
+
+					//mxd. Reset texture offsets to their original position
+					if(General.Map.UDMF) RestoreTextureTransform();
+
 					General.Map.Map.Update(true, true);
 					
 					// Make undo
@@ -1032,14 +1534,50 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				// Resume normal undo/redo recording
 				General.Map.UndoRedo.IgnorePropChanges = false;
 
+				//mxd. Update sector slopes?
+				if(General.Map.UDMF)
+				{
+					// We need a different kind of offset...
+					Vector2D relativeoffset = offset - baseoffset;
+					
+					foreach(Sector s in selectedsectors.Keys)
+					{
+						// Update floor slope?
+						if(s.FloorSlope.GetLengthSq() > 0 && !float.IsNaN(s.FloorSlopeOffset / s.FloorSlope.z)) 
+						{
+							Plane floor = new Plane(s.FloorSlope, s.FloorSlopeOffset);
+							Vector2D center = new Vector2D(s.BBox.X + s.BBox.Width / 2, s.BBox.Y + s.BBox.Height / 2);
+							s.FloorSlope = new Vector3D(new Vector2D(s.FloorSlope.x, s.FloorSlope.y).GetRotated(rotation), s.FloorSlope.z);
+							s.FloorSlopeOffset = -Vector3D.DotProduct(s.FloorSlope, new Vector3D(center + relativeoffset, floor.GetZ(center)));
+						}
+
+						// Update ceiling slope?
+						if(s.CeilSlope.GetLengthSq() > 0 && !float.IsNaN(s.CeilSlopeOffset / s.CeilSlope.z)) 
+						{
+							Plane ceiling = new Plane(s.CeilSlope, s.CeilSlopeOffset);
+							Vector2D center = new Vector2D(s.BBox.X + s.BBox.Width / 2, s.BBox.Y + s.BBox.Height / 2);
+							s.CeilSlope = new Vector3D(new Vector2D(s.CeilSlope.x, s.CeilSlope.y).GetRotated(rotation), s.CeilSlope.z);
+							s.CeilSlopeOffset = -Vector3D.DotProduct(s.CeilSlope, new Vector3D(center + relativeoffset, ceiling.GetZ(center)));
+						}
+					}
+				}
+
 				// Mark selected geometry
 				General.Map.Map.ClearAllMarks(false);
 				General.Map.Map.MarkAllSelectedGeometry(true, true, true, true, false);
 				
 				// Move geometry to new position
 				UpdateGeometry();
+
+				//mxd. Update floor/ceiling texture settings
+				if(General.Map.UDMF) UpdateTextureTransform();
+				
 				General.Map.Map.Update(true, true);
 				
+				//mxd
+				int oldoutsidefloorheight = int.MinValue;
+				int oldoutsideceilingheight = int.MinValue;
+
 				// When pasting, we want to join with the parent sector
 				// where the sidedefs are referencing a virtual sector
 				if(pasting)
@@ -1050,10 +1588,15 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 					// Go for all sidedes in the new geometry
 					List<Sidedef> newsides = General.Map.Map.GetMarkedSidedefs(true);
-					for(int i = 0; i < newsides.Count; i++)
+					List<Linedef> oldlines = General.Map.Map.GetMarkedLinedefs(false); //mxd
+
+					//mxd. Let's use a blockmap...
+					RectangleF area = MapSet.CreateArea(oldlines);
+					BlockMap<BlockEntry> blockmap = new BlockMap<BlockEntry>(area);
+					blockmap.AddLinedefsSet(oldlines);
+
+					foreach(Sidedef s in newsides) 
 					{
-						Sidedef s = newsides[i];
-						
 						// Connected to a virtual sector?
 						if(s.Marked && s.Sector.Fields.ContainsKey(MapSet.VirtualSectorField))
 						{
@@ -1068,17 +1611,12 @@ namespace CodeImp.DoomBuilder.BuilderModes
 							// loses both its sidedefs because it doesn't join any sector)
 							//if((s.Other != null) && !s.Other.Sector.Fields.ContainsKey(MapSet.VirtualSectorField))
 							{
-								Sidedef joinsidedef = null;
-								
 								// Find out in which sector this was pasted
 								Vector2D testpoint = s.Line.GetSidePoint(!s.IsFront);
-								Linedef nl = MapSet.NearestLinedef(General.Map.Map.GetMarkedLinedefs(false), testpoint);
-								if(nl != null)
+								Linedef nl = MapSet.NearestLinedef(blockmap, testpoint); //mxd
+								if(nl != null) 
 								{
-									if(nl.SideOfLine(testpoint) <= 0)
-										joinsidedef = nl.Front;
-									else
-										joinsidedef = nl.Back;
+									Sidedef joinsidedef = (nl.SideOfLine(testpoint) <= 0 ? nl.Front : nl.Back);
 
 									// Join?
 									if(joinsidedef != null)
@@ -1118,45 +1656,75 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					// Do we have a virtual and parent sector?
 					if((vsector != null) && (parent != null))
 					{
-						// Adjust the floor and ceiling heights of all new sectors
-						if(pasteoptions.AdjustHeights)
-						{
-							ICollection<Sector> newsectors = General.Map.Map.GetMarkedSectors(true);
-							foreach(Sector s in newsectors)
-							{
-								s.CeilHeight += parent.CeilHeight - vsector.CeilHeight;
-								s.FloorHeight += parent.FloorHeight - vsector.FloorHeight;
-							}
-						}
+						//mxd. Store floor/ceiling height
+						oldoutsidefloorheight = vsector.FloorHeight;
+						oldoutsideceilingheight = vsector.CeilHeight;
 					}
 					
 					// Remove any virtual sectors
 					General.Map.Map.RemoveVirtualSectors();
 				}
-				
-				// Stitch geometry
-				if(snaptonearest) General.Map.Map.StitchGeometry();
+				else
+				{
+					//mxd. Get floor/ceiling height from outside sectors
+					if(unstablelines.Count == 0 && heightadjustmode != HeightAdjustMode.NONE)
+					{
+						// Get affected sectors
+						HashSet<Sector> affectedsectors = new HashSet<Sector>(General.Map.Map.GetSelectedSectors(true));
+						
+						Point outsideheights = GetOutsideHeights(affectedsectors);
+						oldoutsidefloorheight = outsideheights.X;
+						oldoutsideceilingheight = outsideheights.Y;
+					}
+				}
 
-				// Make corrections for backward linedefs
-				MapSet.FlipBackwardLinedefs(General.Map.Map.Linedefs);
-				
+				//mxd. We'll need sidedefs marked by StitchGeometry, not all sidedefs from selection...
+				General.Map.Map.ClearMarkedSidedefs(false);
+
+				// Stitch geometry
+				General.Map.Map.StitchGeometry(General.Settings.MergeGeometryMode);
+
 				// Snap to map format accuracy
-				General.Map.Map.SnapAllToAccuracy();
+				General.Map.Map.SnapAllToAccuracy(General.Map.UDMF && usepreciseposition);
+
+				//mxd. Get new lines from linedef marks...
+				HashSet<Linedef> newlines = new HashSet<Linedef>(General.Map.Map.GetMarkedLinedefs(true));
+
+				//mxd. Marked lines were created during linedef splitting
+				HashSet<Linedef> changedlines = new HashSet<Linedef>(selectedlines);
+				changedlines.UnionWith(newlines);
+
+				//mxd. Update sector height?
+				if(changedlines.Count > 0 && heightadjustmode != HeightAdjustMode.NONE 
+					&& oldoutsidefloorheight != int.MinValue && oldoutsideceilingheight != int.MinValue)
+				{
+					// Sectors may've been created/removed when applying dragging...
+					HashSet<Sector> draggedsectors = new HashSet<Sector>(General.Map.Map.GetMarkedSectors(true));
+					foreach(Sector ss in selectedsectors.Keys) if(!ss.IsDisposed) draggedsectors.Add(ss);
+
+					// Change floor/ceiling height
+					AdjustSectorsHeight(draggedsectors, heightadjustmode, oldoutsidefloorheight, oldoutsideceilingheight);
+				}
 				
 				// Update cached values
 				General.Map.Data.UpdateUsedTextures();
 				General.Map.Map.Update();
+				General.Map.ThingsFilter.Update();
 				
-				// Make normal selection
+				// Make normal selection?
 				General.Map.Map.ClearAllSelected();
-				foreach(Vertex v in selectedvertices) v.Selected = true;
-				foreach(Linedef l in selectedlines) { l.Start.Selected = true; l.End.Selected = true; }
-				foreach(Thing t in selectedthings) t.Selected = true;
+				if(!clearselection) //mxd
+				{
+					foreach(Vertex v in selectedvertices) if(!v.IsDisposed) v.Selected = true;
+					foreach(Linedef l in selectedlines) { if(!l.IsDisposed) { l.Start.Selected = true; l.End.Selected = true; } }
+					foreach(Thing t in selectedthings) if(!t.IsDisposed) t.Selected = true;
+				}
 				General.Map.Map.SelectionType = SelectionType.Vertices | SelectionType.Things;
 				
 				// Done
 				selectedvertices = new List<Vertex>();
 				selectedthings = new List<Thing>();
+				selectedlines = new List<Linedef>();
 				Cursor.Current = Cursors.Default;
 				General.Map.IsChanged = true;
 			}
@@ -1174,9 +1742,15 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			base.OnDisengage();
 
 			// Remove toolbar buttons
+			General.Interface.BeginToolbarUpdate(); //mxd
 			General.Interface.RemoveButton(BuilderPlug.Me.MenusForm.FlipSelectionH);
 			General.Interface.RemoveButton(BuilderPlug.Me.MenusForm.FlipSelectionV);
-			
+			General.Interface.EndToolbarUpdate(); //mxd
+
+			//mxd. Save EditPanel-related settings 
+			General.Settings.WritePluginSetting("editselectionmode.usepreciseposition", usepreciseposition);
+			General.Settings.WritePluginSetting("editselectionmode.heightadjustmode", (int)heightadjustmode);
+
 			// Remove docker
 			General.Interface.RemoveDocker(docker);
 			panel.Dispose();
@@ -1211,16 +1785,16 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			{
 				renderer.PlotLinedefSet(General.Map.Map.Linedefs);
 				renderer.PlotVerticesSet(General.Map.Map.Vertices);
-				if(highlighted is Vertex) renderer.PlotVertex((highlighted as Vertex), ColorCollection.HIGHLIGHT);
+				if(highlighted is Vertex) renderer.PlotVertex((Vertex)highlighted, ColorCollection.HIGHLIGHT);
 				renderer.Finish();
 			}
 
 			// Render things
 			if(renderer.StartThings(true))
 			{
-				renderer.RenderThingSet(General.Map.ThingsFilter.HiddenThings, Presentation.THINGS_HIDDEN_ALPHA);
-				renderer.RenderThingSet(General.Map.ThingsFilter.VisibleThings, 1.0f);
-				if(highlighted is Thing) renderer.RenderThing((highlighted as Thing), General.Colors.Highlight, 1.0f);
+				renderer.RenderThingSet(General.Map.ThingsFilter.HiddenThings, General.Settings.HiddenThingsAlpha);
+				renderer.RenderThingSet(General.Map.ThingsFilter.VisibleThings, General.Settings.ActiveThingsAlpha);
+				if(highlighted is Thing) renderer.RenderThing((Thing)highlighted, General.Colors.Highlight, General.Settings.ActiveThingsAlpha);
 				renderer.Finish();
 			}
 
@@ -1258,7 +1832,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		public override void OnMouseMove(MouseEventArgs e)
 		{
 			base.OnMouseMove(e);
-
+			if(panning) return; //mxd. Skip all this jazz while panning
 			Update();
 		}
 
@@ -1297,7 +1871,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			Vector2D delta;
 
 			// Check what grip the mouse is over
-			switch(CheckMouseGrip())
+			Grip mousegrip = (autodrag ? Grip.Main : CheckMouseGrip()); //mxd. We only want to move when starting auto-dragging
+			switch(mousegrip)
 			{
 				// Drag main rectangle
 				case Grip.Main:
@@ -1308,7 +1883,11 @@ namespace CodeImp.DoomBuilder.BuilderModes
 						int index = 0;
 						foreach(Vertex v in selectedvertices)
 						{
-							if(v == highlighted) highlightedpos = vertexpos[index];
+							if(v == highlighted)
+							{
+								highlightedpos = vertexpos[index];
+								break;
+							}
 							index++;
 						}
 					}
@@ -1317,7 +1896,11 @@ namespace CodeImp.DoomBuilder.BuilderModes
 						int index = 0;
 						foreach(Thing t in selectedthings)
 						{
-							if(t == highlighted) highlightedpos = thingpos[index];
+							if(t == highlighted)
+							{
+								highlightedpos = thingpos[index];
+								break;
+							}
 							index++;
 						}
 					}
@@ -1474,6 +2057,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			
 			// No modifying mode
 			mode = ModifyMode.None;
+
+			//mxd. Update floor/ceiling texture settings
+			if(General.Map.UDMF) UpdateTextureTransform();
 			
 			// Redraw
 			General.Map.Map.Update();
@@ -1506,9 +2092,12 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		[BeginAction("clearselection", BaseAction = true)]
 		public void ClearSelection()
 		{
-			// Accept changes
+			//mxd. Accept changes
+			clearselection = true;
 			General.Editing.AcceptMode();
-			General.Map.Map.ClearAllSelected();
+
+			//mxd. Clear selection info
+			General.Interface.DisplayStatus(StatusType.Selection, string.Empty);
 		}
 
 		// Flip vertically

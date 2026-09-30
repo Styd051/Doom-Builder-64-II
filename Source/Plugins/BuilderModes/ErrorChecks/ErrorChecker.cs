@@ -17,22 +17,6 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Editing;
-using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Types;
-using CodeImp.DoomBuilder.Config;
 
 #endregion
 
@@ -53,7 +37,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		#region ================== Properties
 		
 		public int TotalProgress { get { return totalprogress; } }
-		
+		public virtual bool SkipCheck { get { return false; } } //mxd
+
 		#endregion
 		
 		#region ================== Constructor / Destructor

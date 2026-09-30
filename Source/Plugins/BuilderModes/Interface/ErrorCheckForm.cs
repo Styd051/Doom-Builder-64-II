@@ -18,16 +18,12 @@
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
-using Microsoft.Win32;
-using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.Config;
+using CodeImp.DoomBuilder.Editing;
 using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Controls;
 using CodeImp.DoomBuilder.Windows;
 using System.Reflection;
 using System.Globalization;
@@ -53,15 +49,31 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		
 		#region ================== Variables
 		
-		private volatile bool running = false;
+		private volatile bool running;
 		private Thread checksthread;
 		private BlockMap<BlockEntry> blockmap;
+		private Size initialsize; //mxd
+		private List<ErrorResult> resultslist; //mxd 
+		private List<Type> hiddentresulttypes; //mxd 
+		private bool bathselectioninprogress; //mxd
 		
 		#endregion
 
 		#region ================== Properties
 		
-		public ErrorResult SelectedResult { get { return results.SelectedItem as ErrorResult; } }
+		public List<ErrorResult> SelectedResults { 
+			get 
+			{
+				List<ErrorResult> selection = new List<ErrorResult>();
+				foreach(Object ro in results.SelectedItems)
+				{
+					ErrorResult result = ro as ErrorResult;
+					if(result == null) continue;
+					selection.Add(result);
+				}
+				return selection;
+			} 
+		}
 		public BlockMap<BlockEntry> BlockMap { get { return blockmap; } }
 		
 		#endregion
@@ -81,6 +93,31 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				object[] attr = t.GetCustomAttributes(typeof(ErrorCheckerAttribute), true);
 				if(attr.Length > 0)
 				{
+					//mxd. Skip this check?..
+					ErrorChecker checker;
+
+					try
+					{
+						// Create instance
+						checker = (ErrorChecker)Assembly.GetExecutingAssembly().CreateInstance(t.FullName, false, BindingFlags.Default, null, null, CultureInfo.CurrentCulture, new object[0]);
+					}
+					catch(TargetInvocationException ex)
+					{
+						// Error!
+						General.ErrorLogger.Add(ErrorType.Error, "Failed to create class instance \"" + t.Name + "\"");
+						General.WriteLogLine(ex.InnerException.GetType().Name + ": " + ex.InnerException.Message);
+						throw;
+					}
+					catch(Exception ex)
+					{
+						// Error!
+						General.ErrorLogger.Add(ErrorType.Error, "Failed to create class instance \"" + t.Name + "\"");
+						General.WriteLogLine(ex.GetType().Name + ": " + ex.Message);
+						throw;
+					}
+
+					if(checker.SkipCheck) continue;
+					
 					ErrorCheckerAttribute checkerattr = (attr[0] as ErrorCheckerAttribute);
 					
 					// Add the type to the checkbox list
@@ -88,6 +125,12 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					c.Checked = checkerattr.DefaultChecked;
 				}
 			}
+			checks.Sort(); //mxd
+
+			//mxd. Store initial height
+			initialsize = this.Size;
+			resultslist = new List<ErrorResult>();
+			hiddentresulttypes = new List<Type>();
 		}
 		
 		// This shows the window
@@ -97,17 +140,16 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			checks.PerformLayout();
 			buttoncheck.Top = checks.Bottom + 14;
 			resultspanel.Top = buttoncheck.Bottom + 14;
-			
-			// First time showing?
-			//if((this.Location.X == 0) && (this.Location.Y == 0))
-			{
-				// Position at left-top of owner
-				this.Location = new Point(owner.Location.X + 20, owner.Location.Y + 90);
-			}
+			this.Text = "Map Analysis"; //mxd
+
+			// Position at left-top of owner
+			this.Location = new Point(owner.Location.X + 20, owner.Location.Y + 90);
 			
 			// Close results part
 			resultspanel.Visible = false;
-			this.Size = new Size(this.Width, this.Height - this.ClientSize.Height + resultspanel.Top);
+			this.Size = new Size(initialsize.Width, this.Height - this.ClientSize.Height + resultspanel.Top);
+			this.MinimumSize = this.Size; //mxd
+			this.MaximumSize = this.Size; //mxd
 			
 			// Show window
 			base.Show(owner);
@@ -121,13 +163,18 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		{
 			if(results.InvokeRequired)
 			{
-				CallResultMethodDelegate d = new CallResultMethodDelegate(SubmitResult);
+				CallResultMethodDelegate d = SubmitResult;
 				try { progress.Invoke(d, result); }
 				catch(ThreadInterruptedException) { }
 			}
 			else
 			{
-				results.Items.Add(result);
+				if(!result.IsHidden && !hiddentresulttypes.Contains(result.GetType())) //mxd
+				{
+					results.Items.Add(result);
+				}
+				resultslist.Add(result); //mxd
+				UpdateTitle();
 			}
 		}
 
@@ -135,7 +182,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		{
 			if(progress.InvokeRequired)
 			{
-				CallIntMethodDelegate d = new CallIntMethodDelegate(SetProgressMaximum);
+				CallIntMethodDelegate d = SetProgressMaximum;
 				try { progress.Invoke(d, maximum); }
 				catch(ThreadInterruptedException) { }
 			}
@@ -149,7 +196,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		{
 			if(progress.InvokeRequired)
 			{
-				CallIntMethodDelegate d = new CallIntMethodDelegate(AddProgressValue);
+				CallIntMethodDelegate d = AddProgressValue;
 				try { progress.Invoke(d, value); }
 				catch(ThreadInterruptedException) { }
 			}
@@ -158,13 +205,23 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				progress.Value += value;
 			}
 		}
+
+		//mxd
+		private void UpdateTitle()
+		{
+			int hiddencount = resultslist.Count - results.Items.Count;
+			string title = "Map Analysis [" + resultslist.Count + " results";
+			if(hiddencount > 0) title += hiddencount + " hidden";
+			title += ", " + results.SelectedItems.Count + " selected";
+			this.Text = title + @"]";
+		}
 		
 		// This stops checking (only called from the checking management thread)
 		private void StopChecking()
 		{
 			if(this.InvokeRequired)
 			{
-				CallVoidMethodDeletage d = new CallVoidMethodDeletage(StopChecking);
+				CallVoidMethodDeletage d = StopChecking;
 				this.Invoke(d);
 			}
 			else
@@ -178,10 +235,15 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				blockmap = null;
 				
 				// When no results found, show "no results" and disable the list
-				if(results.Items.Count == 0)
+				if(resultslist.Count == 0) 
 				{
 					results.Items.Add(new ResultNoErrors());
 					results.Enabled = false;
+					UpdateTitle(); //mxd
+				} 
+				else 
+				{ 
+					ClearSelectedResult(); //mxd
 				}
 			}
 		}
@@ -200,20 +262,28 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			blockmap.AddLinedefsSet(General.Map.Map.Linedefs);
 			blockmap.AddSectorsSet(General.Map.Map.Sectors);
 			blockmap.AddThingsSet(General.Map.Map.Things);
+			blockmap.AddVerticesSet(General.Map.Map.Vertices); //mxd
 			
-			// Open the results panel
-			this.Size = new Size(this.Width, this.Height - this.ClientSize.Height + resultspanel.Top + resultspanel.Height);
+			//mxd. Open the results panel
+			if(!resultspanel.Visible) 
+			{
+				this.MinimumSize = new Size();
+				this.MaximumSize = new Size();
+				this.Size = initialsize;
+				resultspanel.Size = new Size(resultspanel.Width, this.ClientSize.Height - resultspanel.Top);
+				resultspanel.Visible = true;
+			}
 			progress.Value = 0;
 			results.Items.Clear();
 			results.Enabled = true;
+			resultslist = new List<ErrorResult>(); //mxd
 			ClearSelectedResult();
-			resultspanel.Visible = true;
 			buttoncheck.Text = "Abort Analysis";
 			General.Interface.RedrawDisplay();
 			
 			// Start checking
 			running = true;
-			checksthread = new Thread(new ThreadStart(RunChecks));
+			checksthread = new Thread(RunChecks);
 			checksthread.Name = "Error Checking Management";
 			checksthread.Priority = ThreadPriority.Normal;
 			checksthread.Start();
@@ -236,18 +306,28 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			}
 
 			ClearSelectedResult();
+			
+			//mxd. Clear results 
+			resultslist.Clear();
+			results.Items.Clear();
+
 			this.Hide();
 		}
 
 		// This clears the selected result
 		private void ClearSelectedResult()
 		{
-			results.SelectedIndex = -1;
-			resultinfo.Text = "Select a result from the list to see more information.";
+			results.SelectedItems.Clear(); //mxd
+			if(results.Items.Count == 0 && resultslist.Count > 0) //mxd
+				resultinfo.Text = "All results are hidden. Use context menu to show them.";
+			else
+				resultinfo.Text = "Select a result from the list to see more information.\r\nHold 'Ctrl' to select several results.\r\nHold 'Shift' to select a range of results.\r\nRight-click on a result to show context menu.";
 			resultinfo.Enabled = false;
 			fix1.Visible = false;
 			fix2.Visible = false;
 			fix3.Visible = false;
+
+			UpdateTitle(); //mxd
 		}
 		
 		// This runs in a seperate thread to manage the checking threads
@@ -266,7 +346,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				if(c.Checked)
 				{
 					Type t = (c.Tag as Type);
-					ErrorChecker checker = null;
+					ErrorChecker checker;
 					
 					try
 					{
@@ -276,16 +356,16 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					catch(TargetInvocationException ex)
 					{
 						// Error!
-						General.ErrorLogger.Add(ErrorType.Error, "Failed to create class instance '" + t.Name + "'");
+						General.ErrorLogger.Add(ErrorType.Error, "Failed to create class instance \"" + t.Name + "\"");
 						General.WriteLogLine(ex.InnerException.GetType().Name + ": " + ex.InnerException.Message);
-						throw ex;
+						throw;
 					}
 					catch(Exception ex)
 					{
 						// Error!
-						General.ErrorLogger.Add(ErrorType.Error, "Failed to create class instance '" + t.Name + "'");
+						General.ErrorLogger.Add(ErrorType.Error, "Failed to create class instance \"" + t.Name + "\"");
 						General.WriteLogLine(ex.GetType().Name + ": " + ex.Message);
-						throw ex;
+						throw;
 					}
 					
 					// Add to list
@@ -312,7 +392,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				while((threads.Count < maxthreads) && (nextchecker < checkers.Count))
 				{
 					ErrorChecker c = checkers[nextchecker++];
-					Thread t = new Thread(new ThreadStart(c.Run));
+					Thread t = new Thread(c.Run);
 					t.Name = "Error Checker '" + c.GetType().Name + "'";
 					t.Priority = ThreadPriority.BelowNormal;
 					t.Start();
@@ -345,11 +425,23 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				}
 			}
 			
-			// Dispose all checkers
-			checkers = null;
-			
 			// Done
 			StopChecking();
+		}
+
+		//mxd
+		private Dictionary<Type, bool> GetSelectedTypes()
+		{
+			Dictionary<Type, bool> selectedtypes = new Dictionary<Type, bool>();
+			foreach(var ro in results.SelectedItems)
+			{
+				ErrorResult r = ro as ErrorResult;
+				if(r == null) continue;
+				Type t = r.GetType();
+				if(!selectedtypes.ContainsKey(t)) selectedtypes.Add(t, false);
+			}
+
+			return selectedtypes;
 		}
 		
 		#endregion
@@ -359,6 +451,10 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// Window closing
 		private void ErrorCheckForm_FormClosing(object sender, FormClosingEventArgs e)
 		{
+			//mxd. Clear results 
+			resultslist.Clear();
+			results.Items.Clear();
+			
 			// If the user closes the form, then just cancel the mode
 			if(e.CloseReason == CloseReason.UserClosing)
 			{
@@ -393,19 +489,72 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// Results selection changed
 		private void results_SelectedIndexChanged(object sender, EventArgs e)
 		{
+			//mxd
+			if(bathselectioninprogress) return;
+			
 			// Anything selected?
-			if(results.SelectedIndex >= 0)
+			if(results.SelectedItems.Count > 0)
 			{
-				ErrorResult r = (results.SelectedItem as ErrorResult);
-				resultinfo.Text = r.Description;
-				resultinfo.Enabled = true;
-				fix1.Text = r.Button1Text;
-				fix2.Text = r.Button2Text;
-				fix3.Text = r.Button3Text;
-				fix1.Visible = (r.Buttons >= 1);
-				fix2.Visible = (r.Buttons >= 2);
-				fix3.Visible = (r.Buttons >= 3);
-				r.ZoomToObject();
+				ErrorResult firstresult = (results.SelectedItems[0] as ErrorResult);
+				if(firstresult == null)
+				{
+					ClearSelectedResult();
+				}
+				else
+				{
+					bool sametype = true;
+					List<ErrorResult> validresults = new List<ErrorResult>();
+
+					// Selected results have the same fixes?
+					foreach(var ri in results.SelectedItems)
+					{
+						ErrorResult result = ri as ErrorResult;
+						if(result == null) continue;
+						validresults.Add(result);
+
+						if(result.Buttons != firstresult.Buttons || result.Button1Text != firstresult.Button1Text
+							|| result.Button2Text != firstresult.Button2Text || result.Button3Text != firstresult.Button3Text)
+						{
+							sametype = false;
+							break;
+						}
+					}
+
+					resultinfo.Enabled = true;
+
+					if(sametype)
+					{
+						resultinfo.Text = firstresult.Description;
+						fix1.Text = firstresult.Button1Text;
+						fix2.Text = firstresult.Button2Text;
+						fix3.Text = firstresult.Button3Text;
+						fix1.Visible = (firstresult.Buttons > 0);
+						fix2.Visible = (firstresult.Buttons > 1);
+						fix3.Visible = (firstresult.Buttons > 2);
+					}
+					else
+					{
+						resultinfo.Text = "Several types of map analysis results are selected. To display fixes, make sure that only a single result type is selected.";
+						fix1.Visible = false;
+						fix2.Visible = false;
+						fix3.Visible = false;
+					}
+
+					// Zoom to area
+					if(validresults.Count > 0)
+					{
+						RectangleF zoomarea = validresults[0].GetZoomArea();
+						foreach(ErrorResult result in validresults)
+						{
+							zoomarea = RectangleF.Union(zoomarea, result.GetZoomArea());
+						}
+
+						ClassicMode editmode = (General.Editing.Mode as ClassicMode);
+						editmode.CenterOnArea(zoomarea, 0.6f);
+					}
+				}
+
+				UpdateTitle(); //mxd
 			}
 			else
 			{
@@ -419,7 +568,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		private void fix1_Click(object sender, EventArgs e)
 		{
 			// Anything selected?
-			if(results.SelectedIndex >= 0)
+			if(results.SelectedItems.Count > 0)
 			{
 				if(running)
 				{
@@ -428,7 +577,15 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				else
 				{
 					ErrorResult r = (results.SelectedItem as ErrorResult);
-					if(r.Button1Click()) StartChecking(); else General.Interface.RedrawDisplay();
+					if(r.Button1Click(false)) 
+					{
+						if(results.SelectedItems.Count > 1) FixSimilarErrors(r.GetType(), 1); //mxd
+						StartChecking();
+					} 
+					else 
+					{
+						General.Interface.RedrawDisplay();
+					}
 				}
 			}
 		}
@@ -446,7 +603,15 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				else
 				{
 					ErrorResult r = (results.SelectedItem as ErrorResult);
-					if(r.Button2Click()) StartChecking(); else General.Interface.RedrawDisplay();
+					if(r.Button2Click(false)) 
+					{
+						if(results.SelectedItems.Count > 1) FixSimilarErrors(r.GetType(), 2); //mxd
+						StartChecking();
+					} 
+					else 
+					{
+						General.Interface.RedrawDisplay();
+					}
 				}
 			}
 		}
@@ -464,9 +629,39 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				else
 				{
 					ErrorResult r = (results.SelectedItem as ErrorResult);
-					if(r.Button3Click()) StartChecking(); else General.Interface.RedrawDisplay();
+					if(r.Button3Click(false)) 
+					{
+						if(results.SelectedItems.Count > 1) FixSimilarErrors(r.GetType(), 3); //mxd
+						StartChecking();
+					} 
+					else 
+					{
+						General.Interface.RedrawDisplay();
+					}
 				}
 			}
+		}
+
+		//mxd
+		private void FixSimilarErrors(Type type, int fixIndex) 
+		{
+			foreach(Object item in results.SelectedItems) 
+			{
+				if(item == results.SelectedItem) continue;
+				if(item.GetType() != type) continue;
+
+				ErrorResult r = item as ErrorResult;
+
+				if(fixIndex == 1 && !r.Button1Click(true)) break;
+				if(fixIndex == 2 && !r.Button2Click(true)) break;
+				if(fixIndex == 3 && !r.Button3Click(true)) break;
+			}
+		}
+
+		//mxd
+		private void toggleall_CheckedChanged(object sender, EventArgs e) 
+		{
+			foreach(CheckBox cb in checks.Checkboxes) cb.Checked = toggleall.Checked;
 		}
 
 		private void ErrorCheckForm_HelpRequested(object sender, HelpEventArgs hlpevent)
@@ -475,5 +670,167 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		}
 		
 		#endregion
+
+		#region ================== Results Context Menu (mxd)
+
+		private void resultcontextmenustrip_Opening(object sender, System.ComponentModel.CancelEventArgs e) 
+		{
+			//disable or enable stuff
+			bool haveresult = resultslist.Count > 0 && results.SelectedItems.Count > 0;
+			resultshowall.Enabled = (resultslist.Count > 0 && resultslist.Count > results.Items.Count);
+			resultselectcurrenttype.Enabled = haveresult;
+			resultcopytoclipboard.Enabled = haveresult;
+			resulthidecurrent.Enabled = haveresult;
+			resulthidecurrenttype.Enabled = haveresult;
+			resultshowonlycurrent.Enabled = haveresult;
+		}
+
+		private void resultshowall_Click(object sender, EventArgs e) 
+		{
+			// Reset ignored items
+			foreach(ErrorResult result in resultslist) result.Hide(false);
+			
+			// Restore items
+			results.Items.Clear();
+			results.Items.AddRange(resultslist.ToArray());
+			hiddentresulttypes.Clear();
+
+			// Do the obvious
+			ClearSelectedResult();
+		}
+
+		private void resulthidecurrent_Click(object sender, EventArgs e) 
+		{
+			// Collect results to hide
+			List<ErrorResult> tohide = new List<ErrorResult>();
+			foreach(var ro in results.SelectedItems)
+			{
+				ErrorResult r = ro as ErrorResult;
+				if(r == null) return;
+				r.Hide(true);
+				tohide.Add(r);
+			}
+			
+			// Remove from the list
+			results.BeginUpdate();
+			foreach(ErrorResult r in tohide) results.Items.Remove(r);
+			results.EndUpdate();
+
+			// Do the obvious
+			ClearSelectedResult();
+		}
+
+		private void resulthidecurrenttype_Click(object sender, EventArgs e)
+		{
+			Dictionary<Type, bool> tohide = GetSelectedTypes();
+			List<ErrorResult> filtered = new List<ErrorResult>();
+			hiddentresulttypes.AddRange(tohide.Keys);
+
+			// Apply filtering
+			foreach(ErrorResult result in results.Items)
+			{
+				if(!tohide.ContainsKey(result.GetType())) filtered.Add(result);
+			}
+
+			// Replace items
+			results.Items.Clear();
+			results.Items.AddRange(filtered.ToArray());
+
+			// Do the obvious
+			ClearSelectedResult();
+		}
+
+		private void resultshowonlycurrent_Click(object sender, EventArgs e) 
+		{
+			Dictionary<Type, bool> toshow = GetSelectedTypes();
+			List<ErrorResult> filtered = new List<ErrorResult>();
+			hiddentresulttypes.Clear();
+
+			// Apply filtering
+			foreach(ErrorResult result in results.Items)
+			{
+				Type curresulttype = result.GetType();
+				if(!toshow.ContainsKey(curresulttype))
+				{
+					hiddentresulttypes.Add(curresulttype);
+				}
+				else
+				{
+					filtered.Add(result);
+				}
+			}
+
+			// Replace items
+			results.Items.Clear();
+			results.Items.AddRange(filtered.ToArray());
+
+			// Do the obvious
+			ClearSelectedResult();
+		}
+
+		private void resultcopytoclipboard_Click(object sender, EventArgs e)
+		{
+			// Get results
+			StringBuilder sb = new StringBuilder();
+			foreach(ErrorResult result in results.SelectedItems) sb.AppendLine(result.ToString());
+			
+			try
+			{
+				//mxd. Set on clipboard
+				Clipboard.SetDataObject(sb.ToString(), true, 5, 200);
+
+				// Inform the user
+				General.Interface.DisplayStatus(StatusType.Info, "Analysis results copied to clipboard.");
+			}
+			catch(ExternalException)
+			{
+				// Inform the user
+				General.Interface.DisplayStatus(StatusType.Warning, "Failed to perform a Clipboard operation...");
+			}
+		}
+
+		private void results_KeyUp(object sender, KeyEventArgs e) 
+		{
+			// Copy descriptions to clipboard?
+			if(e.Control && e.KeyCode == Keys.C)
+			{
+				resultcopytoclipboard_Click(sender, EventArgs.Empty);
+			} 
+			// Select all?
+			else if(e.Control && e.KeyCode == Keys.A)
+			{
+				results.SelectedItems.Clear();
+
+				bathselectioninprogress = true; //mxd
+				results.BeginUpdate(); //mxd
+				for(int i = 0; i < results.Items.Count; i++) results.SelectedItems.Add(results.Items[i]);
+				results.EndUpdate(); //mxd
+				bathselectioninprogress = false; //mxd
+
+				results_SelectedIndexChanged(this, EventArgs.Empty); //trigger update manually
+			}
+		}
+
+		private void resultselectcurrenttype_Click(object sender, EventArgs e)
+		{
+			Dictionary<Type, bool> toselect = GetSelectedTypes();
+			results.SelectedItems.Clear();
+
+			bathselectioninprogress = true; //mxd
+			results.BeginUpdate(); //mxd
+
+			for(int i = 0; i < results.Items.Count; i++) 
+			{
+				if(toselect.ContainsKey(results.Items[i].GetType())) results.SelectedItems.Add(results.Items[i]);
+			}
+
+			results.EndUpdate(); //mxd
+			bathselectioninprogress = false; //mxd
+
+			results_SelectedIndexChanged(this, EventArgs.Empty); //trigger update manually
+		}
+
+		#endregion
+
 	}
 }

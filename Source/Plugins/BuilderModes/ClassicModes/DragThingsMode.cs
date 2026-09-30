@@ -17,20 +17,13 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
+using System.Drawing;
 using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
+using CodeImp.DoomBuilder.Editing;
+using CodeImp.DoomBuilder.Geometry;
 using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Geometry;
-using System.Drawing;
-using CodeImp.DoomBuilder.Editing;
 
 #endregion
 
@@ -42,7 +35,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 	// In that case, just specifying the attribute like this is enough:
 	// [EditMode]
 
-	[EditMode(DisplayName = "Things",
+	[EditMode(DisplayName = "Drag Things",
+			  AllowCopyPaste = false,
 			  Volatile = true)]
 
 	public sealed class DragThingsMode : BaseClassicMode
@@ -54,23 +48,48 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		#region ================== Variables
 
 		// Mode to return to
-		private EditMode basemode;
+		private readonly EditMode basemode;
 		
 		// Mouse position on map where dragging started
-		private Vector2D dragstartmappos;
+		private readonly Vector2D dragstartmappos;
+
+		//mxd. Offset from nearest grid intersection to dragstartmappos
+		private readonly Vector2D dragstartoffset;
 
 		// Item used as reference for snapping to the grid
-		private Thing dragitem;
-		private Vector2D dragitemposition;
+		private readonly Thing dragitem;
+		private readonly Vector2D dragitemposition;
 
 		// List of old thing positions
-		private List<Vector2D> oldpositions;
+		private readonly List<Vector2D> oldpositions;
+
+		//mxd
+		private bool makeundo;
+
+		//mxd
+		private class AlignData
+		{
+			public readonly int InitialAngle;
+			public int CurrentAngle;
+			public readonly float InitialHeight;
+			public float CurrentHeight;
+			public PointF Position = PointF.Empty;
+			public bool Active;
+
+			public AlignData(Thing t)
+			{
+				InitialAngle = t.AngleDoom;
+				InitialHeight = t.Position.z;
+			}
+		}
+
+		private AlignData aligndata;
 
 		// List of selected items
-		private ICollection<Thing> selectedthings;
+		private readonly ICollection<Thing> selectedthings;
 
 		// List of non-selected items
-		private ICollection<Thing> unselectedthings;
+		private readonly ICollection<Thing> unselectedthings;
 		
 		// Keep track of view changes
 		private float lastoffsetx;
@@ -80,6 +99,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// Options
 		private bool snaptogrid;		// SHIFT to toggle
 		private bool snaptonearest;		// CTRL to enable
+		private bool snaptogridincrement; //mxd. ALT to toggle
+		private bool snaptocardinaldirection; //mxd. ALT-SHIFT to enable
 
 		#endregion
 
@@ -87,19 +108,18 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 		// Just keep the base mode button checked
 		public override string EditModeButtonName { get { return basemode.GetType().Name; } }
-
-		internal EditMode BaseMode { get { return basemode; } }
 		
 		#endregion
 
 		#region ================== Constructor / Disposer
 
 		// Constructor to start dragging immediately
-		public DragThingsMode(EditMode basemode, Vector2D dragstartmappos)
+		public DragThingsMode(EditMode basemode, Vector2D dragstartmappos, bool makeundo)
 		{
 			// Initialize
 			this.dragstartmappos = dragstartmappos;
 			this.basemode = basemode;
+			this.makeundo = makeundo; //mxd
 
 			Cursor.Current = Cursors.AppStarting;
 
@@ -122,6 +142,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 			// Also keep old position of the dragged item
 			dragitemposition = dragitem.Position;
+
+			//mxd. Get drag offset
+			dragstartoffset = General.Map.Grid.SnappedToGrid(dragitem.Position) - dragitemposition;
 
 			// Keep view information
 			lastoffsetx = renderer.OffsetX;
@@ -153,30 +176,37 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		
 		// This moves the selected things relatively
 		// Returns true when things has actually moved
-		private bool MoveThingsRelative(Vector2D offset, bool snapgrid, bool snapnearest)
+		private bool MoveThingsRelative(Vector2D offset, bool snapgrid, bool snapgridincrement, bool snapnearest, bool snapcardinal)
 		{
+			//mxd. If snap to cardinal directions is enabled, modify the offset
+			if(snapcardinal)
+			{
+				float angle = Angle2D.DegToRad((General.ClampAngle((int)Angle2D.RadToDeg(offset.GetAngle()) + 44)) / 90 * 90);
+				offset = new Vector2D(0, -offset.GetLength()).GetRotated(angle);
+				snapgridincrement = true; // We don't want to move Things away from the cardinal directions
+			}
+			
 			Vector2D oldpos = dragitem.Position;
-			Thing nearest;
 			Vector2D tl, br;
 
 			// don't move if the offset contains invalid data
-			if (!offset.IsFinite())	return false;
+			if(!offset.IsFinite())	return false;
 
 			// Find the outmost things
 			tl = br = oldpositions[0];
-			for (int i = 0; i < oldpositions.Count; i++)
+			for(int i = 0; i < oldpositions.Count; i++)
 			{
-				if (oldpositions[i].x < tl.x) tl.x = (int)oldpositions[i].x;
-				if (oldpositions[i].x > br.x) br.x = (int)oldpositions[i].x;
-				if (oldpositions[i].y > tl.y) tl.y = (int)oldpositions[i].y;
-				if (oldpositions[i].y < br.y) br.y = (int)oldpositions[i].y;
+				if(oldpositions[i].x < tl.x) tl.x = (int)oldpositions[i].x;
+				if(oldpositions[i].x > br.x) br.x = (int)oldpositions[i].x;
+				if(oldpositions[i].y > tl.y) tl.y = (int)oldpositions[i].y;
+				if(oldpositions[i].y < br.y) br.y = (int)oldpositions[i].y;
 			}
 
 			// Snap to nearest?
 			if(snapnearest)
 			{
 				// Find nearest unselected item within selection range
-				nearest = MapSet.NearestThingSquareRange(unselectedthings, mousemappos, BuilderPlug.Me.StitchRange / renderer.Scale);
+				Thing nearest = MapSet.NearestThingSquareRange(unselectedthings, mousemappos, BuilderPlug.Me.StitchRange / renderer.Scale);
 				if(nearest != null)
 				{
 					// Move the dragged item
@@ -187,30 +217,38 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 					// Do not snap to grid!
 					snapgrid = false;
+					snapgridincrement = false; //mxd
 				}
 			}
 
 			// Snap to grid?
-			if(snapgrid)
+			if(snapgrid || snapgridincrement)
 			{
 				// Move the dragged item
 				dragitem.Move(dragitemposition + offset);
 
-				// Snap item to grid
-				dragitem.SnapToGrid();
+				// Snap item to grid increment (mxd)
+				if(snapgridincrement)
+				{
+					dragitem.Move(General.Map.Grid.SnappedToGrid(dragitemposition + offset) - dragstartoffset);
+				} 
+				else // Or to the grid itself
+				{
+					dragitem.SnapToGrid();
+				}
 
 				// Adjust the offset
 				offset += (Vector2D)dragitem.Position - (dragitemposition + offset);
 			}
 
 			// Make sure the offset is inside the map boundaries
-			if (offset.x + tl.x < General.Map.Config.LeftBoundary) offset.x = General.Map.Config.LeftBoundary - tl.x;
-			if (offset.x + br.x > General.Map.Config.RightBoundary) offset.x = General.Map.Config.RightBoundary - br.x;
-			if (offset.y + tl.y > General.Map.Config.TopBoundary) offset.y = General.Map.Config.TopBoundary - tl.y;
-			if (offset.y + br.y < General.Map.Config.BottomBoundary) offset.y = General.Map.Config.BottomBoundary - br.y;
+			if(offset.x + tl.x < General.Map.Config.LeftBoundary) offset.x = General.Map.Config.LeftBoundary - tl.x;
+			if(offset.x + br.x > General.Map.Config.RightBoundary) offset.x = General.Map.Config.RightBoundary - br.x;
+			if(offset.y + tl.y > General.Map.Config.TopBoundary) offset.y = General.Map.Config.TopBoundary - tl.y;
+			if(offset.y + br.y < General.Map.Config.BottomBoundary) offset.y = General.Map.Config.BottomBoundary - br.y;
 
 			// Drag item moved?
-			if(!snapgrid || ((Vector2D)dragitem.Position != oldpos))
+			if((!snapgrid && !snapgridincrement) || ((Vector2D)dragitem.Position != oldpos))
 			{
 				int i = 0;
 
@@ -238,9 +276,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// This redraws the display
 		public override void OnRedrawDisplay()
 		{
-			bool viewchanged = CheckViewChanged();
-
-			if(viewchanged)
+			if(CheckViewChanged())
 			{
 				renderer.RedrawSurface();
 
@@ -262,18 +298,29 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// This redraws only changed things
 		private void UpdateRedraw()
 		{
+			//mxd. Added, so grid can be rendered properly if the user changes grid size while dragging (very useful and important, I know)
+			if(renderer.StartPlotter(true)) 
+			{
+				// Render lines and vertices
+				renderer.PlotLinedefSet(General.Map.Map.Linedefs);
+				renderer.PlotVerticesSet(General.Map.Map.Vertices);
+				
+				// Done
+				renderer.Finish();
+			}
+
 			// Render things
 			if(renderer.StartThings(true))
 			{
 				// Render things
-				renderer.RenderThingSet(General.Map.ThingsFilter.HiddenThings, Presentation.THINGS_HIDDEN_ALPHA);
-				renderer.RenderThingSet(unselectedthings, 1.0f);
-				renderer.RenderThingSet(selectedthings, 1.0f);
+				renderer.RenderThingSet(General.Map.ThingsFilter.HiddenThings, General.Settings.HiddenThingsAlpha);
+				renderer.RenderThingSet(unselectedthings, General.Settings.ActiveThingsAlpha);
+				renderer.RenderThingSet(selectedthings, General.Settings.ActiveThingsAlpha);
 
 				// Draw the dragged item highlighted
 				// This is important to know, because this item is used
 				// for snapping to the grid and snapping to nearest items
-				renderer.RenderThing(dragitem, General.Colors.Highlight, 1.0f);
+				renderer.RenderThing(dragitem, General.Colors.Highlight, General.Settings.ActiveThingsAlpha);
 
 				// Done
 				renderer.Finish();
@@ -284,7 +331,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		public override void OnCancel()
 		{
 			// Move geometry back to original position
-			MoveThingsRelative(new Vector2D(0f, 0f), false, false);
+			MoveThingsRelative(new Vector2D(0f, 0f), false, false, false, false);
 
 			// If only a single vertex was selected, deselect it now
 			if(selectedthings.Count == 1) General.Map.Map.ClearSelectedThings();
@@ -316,19 +363,37 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			if(!cancelled)
 			{
 				// Move geometry back to original position
-				MoveThingsRelative(new Vector2D(0f, 0f), false, false);
+				MoveThingsRelative(new Vector2D(0f, 0f), false, false, false, false);
+
+				//mxd. Revert aligning
+				if(aligndata != null && aligndata.Active)
+				{
+					aligndata.CurrentAngle = dragitem.AngleDoom; //mxd
+					dragitem.Rotate(aligndata.InitialAngle);
+					aligndata.CurrentHeight = dragitem.Position.z; //mxd
+					dragitem.Move(dragitem.Position.x, dragitem.Position.y, aligndata.InitialHeight);
+				}
 
 				// Make undo for the dragging
-				General.Map.UndoRedo.CreateUndo("Drag things");
+				if(makeundo) //mxd
+					General.Map.UndoRedo.CreateUndo((selectedthings.Count == 1 ? "Drag thing" : "Drag " + selectedthings.Count + " things"));
 
 				// Move selected geometry to final position
-				MoveThingsRelative(mousemappos - dragstartmappos, snaptogrid, snaptonearest);
+				if(aligndata != null && aligndata.Active) //mxd. Apply aligning
+				{
+					if(!aligndata.Position.IsEmpty) 
+						dragitem.Move(aligndata.Position.X, aligndata.Position.Y, aligndata.CurrentHeight);
+					else
+						dragitem.Move(dragitem.Position.x, dragitem.Position.y, aligndata.CurrentHeight);
+					dragitem.Rotate(aligndata.CurrentAngle);
+				} 
+				else 
+				{
+					MoveThingsRelative(mousemappos - dragstartmappos, snaptogrid, snaptogridincrement, snaptonearest, snaptocardinaldirection);
+				}
 
-				// Snap to map format accuracy
-				General.Map.Map.SnapAllToAccuracy();
-				
-				// Update cached values
-				General.Map.Map.Update(false, false);
+				//mxd. Snap selected things to map format accuracy
+				foreach(Thing thing in selectedthings) thing.SnapToAccuracy(false);
 
 				// Map is changed
 				General.Map.IsChanged = true;
@@ -344,12 +409,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// This checks if the view offset/zoom changed and updates the check
 		private bool CheckViewChanged()
 		{
-			bool viewchanged = false;
-			
 			// View changed?
-			if(renderer.OffsetX != lastoffsetx) viewchanged = true;
-			if(renderer.OffsetY != lastoffsety) viewchanged = true;
-			if(renderer.Scale != lastscale) viewchanged = true;
+			bool viewchanged = (renderer.OffsetX != lastoffsetx || renderer.OffsetY != lastoffsety || renderer.Scale != lastscale);
 
 			// Keep view information
 			lastoffsetx = renderer.OffsetX;
@@ -363,20 +424,57 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// This updates the dragging
 		private void Update()
 		{
-			snaptogrid = General.Interface.ShiftState ^ General.Interface.SnapToGrid;
+			snaptocardinaldirection = (General.Interface.ShiftState && General.Interface.AltState); //mxd
+			snaptogrid = (snaptocardinaldirection || General.Interface.ShiftState ^ General.Interface.SnapToGrid);
 			snaptonearest = General.Interface.CtrlState;
+			snaptogridincrement = (!snaptocardinaldirection && General.Interface.AltState); //mxd
+
+			//mxd. Snap to nearest linedef
+			if(selectedthings.Count == 1 && snaptonearest && !snaptocardinaldirection 
+				&& Thing.AlignableRenderModes.Contains(dragitem.RenderMode)
+				&& MoveThingsRelative(mousemappos - dragstartmappos, snaptogrid, snaptogridincrement, false, false)) 
+			{
+				Linedef l = General.Map.Map.NearestLinedefRange(oldpositions[0] + mousemappos - dragstartmappos, BuilderPlug.Me.StitchRange / renderer.Scale);
+				bool restoresettings = false;
+				if(aligndata == null) aligndata = new AlignData(dragitem);
+
+				if(l != null) 
+				{
+					if(Tools.TryAlignThingToLine(dragitem, l)) 
+					{
+						aligndata.Position = new PointF(dragitem.Position.x, dragitem.Position.y);
+						aligndata.Active = true;
+					} 
+					else if(dragitem.AngleDoom != aligndata.InitialAngle) //restore initial angle?
+					{ 
+						restoresettings = true;
+					}
+
+				} 
+				else if(dragitem.AngleDoom != aligndata.InitialAngle) //restore initial angle?
+				{ 
+					restoresettings = true;
+				}
+
+				if(restoresettings) 
+				{
+					aligndata.Position = PointF.Empty;
+					aligndata.Active = false;
+					dragitem.Rotate(aligndata.InitialAngle);
+				}
+
+				UpdateRedraw();// Redraw
+				renderer.Present();
+
+				return;
+			}
 			
 			// Move selected geometry
-			if(MoveThingsRelative(mousemappos - dragstartmappos, snaptogrid, snaptonearest))
+			if(MoveThingsRelative(mousemappos - dragstartmappos, snaptogrid, snaptogridincrement, snaptonearest, snaptocardinaldirection))
 			{
-				// Update cached values
-				//General.Map.Map.Update(true, false);
-				General.Map.Map.Update();
-
 				// Redraw
 				UpdateRedraw();
 				renderer.Present();
-				//General.Interface.RedrawDisplay();
 			}
 		}
 
@@ -400,16 +498,20 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		public override void OnKeyUp(KeyEventArgs e)
 		{
 			base.OnKeyUp(e);
-			if(snaptogrid != General.Interface.ShiftState ^ General.Interface.SnapToGrid) Update();
-			if(snaptonearest != General.Interface.CtrlState) Update();
+			if(snaptogrid != General.Interface.ShiftState ^ General.Interface.SnapToGrid ||
+				snaptonearest != General.Interface.CtrlState || 
+				snaptogridincrement != General.Interface.AltState ||
+				snaptocardinaldirection != (General.Interface.AltState && General.Interface.ShiftState)) Update();
 		}
 
 		// When a key is pressed
 		public override void OnKeyDown(KeyEventArgs e)
 		{
 			base.OnKeyDown(e);
-			if(snaptogrid != General.Interface.ShiftState ^ General.Interface.SnapToGrid) Update();
-			if(snaptonearest != General.Interface.CtrlState) Update();
+			if(snaptogrid != General.Interface.ShiftState ^ General.Interface.SnapToGrid ||
+				snaptonearest != General.Interface.CtrlState ||
+				snaptogridincrement != General.Interface.AltState ||
+				snaptocardinaldirection != (General.Interface.AltState && General.Interface.ShiftState)) Update();
 		}
 		
 		#endregion

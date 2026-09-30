@@ -1,0 +1,8 @@
+/GIT_Build
+/Release
+obj
+/.vs
+/Build/Plugins
+/Build/Builder.xml
+/Build/Builder.exe
+/Build/Refmanual.chm

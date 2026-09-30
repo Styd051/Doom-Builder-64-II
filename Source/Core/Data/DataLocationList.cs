@@ -16,19 +16,17 @@
 
 #region ================== Namespaces
 
-using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.IO;
 using System.Collections.Specialized;
+using System.Globalization;
+using CodeImp.DoomBuilder.IO;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.Data
 {
-	internal sealed class DataLocationList : List<DataLocation>
+	public sealed class DataLocationList : List<DataLocation>
 	{
 		#region ================== Constructors
 
@@ -36,23 +34,25 @@ namespace CodeImp.DoomBuilder.Data
 		public DataLocationList()
 		{
 		}
-		
-		// This creates a list from a configuration structure
-		public DataLocationList(Configuration cfg, string path)
-		{
-			IDictionary resinfo, rlinfo;
-			DataLocation res;
 
+		// This makes a copy of a list
+		public DataLocationList(IEnumerable<DataLocation> list) : base(list)
+		{
+		}
+
+		// This creates a list from a configuration structure
+		internal DataLocationList(Configuration cfg, string path)
+		{
 			// Go for all items in the map info
-			resinfo = cfg.ReadSetting(path, new ListDictionary());
+			IDictionary resinfo = cfg.ReadSetting(path, new ListDictionary());
 			foreach(DictionaryEntry rl in resinfo)
 			{
 				// Item is a structure?
-				if(rl.Value is IDictionary)
+				IDictionary rlinfo = rl.Value as IDictionary;
+				if(rlinfo != null)
 				{
 					// Create resource location
-					rlinfo = (IDictionary)rl.Value;
-					res = new DataLocation();
+					DataLocation res = new DataLocation();
 
 					// Copy information from Configuration to ResourceLocation
 					if(rlinfo.Contains("type") && (rlinfo["type"] is int)) res.type = (int)rlinfo["type"];
@@ -74,23 +74,27 @@ namespace CodeImp.DoomBuilder.Data
 		// This merges two lists together
 		public static DataLocationList Combined(DataLocationList a, DataLocationList b)
 		{
-			DataLocationList result = new DataLocationList();
-			result.AddRange(a);
-			result.AddRange(b);
+			DataLocationList result = new DataLocationList(a);
+
+			//mxd. In case of duplicates, keep the last entry
+			foreach(DataLocation dl in b)
+			{
+				result.Remove(dl);
+				result.Add(dl);
+			}
+
 			return result;
 		}
 
 		// This writes the list to configuration
-		public void WriteToConfig(Configuration cfg, string path)
+		internal void WriteToConfig(Configuration cfg, string path)
 		{
-			IDictionary resinfo, rlinfo;
-			
 			// Fill structure
-			resinfo = new ListDictionary();
+			IDictionary resinfo = new ListDictionary();
 			for(int i = 0; i < this.Count; i++)
 			{
 				// Create structure for resource
-				rlinfo = new ListDictionary();
+				IDictionary rlinfo = new ListDictionary();
 				rlinfo.Add("type", this[i].type);
 				rlinfo.Add("location", this[i].location);
 				rlinfo.Add("option1", General.Bool2Int(this[i].option1));
@@ -103,6 +107,13 @@ namespace CodeImp.DoomBuilder.Data
 			
 			// Write to config
 			cfg.WriteSetting(path, resinfo);
+		}
+
+		//mxd
+		public bool IsValid()
+		{
+			foreach(DataLocation location in this) if(!location.IsValid()) return false;
+			return true;
 		}
 		
 		#endregion

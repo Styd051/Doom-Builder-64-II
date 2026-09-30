@@ -17,14 +17,11 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Text;
 using System.IO;
 using System.Reflection;
-using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Editing;
+using System.Windows.Forms;
 
 #endregion
 
@@ -45,10 +42,10 @@ namespace CodeImp.DoomBuilder.Plugins
 		private Plug plug;
 		
 		// Unique name used to refer to this assembly
-		private string name;
+		private readonly string name;
 		
 		// Disposing
-		private bool isdisposed = false;
+		private bool isdisposed;
 
 		#endregion
 
@@ -69,12 +66,12 @@ namespace CodeImp.DoomBuilder.Plugins
 			// Initialize
 			string shortfilename = Path.GetFileName(filename);
 			name = Path.GetFileNameWithoutExtension(filename);
-			General.WriteLogLine("Loading plugin '" + name + "' from '" + shortfilename + "'...");
+			General.WriteLogLine("Loading plugin \"" + name + "\" from \"" + shortfilename + "\"...");
 
 			try
 			{
 				// Load assembly
-				asm = Assembly.LoadFile(filename);
+				asm = Assembly.LoadFrom(filename);
 			}
 			catch(Exception)
 			{
@@ -90,26 +87,48 @@ namespace CodeImp.DoomBuilder.Plugins
 				if(FindClasses(typeof(Plug)).Length > 1)
 				{
 					// Show a warning
-					General.ErrorLogger.Add(ErrorType.Warning, "Plugin \"" + shortfilename + "\" has more than one plug. The following class is used to create in instance: " + t.FullName);
+					General.ErrorLogger.Add(ErrorType.Warning, "Plugin \"" + shortfilename + "\" has more than one Plug class. The following class is used to create in instance: " + t.FullName);
 				}
 				
 				// Make plug instance
 				plug = CreateObject<Plug>(t);
 				plug.Plugin = this;
 
-				// Verify minimum revision number
+				// Verify revision numbers
 				int thisrevision = General.ThisAssembly.GetName().Version.Revision;
+
+				//mxd. Revision numbers should match?
+				if(plug.StrictRevisionMatching && plug.MinimumRevision != thisrevision)
+				{
+					string message = shortfilename + " plugin's assembly version (" + plug.MinimumRevision + ") doesn't match main module version (" + thisrevision + ").";
+					if(General.ShowWarningMessage(message + Environment.NewLine +
+												  "It's strongly recommended to update the editor." + Environment.NewLine + 
+												  "Program stability is not guaranteed." + Environment.NewLine + Environment.NewLine +
+					                              "Continue anyway?", MessageBoxButtons.YesNo, MessageBoxDefaultButton.Button2, false) == DialogResult.No)
+					{
+						General.WriteLogLine("Quiting on " + shortfilename + " module version mismatch");
+						General.Exit(General.Map != null);
+						return;
+					}
+					else
+					{
+						General.ErrorLogger.Add(ErrorType.Warning, message);
+						throw new InvalidProgramException();
+					}
+				}
+
+				// Verify minimum revision number
 				if((thisrevision != 0) && (plug.MinimumRevision > thisrevision))
 				{
 					// Can't load this plugin because it is meant for a newer version
-					General.ErrorLogger.Add(ErrorType.Error, "Could not load plugin \"" + shortfilename + "\", the Plugin is made for Doom Builder 2 core revision " + plug.MinimumRevision + " and you are running revision " + thisrevision + ".");
+					General.ErrorLogger.Add(ErrorType.Error, "Could not load plugin \"" + shortfilename + "\", the Plugin is made for GZDoom Builder R" + plug.MinimumRevision + " or newer and you are running R" + thisrevision + ".");
 					throw new InvalidProgramException();
 				}
 			}
 			else
 			{
 				// How can we plug something in without a plug?
-				General.ErrorLogger.Add(ErrorType.Error, "Could not load plugin \"" + shortfilename + "\", plugin is missing the plug. This file is not supposed to be in the Plugins subdirectory.");
+				General.ErrorLogger.Add(ErrorType.Error, "Could not load plugin \"" + shortfilename + "\", plugin is missing the Plug class. This file is not supposed to be in the Plugins subdirectory.");
 				throw new InvalidProgramException();
 			}
 			
@@ -124,6 +143,8 @@ namespace CodeImp.DoomBuilder.Plugins
 			if(!isdisposed)
 			{
 				// Clean up
+				plug.Dispose(); //mxd
+				plug = null; //mxd
 				asm = null;
 				
 				// Done
@@ -138,14 +159,13 @@ namespace CodeImp.DoomBuilder.Plugins
 		// This creates a stream to read a resource or returns null when not found
 		public Stream GetResourceStream(string resourcename)
 		{
-			string[] resnames;
-			
 			// Find a resource
-			resnames = asm.GetManifestResourceNames();
+			resourcename = "." + resourcename; //mxd. Otherwise, we can get Properties.Resources.SuperCoolMode.png while searching for CoolMode.png
+			string[] resnames = asm.GetManifestResourceNames();
 			foreach(string rn in resnames)
 			{
 				// Found it?
-				if(rn.EndsWith(resourcename, StringComparison.InvariantCultureIgnoreCase))
+				if(rn.EndsWith(resourcename, StringComparison.OrdinalIgnoreCase))
 				{
 					// Get a stream from the resource
 					return asm.GetManifestResourceStream(rn);
@@ -160,10 +180,9 @@ namespace CodeImp.DoomBuilder.Plugins
 		public Type[] FindClasses(Type t)
 		{
 			List<Type> found = new List<Type>();
-			Type[] types;
-			
+
 			// Get all exported types
-			types = asm.GetExportedTypes();
+			Type[] types = asm.GetExportedTypes();
 			foreach(Type it in types)
 			{
 				// Compare types
@@ -179,7 +198,7 @@ namespace CodeImp.DoomBuilder.Plugins
 		public Type FindSingleClass(Type t)
 		{
 			Type[] types = FindClasses(t);
-			if(types.Length > 0) return types[0]; else return null;
+			return (types.Length > 0 ? types[0] : null);
 		}
 		
 		// This creates an instance of a class
@@ -199,13 +218,19 @@ namespace CodeImp.DoomBuilder.Plugins
 			catch(TargetInvocationException e)
 			{
 				// Error!
-				General.ErrorLogger.Add(ErrorType.Error, "Failed to create class instance '" + t.Name + "' from plugin '" + name + "' " + e.InnerException.GetType().Name + " at target: " + e.InnerException.Message);
+				string error = "Failed to create class instance \"" + t.Name + "\" from plugin \"" + name + "\".";
+				General.ShowErrorMessage(error + Environment.NewLine + Environment.NewLine + "See the error log for more details", MessageBoxButtons.OK, false);
+				General.WriteLogLine(error + " " + e.InnerException.GetType().Name + " at target: " 
+					+ e.InnerException.Message + Environment.NewLine + "Stacktrace: " + e.InnerException.StackTrace.Trim());
 				return default(T);
 			}
 			catch(Exception e)
 			{
 				// Error!
-				General.ErrorLogger.Add(ErrorType.Error, "Failed to create class instance '" + t.Name + "' from plugin '" + name + "' " + e.GetType().Name + ": " + e.Message);
+				string error = "Failed to create class instance \"" + t.Name + "\" from plugin \"" + name + "\".";
+				General.ShowErrorMessage(error + Environment.NewLine + Environment.NewLine + "See the error log for more details", MessageBoxButtons.OK, false);
+				General.WriteLogLine(error + " " + e.GetType().Name + ": " + e.Message + Environment.NewLine
+					+ "Stacktrace: " + e.StackTrace.Trim());
 				return default(T);
 			}
 		}

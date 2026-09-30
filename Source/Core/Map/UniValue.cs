@@ -17,14 +17,6 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Rendering;
-using SlimDX.Direct3D9;
-using System.Drawing;
 using CodeImp.DoomBuilder.Types;
 using CodeImp.DoomBuilder.IO;
 
@@ -84,6 +76,16 @@ namespace CodeImp.DoomBuilder.Map
 		}
 
 		// Constructor
+		public UniValue(UniversalType type, object value)
+		{
+			this.type = (int)type;
+			this.value = value;
+
+			// We have no destructor
+			GC.SuppressFinalize(this);
+		}
+
+		// Constructor
 		public UniValue(UniValue v)
 		{
 			this.type = v.type;
@@ -115,13 +117,16 @@ namespace CodeImp.DoomBuilder.Map
 				case UniversalType.Float:
 				{
 					float v = 0.0f;
-					try { v = (float)value; } catch(NullReferenceException e) { }
+					//mxd. Seems to work faster this way
+					//try { v = (float)value; } catch(NullReferenceException e) { }
+					if(value != null) v = (float)value;
 					s.rwFloat(ref v);
 					value = v;
 					break;
 				}
 				
 				case UniversalType.AngleDegrees:
+				case UniversalType.AngleByte: //mxd
 				case UniversalType.Color:
 				case UniversalType.EnumBits:
 				case UniversalType.EnumOption:
@@ -131,9 +136,12 @@ namespace CodeImp.DoomBuilder.Map
 				case UniversalType.SectorEffect:
 				case UniversalType.SectorTag:
 				case UniversalType.ThingTag:
+				case UniversalType.ThingType:
 				{
 					int v = 0;
-					try { v = (int)value; } catch(NullReferenceException e) { }
+					//mxd. Seems to work faster this way
+					//try { v = (int)value; } catch(NullReferenceException e) { }
+					if(value != null) v = (int)value;
 					s.rwInt(ref v);
 					value = v;
 					break;
@@ -142,7 +150,9 @@ namespace CodeImp.DoomBuilder.Map
 				case UniversalType.Boolean:
 				{
 					bool v = false;
-					try { v = (bool)value; } catch(NullReferenceException e) { }
+					//mxd. Seems to work faster this way
+					//try { v = (bool)value; } catch(NullReferenceException e) { }
+					if(value != null) v = (bool)value;
 					s.rwBool(ref v);
 					value = v;
 					break;
@@ -152,6 +162,7 @@ namespace CodeImp.DoomBuilder.Map
 				case UniversalType.String:
 				case UniversalType.Texture:
 				case UniversalType.EnumStrings:
+				case UniversalType.ThingClass:
 				{
 					string v = (string)value;
 					s.rwString(ref v);

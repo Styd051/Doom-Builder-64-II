@@ -16,27 +16,24 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Map;
-
 #endregion
 
 namespace CodeImp.DoomBuilder.BuilderModes
 {
-	public class UndoGroup
+	public static class UndoGroup
 	{
 		public const int None = 0;
 		public const int FloorHeightChange = 1;
 		public const int CeilingHeightChange = 2;
 		public const int SectorBrightnessChange = 3;
 		public const int TextureOffsetChange = 4;
-		public const int SectorHeightChange = 5;
+		public const int TextureRotationChange = 5; //mxd
+		public const int TextureScaleChange = 6; //mxd
+		public const int SurfaceBrightnessChange = 7; //mxd
+		public const int SectorHeightChange = 8;
+		public const int ThingMove = 9; //mxd
+		public const int ThingAngleChange = 10; //mxd
+		public const int ThingPitchChange = 11; //mxd
+		public const int ThingRollChange = 12; //mxd
 	}
 }

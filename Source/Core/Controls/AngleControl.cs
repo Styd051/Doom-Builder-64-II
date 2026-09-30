@@ -17,16 +17,9 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
-using System.Text;
-using System.Globalization;
 using System.Windows.Forms;
-using CodeImp.DoomBuilder.Actions;
 using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Editing;
 using System.Drawing.Drawing2D;
 
 #endregion
@@ -92,36 +85,17 @@ namespace CodeImp.DoomBuilder.Controls
 
 		#region ================== Interface
 
-		// Size changed
-		protected override void OnClientSizeChanged(EventArgs e)
-		{
-			base.OnClientSizeChanged(e);
-			AngleControl_Resize(this, e);
-		}
-
-		// Layout changed
-		private void AngleControl_Layout(object sender, LayoutEventArgs e)
-		{
-			AngleControl_Resize(sender, e);
-		}
-
-		// Size changed
-		private void AngleControl_Resize(object sender, EventArgs e)
-		{
-			//this.Size = new Size(84, 84);
-		}
-
 		// Redraw the control
 		private void AngleControl_Paint(object sender, PaintEventArgs e)
 		{
-			float rad = Angle2D.DegToRad((float)angle);
+			float rad = Angle2D.DegToRad(angle);
 			e.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
 			e.Graphics.InterpolationMode = InterpolationMode.High;
 			e.Graphics.SmoothingMode = SmoothingMode.HighQuality;
 			e.Graphics.Clear(this.BackColor);
 			Pen linepen = new Pen(SystemColors.ControlText, LINE_THICKNESS);
-			PointF start = new PointF((float)this.Size.Width * 0.5f, (float)this.Size.Height * 0.5f);
-			float line_length = (float)this.Size.Width * 0.26f;
+			PointF start = new PointF(this.Size.Width * 0.5f, this.Size.Height * 0.5f);
+			float line_length = this.Size.Width * 0.26f;
 			if((rad >= 0) && (rad < 360))
 			{
 				PointF end = new PointF(start.X + (float)Math.Sin(rad + Angle2D.PIHALF) * line_length,
@@ -132,6 +106,7 @@ namespace CodeImp.DoomBuilder.Controls
 			{
 				e.Graphics.DrawLine(linepen, start, start);
 			}
+			linepen.Dispose(); //mxd
 		}
 		
 		#endregion
@@ -141,10 +116,8 @@ namespace CodeImp.DoomBuilder.Controls
 		// This sets an angle manually
 		private void SetAngle(int newangle, bool changebuttons)
 		{
-			bool changed;
-			
 			// Normalize and apply angle
-			changed = (newangle != angle);
+			bool changed = (newangle != angle);
 			angle = newangle;
 			
 			// Check if it matches an angle from the buttons

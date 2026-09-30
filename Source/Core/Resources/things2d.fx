@@ -4,22 +4,25 @@
 // Vertex input data
 struct VertexData
 {
-    float3 pos		: POSITION;
-    float4 color	: COLOR0;
-    float2 uv		: TEXCOORD0;
+	float3 pos		: POSITION;
+	float4 color	: COLOR0;
+	float2 uv		: TEXCOORD0;
 };
 
 // Pixel input data
 struct PixelData
 {
-    float4 pos		: POSITION;
-    float4 color	: COLOR0;
-    float2 uv		: TEXCOORD0;
+	float4 pos		: POSITION;
+	float4 color	: COLOR0;
+	float2 uv		: TEXCOORD0;
 };
 
 // Render settings
 // w = transparency
 float4 rendersettings;
+
+//mxd. solid fill color. used in model wireframe rendering
+float4 fillColor;
 
 // Transform settings
 float4x4 transformsettings;
@@ -27,20 +30,32 @@ float4x4 transformsettings;
 // Texture1 input
 texture texture1
 <
-    string UIName = "Texture1";
-    string ResourceType = "2D";
+	string UIName = "Texture1";
+	string ResourceType = "2D";
 >;
 
 // Texture sampler settings
 sampler2D texture1samp = sampler_state
 {
-    Texture = <texture1>;
-    MagFilter = Linear;
-    MinFilter = Linear;
-    MipFilter = Linear;
+	Texture = <texture1>;
+	MagFilter = Linear;
+	MinFilter = Linear;
+	MipFilter = Linear;
 	AddressU = Wrap;
 	AddressV = Wrap;
 	MipMapLodBias = -0.9f;
+};
+
+//mxd. Texture sampler settings for sprite rendering
+sampler2D texture1sprite = sampler_state
+{
+	Texture = <texture1>;
+	MagFilter = Point;
+	MinFilter = Point;
+	MipFilter = Point;
+	AddressU = Clamp;
+	AddressV = Clamp;
+	MipMapLodBias = 0.0f;
 };
 
 // Transformation
@@ -53,29 +68,55 @@ PixelData vs_transform(VertexData vd)
 	return pd;
 }
 
-// Pixel shader for colored circle
-float4 ps_circle(PixelData pd) : COLOR
+//mxd. Pixel shader for sprite drawing
+float4 ps_sprite(PixelData pd) : COLOR
 {
-	// Texture pixel color
-	float4 c = tex2D(texture1samp, pd.uv);
+	// Take this pixel's color
+	float4 c = tex2D(texture1sprite, pd.uv);
 	
-	// Use shinyness?
-	if(pd.uv.x < 0.4f)
+	// Modulate it by selection color
+	if(pd.color.a > 0)
 	{
-		float4 s = tex2D(texture1samp, pd.uv + float2(0.25f, 0.0f));
-		c = float4(lerp(c.rgb * pd.color.rgb, s.rgb, s.a), c.a);
+		return float4((c.r + pd.color.r) / 2.0f, (c.g + pd.color.g) / 2.0f, (c.b + pd.color.b) / 2.0f, c.a * rendersettings.w * pd.color.a);
 	}
-	
-	c.a = c.a * pd.color.a * rendersettings.w;
-	return c;
+
+	// Or leave it as it is
+	return float4(c.rgb, c.a * rendersettings.w);
+}
+
+//mxd. Pixel shader for thing box and arrow drawing
+float4 ps_thing(PixelData pd) : COLOR
+{
+	// Take this pixel's color
+	float4 c = tex2D(texture1samp, pd.uv);
+	return float4(c.rgb, c.a * rendersettings.w) * pd.color;
+}
+
+//mxd. Pretty darn simple pixel shader for wireframe rendering :)
+float4 ps_fill(PixelData pd) : COLOR 
+{
+	return fillColor;
 }
 
 // Technique for shader model 2.0
 technique SM20
 {
-	pass p0
+	pass p0 //mxd
 	{
-	    VertexShader = compile vs_2_0 vs_transform();
-	    PixelShader = compile ps_2_0 ps_circle();
+		VertexShader = compile vs_2_0 vs_transform();
+		PixelShader = compile ps_2_0 ps_thing();
+	}
+
+	pass p1 //mxd
+	{
+		VertexShader = compile vs_2_0 vs_transform();
+		PixelShader = compile ps_2_0 ps_sprite();
+	}
+
+
+	pass p2 //mxd
+	{
+		VertexShader = compile vs_2_0 vs_transform();
+		PixelShader = compile ps_2_0 ps_fill();
 	}
 }

@@ -19,19 +19,18 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Windows;
-using SlimDX.Direct3D9;
-using CodeImp.DoomBuilder.Rendering;
-using SlimDX;
+using System.Collections.Specialized;
 using System.Drawing;
-using CodeImp.DoomBuilder.Editing;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Types;
 using System.IO;
+using System.Linq;
 using CodeImp.DoomBuilder.Config;
+using CodeImp.DoomBuilder.Geometry;
+using CodeImp.DoomBuilder.IO;
+using CodeImp.DoomBuilder.Rendering;
+using CodeImp.DoomBuilder.Types;
+using CodeImp.DoomBuilder.Windows;
+using CodeImp.DoomBuilder.VisualModes;
+using System.Diagnostics;
 
 #endregion
 
@@ -48,13 +47,16 @@ namespace CodeImp.DoomBuilder.Map
 
 		/// <summary>Stiching distance. This is only to get around inaccuracies. Basically,
 		/// geometry only stitches when exactly on top of each other.</summary>
-		public const float STITCH_DISTANCE = 0.001f;
+		public const float STITCH_DISTANCE = 0.005f; //mxd. 0.001f is not enough when drawing very long lines...
 		
 		// Virtual sector identification
 		// This contains a character that is invalid in the UDMF standard, but valid
 		// in our parser, so that it can only be used by Doom Builder and will never
 		// conflict with any other valid UDMF field.
 		internal const string VIRTUAL_SECTOR_FIELD = "!virtual_sector";
+		
+		//mxd
+		private const string SELECTION_GROUPS_PATH = "selectiongroups";
 		
 		// Handler for tag fields
 		public delegate void TagHandler<T>(MapElement element, bool actionargument, UniversalType type, ref int value, T obj);
@@ -69,9 +71,6 @@ namespace CodeImp.DoomBuilder.Map
 		
 		// Sidedef indexing for (de)serialization
 		private Sidedef[] sidedefindices;
-
-        // Map info
-        //private MapInfo mapinfo;    // villsa
 		
 		// Map structures
 		private Vertex[] vertices;
@@ -79,13 +78,11 @@ namespace CodeImp.DoomBuilder.Map
 		private Sidedef[] sidedefs;
 		private Sector[] sectors;
 		private Thing[] things;
-        private Macro[] macros; // villsa
 		private int numvertices;
 		private int numlinedefs;
 		private int numsidedefs;
 		private int numsectors;
 		private int numthings;
-        private int nummacros;  // villsa
 		
 		// Behavior
 		private int freezearrays;
@@ -103,14 +100,12 @@ namespace CodeImp.DoomBuilder.Map
 		private static UniValue virtualsectorvalue;
 		
 		// Disposing
-		private bool isdisposed = false;
+		private bool isdisposed;
 
 		#endregion
 
 		#region ================== Properties
-
-        //public MapInfo MapInfo { get { return mapinfo; } }  // villsa
-
+		
 		/// <summary>Returns the number of selected sectors.</summary>
 		public int SelectedSectorsCount { get { return sel_sectors.Count; } }
 
@@ -152,8 +147,6 @@ namespace CodeImp.DoomBuilder.Map
 
 		/// <summary>Returns a reference to the list of selected things.</summary>
 		internal LinkedList<Thing> SelectedThings { get { return sel_things; } }
-
-        internal Macro[] Macros { get { return macros; } }  // villsa
 		
 		/// <summary>Returns the current type of selection.</summary>
 		public SelectionType SelectionType { get { return sel_type; } set { sel_type = value; } }
@@ -171,8 +164,6 @@ namespace CodeImp.DoomBuilder.Map
 
 		internal bool AutoRemove { get { return autoremove; } set { autoremove = value; } }
 
-        public int NumMacros { get { return nummacros; } set { nummacros = value; } }   // villsa
-
 		#endregion
 
 		#region ================== Constructor / Disposer
@@ -181,13 +172,11 @@ namespace CodeImp.DoomBuilder.Map
 		internal MapSet()
 		{
 			// Initialize
-            //mapinfo = new MapInfo();    // villsa
 			vertices = new Vertex[0];
 			linedefs = new Linedef[0];
 			sidedefs = new Sidedef[0];
 			sectors = new Sector[0];
 			things = new Thing[0];
-            macros = new Macro[256];
 			sel_vertices = new LinkedList<Vertex>();
 			sel_linedefs = new LinkedList<Linedef>();
 			sel_sectors = new LinkedList<Sector>();
@@ -204,13 +193,11 @@ namespace CodeImp.DoomBuilder.Map
 		internal MapSet(MemoryStream stream)
 		{
 			// Initialize
-            //mapinfo = new MapInfo();    // villsa
 			vertices = new Vertex[0];
 			linedefs = new Linedef[0];
 			sidedefs = new Sidedef[0];
 			sectors = new Sector[0];
 			things = new Thing[0];
-            macros = new Macro[256];
 			sel_vertices = new LinkedList<Vertex>();
 			sel_linedefs = new LinkedList<Linedef>();
 			sel_sectors = new LinkedList<Sector>();
@@ -228,7 +215,7 @@ namespace CodeImp.DoomBuilder.Map
 
 		// Disposer
 		internal void Dispose()
-		{	
+		{
 			// Not already disposed?
 			if(!isdisposed)
 			{
@@ -257,13 +244,11 @@ namespace CodeImp.DoomBuilder.Map
 					vertices[0].Dispose();
 
 				// Clean up
-                //mapinfo = null; // villsa
 				vertices = null;
 				linedefs = null;
 				sidedefs = null;
 				sectors = null;
 				things = null;
-                macros = null;
 				sel_vertices = null;
 				sel_linedefs = null;
 				sel_sectors = null;
@@ -278,8 +263,8 @@ namespace CodeImp.DoomBuilder.Map
 		// Static initializer
 		internal static void Initialize()
 		{
-			emptylongname = Lump.MakeLongName("-");
-			virtualsectorvalue = new UniValue((int)UniversalType.Integer, (int)0);
+			emptylongname = Lump.MakeLongName("-", false);
+			virtualsectorvalue = new UniValue((int)UniversalType.Integer, 0);
 		}
 
 		#endregion
@@ -346,9 +331,6 @@ namespace CodeImp.DoomBuilder.Map
 		/// </summary>
 		public MapSet Clone()
 		{
-			Linedef nl;
-			Sidedef nd;
-			
 			// Create the map set
 			MapSet newset = new MapSet();
 			newset.BeginAddRemove();
@@ -374,14 +356,14 @@ namespace CodeImp.DoomBuilder.Map
 			foreach(Linedef l in linedefs)
 			{
 				// Make new linedef
-				nl = newset.CreateLinedef(l.Start.Clone, l.End.Clone);
+				Linedef nl = newset.CreateLinedef(l.Start.Clone, l.End.Clone);
 				l.CopyPropertiesTo(nl);
 
 				// Linedef has a front side?
 				if(l.Front != null)
 				{
 					// Make new sidedef
-					nd = newset.CreateSidedef(nl, true, l.Front.Sector.Clone);
+					Sidedef nd = newset.CreateSidedef(nl, true, l.Front.Sector.Clone);
 					l.Front.CopyPropertiesTo(nd);
 				}
 
@@ -389,7 +371,7 @@ namespace CodeImp.DoomBuilder.Map
 				if(l.Back != null)
 				{
 					// Make new sidedef
-					nd = newset.CreateSidedef(nl, false, l.Back.Sector.Clone);
+					Sidedef nd = newset.CreateSidedef(nl, false, l.Back.Sector.Clone);
 					l.Back.CopyPropertiesTo(nd);
 				}
 			}
@@ -883,6 +865,7 @@ namespace CodeImp.DoomBuilder.Map
 				s.SerializedIndex = index++;
 
 				s.ReadWrite(stream);
+				s.Triangles.ReadWrite(stream); //mxd
 			}
 		}
 
@@ -890,8 +873,8 @@ namespace CodeImp.DoomBuilder.Map
 
 		#region ================== Deserialization
 
-		// This serializes the MapSet
-		private void Deserialize(MemoryStream stream)
+		// This deserializes the MapSet
+		internal void Deserialize(MemoryStream stream)
 		{
 			stream.Seek(0, SeekOrigin.Begin);
 			DeserializerStream deserializer = new DeserializerStream(stream);
@@ -917,6 +900,7 @@ namespace CodeImp.DoomBuilder.Map
 			ReadThings(deserializer);
 
 			deserializer.End();
+			deserializer.Dispose(); //mxd
 
 			// Make table of sidedef indices
 			sidedefindices = new Sidedef[numsidedefs];
@@ -1015,6 +999,7 @@ namespace CodeImp.DoomBuilder.Map
 			{
 				array[i] = CreateSector();
 				array[i].ReadWrite(stream);
+				array[i].Triangles.ReadWrite(stream); //mxd
 			}
 
 			return array;
@@ -1045,11 +1030,8 @@ namespace CodeImp.DoomBuilder.Map
 			if(dosectors)
 			{
 				foreach(Sector s in sectors) s.Triangulate();
-				
 				General.Map.CRenderer2D.Surfaces.AllocateBuffers();
-				
 				foreach(Sector s in sectors) s.CreateSurfaces();
-				
 				General.Map.CRenderer2D.Surfaces.UnlockBuffers();
 			}
 		}
@@ -1068,7 +1050,7 @@ namespace CodeImp.DoomBuilder.Map
 		#region ================== Selection
 		
 		// This checks a flag in a selection type
-		private bool InSelectionType(SelectionType value, SelectionType bits)
+		private static bool InSelectionType(SelectionType value, SelectionType bits)
 		{
 			return (value & bits) == bits;
 		}
@@ -1084,9 +1066,6 @@ namespace CodeImp.DoomBuilder.Map
 		/// Note that this function uses the markings to convert the selection.</summary>
 		public void ConvertSelection(SelectionType source, SelectionType target)
 		{
-			ICollection<Linedef> lines;
-			ICollection<Vertex> verts;
-			
 			ClearAllMarks(false);
 			
 			switch(target)
@@ -1095,7 +1074,7 @@ namespace CodeImp.DoomBuilder.Map
 				case SelectionType.Vertices:
 					if(InSelectionType(source, SelectionType.Linedefs)) MarkSelectedLinedefs(true, true);
 					if(InSelectionType(source, SelectionType.Sectors)) General.Map.Map.MarkSelectedSectors(true, true);
-					verts = General.Map.Map.GetVerticesFromLinesMarks(true);
+					ICollection<Vertex> verts = General.Map.Map.GetVerticesFromLinesMarks(true);
 					foreach(Vertex v in verts) v.Selected = true;
 					verts = General.Map.Map.GetVerticesFromSectorsMarks(true);
 					foreach(Vertex v in verts) v.Selected = true;
@@ -1107,7 +1086,7 @@ namespace CodeImp.DoomBuilder.Map
 				case SelectionType.Linedefs:
 					if(InSelectionType(source, SelectionType.Vertices)) MarkSelectedVertices(true, true);
 					if(!InSelectionType(source, SelectionType.Linedefs)) ClearSelectedLinedefs();
-					lines = General.Map.Map.LinedefsFromMarkedVertices(false, true, false);
+					ICollection<Linedef> lines = General.Map.Map.LinedefsFromMarkedVertices(false, true, false);
 					foreach(Linedef l in lines) l.Selected = true;
 					if(InSelectionType(source, SelectionType.Sectors))
 					{
@@ -1145,7 +1124,7 @@ namespace CodeImp.DoomBuilder.Map
 					{
 						foreach(Sector s in General.Map.Map.Sectors)
 						{
-							if(s.Marked || s.Selected)
+							if(s.Selected || (s.Marked && s.Sidedefs.Count > 0))
 							{
 								s.Selected = true;
 								foreach(Sidedef sd in s.Sidedefs)
@@ -1157,7 +1136,7 @@ namespace CodeImp.DoomBuilder.Map
 					{
 						foreach(Sector s in General.Map.Map.Sectors)
 						{
-							if(s.Marked)
+							if(s.Marked && s.Sidedefs.Count > 0)
 							{
 								s.Selected = true;
 								foreach(Sidedef sd in s.Sidedefs)
@@ -1173,7 +1152,6 @@ namespace CodeImp.DoomBuilder.Map
 					
 				default:
 					throw new ArgumentException("Unsupported selection target conversion");
-					break;
 			}
 			
 			// New selection type
@@ -1335,44 +1313,196 @@ namespace CodeImp.DoomBuilder.Map
 			foreach(Thing t in things) if(t.Marked == mark) t.Selected = select;
 		}
 
+		#endregion
+
+		#region ================== Selection groups
+
 		/// <summary>This selects geometry by selection group index.</summary>
 		public void SelectVerticesByGroup(int groupmask)
 		{
-			foreach(SelectableElement e in vertices) e.SelectByGroup(groupmask);
+			foreach(Vertex e in vertices) e.SelectByGroup(groupmask);
 		}
 
 		/// <summary>This selects geometry by selection group index.</summary>
 		public void SelectLinedefsByGroup(int groupmask)
 		{
-			foreach(SelectableElement e in linedefs) e.SelectByGroup(groupmask);
+			foreach(Linedef e in linedefs) e.SelectByGroup(groupmask);
 		}
 
 		/// <summary>This selects geometry by selection group index.</summary>
 		public void SelectSectorsByGroup(int groupmask)
 		{
-			foreach(SelectableElement e in sectors) e.SelectByGroup(groupmask);
+			foreach(Sector e in sectors) e.SelectByGroup(groupmask);
 		}
 
 		/// <summary>This selects geometry by selection group index.</summary>
 		public void SelectThingsByGroup(int groupmask)
 		{
-			foreach(SelectableElement e in things) e.SelectByGroup(groupmask);
+			foreach(Thing e in things) e.SelectByGroup(groupmask);
 		}
 
 		/// <summary>This adds the current selection to the specified selection group.</summary>
-		public void AddSelectionToGroup(int groupmask)
+		//mxd. switched groupmask to groupindex
+		public void AddSelectionToGroup(int groupindex)
 		{
-			foreach(SelectableElement e in vertices)
-				if(e.Selected) e.AddToGroup(groupmask);
-			
-			foreach(SelectableElement e in linedefs)
-				if(e.Selected) e.AddToGroup(groupmask);
-			
-			foreach(SelectableElement e in sectors)
-				if(e.Selected) e.AddToGroup(groupmask);
-			
-			foreach(SelectableElement e in things)
-				if(e.Selected) e.AddToGroup(groupmask);
+			int groupmask = 0x01 << groupindex;
+			foreach(Vertex e in vertices) if(e.Selected) e.AddToGroup(groupmask);
+			foreach(Linedef e in linedefs) if(e.Selected) e.AddToGroup(groupmask);
+			foreach(Sector e in sectors) if(e.Selected) e.AddToGroup(groupmask);
+			foreach(Thing e in things) if(e.Selected) e.AddToGroup(groupmask);
+		}
+
+		/// <summary>This clears specified selection group.</summary>
+		//mxd
+		public void ClearGroup(int groupmask) 
+		{
+			foreach(Vertex e in vertices)  e.RemoveFromGroup(groupmask);
+			foreach(Linedef e in linedefs) e.RemoveFromGroup(groupmask);
+			foreach(Sector e in sectors)   e.RemoveFromGroup(groupmask);
+			foreach(Thing e in things)     e.RemoveFromGroup(groupmask);
+		}
+
+		//mxd
+		internal GroupInfo GetGroupInfo(int groupindex) 
+		{
+			int numSectors = 0;
+			int numLines = 0;
+			int numVerts = 0;
+			int numThings = 0;
+			int groupmask = 0x01 << groupindex;
+
+			foreach(Vertex e in vertices)  if(e.IsInGroup(groupmask)) numVerts++; //mxd
+			foreach(Linedef e in linedefs) if(e.IsInGroup(groupmask)) numLines++; //mxd
+			foreach(Sector e in sectors)   if(e.IsInGroup(groupmask)) numSectors++; //mxd
+			foreach(Thing e in things)     if(e.IsInGroup(groupmask)) numThings++; //mxd
+
+			return new GroupInfo(groupindex + 1, numSectors, numLines, numVerts, numThings);
+		}
+
+		//mxd
+		internal void WriteSelectionGroups(Configuration cfg) 
+		{
+			// Fill structure
+			IDictionary groups = new ListDictionary();
+			for(int i = 0; i < 10; i++) 
+			{
+				IDictionary group = new ListDictionary();
+				int groupmask = 0x01 << i;
+
+				//store verts
+				List<string> indices = new List<string>();
+				foreach(Vertex e in vertices) if(e.IsInGroup(groupmask)) indices.Add(e.Index.ToString());
+				if(indices.Count > 0) group.Add("vertices", string.Join(" ", indices.ToArray()));
+
+				//store linedefs
+				indices.Clear();
+				foreach(Linedef e in linedefs) if(e.IsInGroup(groupmask)) indices.Add(e.Index.ToString());
+				if(indices.Count > 0) group.Add("linedefs", string.Join(" ", indices.ToArray()));
+
+				//store sectors
+				indices.Clear();
+				foreach(Sector e in sectors) if(e.IsInGroup(groupmask)) indices.Add(e.Index.ToString());
+				if(indices.Count > 0) group.Add("sectors", string.Join(" ", indices.ToArray()));
+
+				//store things
+				indices.Clear();
+				foreach(Thing e in things) if(e.IsInGroup(groupmask)) indices.Add(e.Index.ToString());
+				if(indices.Count > 0) group.Add("things", string.Join(" ", indices.ToArray()));
+
+				//add to main collection
+				if(group.Count > 0) groups.Add(i, group);
+			}
+
+			// Write to config
+			if(groups.Count > 0) cfg.WriteSetting(SELECTION_GROUPS_PATH, groups);
+		}
+
+		//mxd
+		internal void ReadSelectionGroups(Configuration cfg) 
+		{
+			IDictionary grouplist = cfg.ReadSetting(SELECTION_GROUPS_PATH, new Hashtable());
+
+			foreach(DictionaryEntry mp in grouplist) 
+			{
+				// Item is a structure?
+				if(mp.Value is IDictionary) 
+				{
+					//get group number
+					int groupnum;
+					if(!int.TryParse(mp.Key as string, out groupnum)) continue;
+
+					int groupmask = 0x01 << General.Clamp(groupnum, 0, 10);
+					IDictionary groupinfo = (IDictionary)mp.Value;
+
+					if(groupinfo.Contains("vertices")) 
+					{
+						string s = groupinfo["vertices"] as string;
+						if(!string.IsNullOrEmpty(s)) 
+						{
+							List<int> indices = GetIndices(s);
+							foreach(int index in indices) 
+							{
+								if(index > vertices.Length) continue;
+								vertices[index].AddToGroup(groupmask);
+							}
+						}
+					}
+
+					if(groupinfo.Contains("linedefs")) 
+					{
+						string s = groupinfo["linedefs"] as string;
+						if(!string.IsNullOrEmpty(s)) 
+						{
+							List<int> indices = GetIndices(s);
+							foreach(int index in indices) 
+							{
+								if(index > linedefs.Length) continue;
+								linedefs[index].AddToGroup(groupmask);
+							}
+						}
+					}
+
+					if(groupinfo.Contains("sectors")) 
+					{
+						string s = groupinfo["sectors"] as string;
+						if(!string.IsNullOrEmpty(s)) 
+						{
+							List<int> indices = GetIndices(s);
+							foreach(int index in indices) 
+							{
+								if(index > sectors.Length) continue;
+								sectors[index].AddToGroup(groupmask);
+							}
+						}
+					}
+
+					if(groupinfo.Contains("things")) 
+					{
+						string s = groupinfo["things"] as string;
+						if(!string.IsNullOrEmpty(s)) 
+						{
+							List<int> indices = GetIndices(s);
+							foreach(int index in indices) 
+							{
+								if(index > things.Length) continue;
+								things[index].AddToGroup(groupmask);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		//mxd
+		private static List<int> GetIndices(string input) 
+		{
+			string[] parts = input.Split(new[] {' '}, StringSplitOptions.RemoveEmptyEntries);
+			int index;
+			List<int> result = new List<int>(parts.Length);
+
+			foreach(string part in parts) if(int.TryParse(part, out index)) result.Add(index);
+
+			return result;
 		}
 		
 		#endregion
@@ -1603,8 +1733,8 @@ namespace CodeImp.DoomBuilder.Map
 			{
 				foreach(Linedef l in v.Linedefs)
 				{
-					if(((l.Front != null) && (l.Front.Sector.Marked == mark)) ||
-						((l.Back != null) && (l.Back.Sector.Marked == mark)))
+					if(((l.Front != null) && (l.Front.Sector != null) && (l.Front.Sector.Marked == mark)) ||
+						((l.Back != null) && (l.Back.Sector != null) && (l.Back.Sector.Marked == mark)))
 					{
 						list.Add(v);
 						break;
@@ -1858,16 +1988,42 @@ namespace CodeImp.DoomBuilder.Map
 			return new RectangleF(l, t, r - l, b - t);
 		}
 
-		/// <summary>This filters lines by a rectangular area.</summary>
-		public static ICollection<Linedef> FilterByArea(ICollection<Linedef> lines, ref RectangleF area)
+		/// <summary>This increases and existing area with the given linedefs.</summary>
+		public static RectangleF IncreaseArea(RectangleF area, ICollection<Linedef> lines) //mxd
 		{
-			ICollection<Linedef> newlines = new List<Linedef>(lines.Count);
+			float l = area.Left;
+			float t = area.Top;
+			float r = area.Right;
+			float b = area.Bottom;
+
+			// Go for all vertices
+			foreach(Linedef ld in lines)
+			{
+				// Adjust boundaries by vertices
+				if(ld.Start.Position.x < l) l = ld.Start.Position.x;
+				if(ld.Start.Position.x > r) r = ld.Start.Position.x;
+				if(ld.Start.Position.y < t) t = ld.Start.Position.y;
+				if(ld.Start.Position.y > b) b = ld.Start.Position.y;
+				if(ld.End.Position.x < l) l = ld.End.Position.x;
+				if(ld.End.Position.x > r) r = ld.End.Position.x;
+				if(ld.End.Position.y < t) t = ld.End.Position.y;
+				if(ld.End.Position.y > b) b = ld.End.Position.y;
+			}
+
+			// Return a rect
+			return new RectangleF(l, t, r - l, b - t);
+		}
+
+		/// <summary>This filters lines by a rectangular area.</summary>
+		public static HashSet<Linedef> FilterByArea(ICollection<Linedef> lines, ref RectangleF area)
+		{
+			HashSet<Linedef> newlines = new HashSet<Linedef>();
 			
 			// Go for all lines
 			foreach(Linedef l in lines)
 			{
 				// Check the cs field bits
-				if((GetCSFieldBits(l.Start, ref area) & GetCSFieldBits(l.End, ref area)) == 0)
+				if((GetCSFieldBits(l.Start.Position, area) & GetCSFieldBits(l.End.Position, area)) == 0) 
 				{
 					// The line could be in the area
 					newlines.Add(l);
@@ -1878,14 +2034,14 @@ namespace CodeImp.DoomBuilder.Map
 			return newlines;
 		}
 
-		// This returns the cohen-sutherland field bits for a vertex in a rectangle area
-		private static int GetCSFieldBits(Vertex v, ref RectangleF area)
+		/// <summary> This returns the cohen-sutherland field bits for a vector in a rectangle area</summary>
+		public static int GetCSFieldBits(Vector2D v, RectangleF area) 
 		{
 			int bits = 0;
-			if(v.Position.y < area.Top) bits |= 0x01;
-			if(v.Position.y > area.Bottom) bits |= 0x02;
-			if(v.Position.x < area.Left) bits |= 0x04;
-			if(v.Position.x > area.Right) bits |= 0x08;
+			if(v.y < area.Top) bits |= 0x01;
+			if(v.y > area.Bottom) bits |= 0x02;
+			if(v.x < area.Left) bits |= 0x04;
+			if(v.x > area.Right) bits |= 0x08;
 			return bits;
 		}
 
@@ -1898,14 +2054,11 @@ namespace CodeImp.DoomBuilder.Map
 			foreach(Vertex v in verts)
 			{
 				// Within rect?
-				if((v.Position.x >= area.Left) &&
-				   (v.Position.x <= area.Right) &&
-				   (v.Position.y >= area.Top) &&
-				   (v.Position.y <= area.Bottom))
-				{
-					// The vertex is in the area
-					newverts.Add(v);
-				}
+				if((v.Position.x < area.Left) || (v.Position.x > area.Right) ||
+					(v.Position.y < area.Top) || (v.Position.y > area.Bottom)) continue;
+
+				// The vertex is in the area
+				newverts.Add(v);
 			}
 
 			// Return result
@@ -1919,34 +2072,27 @@ namespace CodeImp.DoomBuilder.Map
 		/// <summary>
 		/// Stitches marked geometry with non-marked geometry. Returns false when the operation failed.
 		/// </summary>
-		public bool StitchGeometry()
+		public bool StitchGeometry() { return StitchGeometry(MergeGeometryMode.CLASSIC); } //mxd. Compatibility
+		public bool StitchGeometry(MergeGeometryMode mergemode)
 		{
-			ICollection<Linedef> movinglines;
-			ICollection<Linedef> fixedlines;
-			ICollection<Vertex> nearbyfixedverts;
-			ICollection<Vertex> movingverts;
-			ICollection<Vertex> fixedverts;
-			RectangleF editarea;
-			int stitchundo;
-
 			// Find vertices
-			movingverts = General.Map.Map.GetMarkedVertices(true);
-			fixedverts = General.Map.Map.GetMarkedVertices(false);
+			HashSet<Vertex> movingverts = new HashSet<Vertex>(General.Map.Map.GetMarkedVertices(true));
+			HashSet<Vertex> fixedverts = new HashSet<Vertex>(General.Map.Map.GetMarkedVertices(false));
 			
 			// Find lines that moved during the drag
-			movinglines = LinedefsFromMarkedVertices(false, true, true);
+			HashSet<Linedef> movinglines = new HashSet<Linedef>(LinedefsFromMarkedVertices(false, true, true));
 			
 			// Find all non-moving lines
-			fixedlines = LinedefsFromMarkedVertices(true, false, false);
+			HashSet<Linedef> fixedlines = new HashSet<Linedef>(LinedefsFromMarkedVertices(true, false, false));
 			
 			// Determine area in which we are editing
-			editarea = MapSet.CreateArea(movinglines);
-			editarea = MapSet.IncreaseArea(editarea, movingverts);
+			RectangleF editarea = CreateArea(movinglines);
+			editarea = IncreaseArea(editarea, movingverts);
 			editarea.Inflate(1.0f, 1.0f);
 			
 			// Join nearby vertices
 			BeginAddRemove();
-			MapSet.JoinVertices(fixedverts, movingverts, true, MapSet.STITCH_DISTANCE);
+			JoinVertices(fixedverts, movingverts, true, STITCH_DISTANCE);
 			EndAddRemove();
 			
 			// Update cached values of lines because we need their length/angle
@@ -1955,25 +2101,498 @@ namespace CodeImp.DoomBuilder.Map
 			BeginAddRemove();
 			
 			// Split moving lines with unselected vertices
-			nearbyfixedverts = MapSet.FilterByArea(fixedverts, ref editarea);
-			if(!MapSet.SplitLinesByVertices(movinglines, nearbyfixedverts, MapSet.STITCH_DISTANCE, movinglines))
+			ICollection<Vertex> nearbyfixedverts = FilterByArea(fixedverts, ref editarea);
+			if(!SplitLinesByVertices(movinglines, nearbyfixedverts, STITCH_DISTANCE, movinglines, mergemode))
 				return false;
-			
-			// Split non-moving lines with selected vertices
-			fixedlines = MapSet.FilterByArea(fixedlines, ref editarea);
-			if(!MapSet.SplitLinesByVertices(fixedlines, movingverts, MapSet.STITCH_DISTANCE, movinglines))
+
+            // Split non-moving lines with selected vertices
+            fixedlines = new HashSet<Linedef>(fixedlines.Where(fixedline => !fixedline.IsDisposed));
+			if(!SplitLinesByVertices(fixedlines, movingverts, STITCH_DISTANCE, movinglines, mergemode))
 				return false;
+
+			//mxd. Split moving lines with fixed lines
+			if(!SplitLinesByLines(fixedlines, movinglines, mergemode)) return false;
 			
 			// Remove looped linedefs
-			MapSet.RemoveLoopedLinedefs(movinglines);
+			RemoveLoopedLinedefs(movinglines);
 			
 			// Join overlapping lines
-			if(!MapSet.JoinOverlappingLines(movinglines))
-				return false;
-			
+			if(!JoinOverlappingLines(movinglines)) return false;
+
+			//mxd. Remove remaining new verts from dragged shape if possible
+			if(mergemode == MergeGeometryMode.REPLACE)
+			{
+				// Collect verts created by splitting. Can't use GetMarkedVertices here, because we are in the middle of AddRemove
+				HashSet<Vertex> tocheck = new HashSet<Vertex>();
+				foreach(Vertex v in vertices)
+				{
+					if(v != null && v.Marked && !movingverts.Contains(v)) tocheck.Add(v);
+				}
+
+				// Remove verts, which are not part of initially dragged verts
+				foreach(Vertex v in tocheck)
+				{
+					if(!v.IsDisposed && v.Linedefs.Count == 2)
+					{
+						Linedef ld1 = General.GetByIndex(v.Linedefs, 0);
+						Linedef ld2 = General.GetByIndex(v.Linedefs, 1);
+
+						Vertex v2 = (ld2.Start == v) ? ld2.End : ld2.Start;
+						if(ld1.Start == v) ld1.SetStartVertex(v2); else ld1.SetEndVertex(v2);
+						ld2.Dispose();
+
+						// Trash vertex
+						v.Dispose();
+					}
+				}
+			}
+
 			EndAddRemove();
+
+			// Collect changed lines... We need those in by-vertex-index order
+			// (otherwise SectorBuilder logic in some cases will incorrectly assign sector propertes)
+			List<Vertex> markedverts = GetMarkedVertices(true);
+			List<Linedef> changedlines = new List<Linedef>(markedverts.Count / 2);
+			HashSet<Linedef> changedlineshash = new HashSet<Linedef>();
+			foreach(Vertex v in markedverts)
+			{
+				foreach(Linedef l in v.Linedefs)
+				{
+					if(!changedlineshash.Contains(l))
+					{
+						changedlines.Add(l);
+						changedlineshash.Add(l);
+					}
+				}
+			}
+
+			//mxd. Correct sector references
+			if(mergemode != MergeGeometryMode.CLASSIC)
+			{
+				// Linedefs cache needs to be up to date...
+				Update(true, false);
+				
+				// Fix stuff...
+				CorrectSectorReferences(changedlines, true);
+				CorrectOuterSides(new HashSet<Linedef>(changedlines));
+
+				// Mark only fully selected sectors
+				ClearMarkedSectors(false);
+				HashSet<Sector> changedsectors = GetSectorsFromLinedefs(changedlines);
+				foreach(Sector s in changedsectors) s.Marked = true;
+			}
+			else
+			{
+				FlipBackwardLinedefs(changedlines);
+			}
 			
 			return true;
+		}
+
+		//mxd. Shameless SLADEMap::correctSectors ripoff... Corrects/builds sectors for all lines in [lines]
+		private static void CorrectSectorReferences(List<Linedef> lines, bool existing_only)
+		{
+			//DebugConsole.Clear();
+			//DebugConsole.WriteLine("CorrectSectorReferences for " + lines.Count + " lines");
+			
+            // ano - set a bunch of foreaches to be for()s because they're faster
+
+			// Create a list of sidedefs to perform sector creation with
+			List<LinedefSide> edges = new List<LinedefSide>();
+			if(existing_only)
+			{
+                int lineCount = lines.Count;
+				for(int i = 0; i < lineCount; i++)
+				{
+                    Linedef l = lines[i];
+					// Add only existing sides as edges (or front side if line has none)
+					if(l.Front != null || l.Back == null)
+						edges.Add(new LinedefSide(l, true));
+					if(l.Back != null)
+						edges.Add(new LinedefSide(l, false));
+				}
+			}
+			else
+			{
+                int lineCount = lines.Count;
+                for (int i = 0; i < lineCount; i++)
+                {
+                    Linedef l = lines[i];
+                    // Add front side
+                    edges.Add(new LinedefSide(l, true));
+
+					// Add back side if there's a sector
+					if(General.Map.Map.GetSectorByCoordinates(l.GetSidePoint(false)) != null)
+						edges.Add(new LinedefSide(l, false));
+				}
+			}
+
+			HashSet<Sidedef> sides_correct = new HashSet<Sidedef>();
+            int edgeCount = edges.Count;
+            for (int i = 0; i < edgeCount; i++)
+            {
+                LinedefSide ls = edges[i];
+                if (ls.Front && ls.Line.Front != null)
+					sides_correct.Add(ls.Line.Front);
+				else if(!ls.Front && ls.Line.Back != null)
+					sides_correct.Add(ls.Line.Back);
+			}
+
+			//mxd. Get affected sectors
+			HashSet<Sector> affectedsectors = new HashSet<Sector>(General.Map.Map.GetSelectedSectors(true));
+			affectedsectors.UnionWith(General.Map.Map.GetUnselectedSectorsFromLinedefs(lines));
+
+			//mxd. Collect their sidedefs
+			HashSet<Sidedef> sectorsides = new HashSet<Sidedef>();
+			foreach(Sector s in affectedsectors) sectorsides.UnionWith(s.Sidedefs);
+
+			// Build sectors
+			SectorBuilder builder = new SectorBuilder();
+			List<Sector> sectors_reused = new List<Sector>();
+
+            for (int i = 0; i < edgeCount; i++)
+            {
+                LinedefSide ls = edges[i];
+                // Skip if edge is ignored
+                //DebugConsole.WriteLine((ls.Ignore ? "Ignoring line " : "Processing line ") + ls.Line.Index);
+                if (ls.Ignore) continue;
+
+                // Run sector builder on current edge
+                Stopwatch watch = new Stopwatch();
+                watch.Start();
+                if (!builder.TraceSector(ls.Line, ls.Front))
+                {
+                    //General.ErrorLogger.Add(ErrorType.Warning, string.Format("TraceSector: took {0}ms, failed!", watch.ElapsedMilliseconds));
+                    continue; // Don't create sector if trace failed
+                }
+                //General.ErrorLogger.Add(ErrorType.Warning, string.Format("TraceSector: took {0}ms", watch.ElapsedMilliseconds));
+
+                // Find any subsequent edges that were part of the sector created
+                bool has_existing_lines = false;
+				bool has_existing_sides = false;
+				//bool has_zero_sided_lines = false;
+				bool has_dragged_sides = false; //mxd
+				List<LinedefSide> edges_in_sector = new List<LinedefSide>();
+				foreach(LinedefSide edge in builder.SectorEdges)
+				{
+					bool line_is_ours = false;
+					bool side_exists = (edge.Front ? edge.Line.Front != null : edge.Line.Back != null); //mxd
+					if(side_exists && sectorsides.Contains(edge.Front ? edge.Line.Front : edge.Line.Back))
+						has_dragged_sides = true; //mxd
+
+                    for (int k = 0; k < edgeCount; k++)
+                    {
+                        LinedefSide ls2 = edges[k];
+                        if (ls2.Line == edge.Line)
+						{
+							line_is_ours = true;
+							if(ls2.Front == edge.Front)
+							{
+								edges_in_sector.Add(ls2);
+								break;
+							}
+						}
+					}
+
+                    // ano - so this inner part was already commented out
+                    // so i just put the /* */ around it
+					/*if(line_is_ours)
+					{
+						//if(edge.Line.Front == null && edge.Line.Back == null)
+							//has_zero_sided_lines = true;
+					}
+					else*/
+
+                    if(!line_is_ours)
+					{
+						has_existing_lines = true;
+						has_existing_sides |= side_exists; //mxd
+					}
+				}
+
+				// Pasting or moving a two-sided line into an enclosed void should NOT
+				// create a new sector out of the entire void.
+				// Heuristic: if the traced sector includes any edges that are NOT
+				// "ours", and NONE of those edges already exist, that sector must be
+				// in an enclosed void, and should not be drawn.
+				// However, if existing_only is false, the caller expects us to create
+				// new sides anyway; skip this check.
+				if(existing_only && has_existing_lines && !has_existing_sides && !has_dragged_sides)
+					continue;
+
+				// Ignore traced edges when trying to create any further sectors
+				foreach(LinedefSide ls3 in edges_in_sector) ls3.Ignore = true;
+
+				// Check if sector traced is already valid
+				if(builder.IsValidSector()) continue;
+
+				// Check if we traced over an existing sector (or part of one)
+				Sector sector = builder.FindExistingSector(sides_correct);
+				if(sector != null)
+				{
+					// Check if it's already been (re)used
+					bool reused = false;
+					foreach(Sector s in sectors_reused)
+					{
+						if(s == sector)
+						{
+							reused = true;
+							break;
+						}
+					}
+
+					// If we can reuse the sector, do so
+					if(!reused)
+						sectors_reused.Add(sector);
+					else
+						sector = null;
+				}
+
+				// Create sector
+				builder.CreateSector(sector, null);
+			}
+
+            // Remove any sides that weren't part of a sector
+            for (int i = 0; i < edgeCount; i++)
+            {
+                LinedefSide ls = edges[i];
+                if (ls.Ignore || ls.Line == null) continue;
+                if (ls.Line.Start == null || ls.Line.End == null)
+                    throw new Exception("ls line is null");
+
+				if(ls.Front)
+				{
+					if(ls.Line.Front != null)
+					{
+						ls.Line.Front.Dispose();
+
+						// Update doublesided flag
+						ls.Line.ApplySidedFlags();
+					}
+				}
+				else
+				{
+					if(ls.Line.Back != null)
+					{
+						ls.Line.Back.Dispose();
+
+						// Update doublesided flag
+						ls.Line.ApplySidedFlags();
+					}
+				}
+			}
+
+			// Check if any lines need to be flipped
+			FlipBackwardLinedefs(lines);
+
+			// Find an adjacent sector to copy properties from
+			Sector sector_copy = null;
+			foreach(Linedef l in lines)
+			{
+				// Check front sector
+				Sector sector = (l.Front != null ? l.Front.Sector : null);
+				if(sector != null && !sector.Marked)
+				{
+					// Copy this sector if it isn't newly created
+					sector_copy = sector;
+					break;
+				}
+
+				// Check back sector
+				sector = (l.Back != null ? l.Back.Sector : null);
+				if(sector != null && !sector.Marked)
+				{
+					// Copy this sector if it isn't newly created
+					sector_copy = sector;
+					break;
+				}
+			}
+
+			// Go through newly created sectors
+			List<Sector> newsectors = General.Map.Map.GetMarkedSectors(true); //mxd
+			foreach(Sector s in newsectors)
+			{
+				// Skip if sector already has properties
+				if(s.CeilTexture != "-" || s.FloorTexture != "-"
+					|| s.FloorHeight != General.Settings.DefaultFloorHeight
+					|| s.CeilHeight != General.Settings.DefaultCeilingHeight)
+					continue;
+
+				// Copy from adjacent sector if any
+				if(sector_copy != null)
+				{
+					sector_copy.CopyPropertiesTo(s);
+					continue;
+				}
+
+				// Otherwise, use defaults from game configuration
+				s.SetFloorTexture(General.Map.Options.DefaultFloorTexture);
+				s.SetCeilTexture(General.Map.Options.DefaultCeilingTexture);
+				s.FloorHeight = General.Settings.DefaultFloorHeight;
+				s.CeilHeight = General.Settings.DefaultCeilingHeight;
+				s.Brightness = General.Settings.DefaultBrightness;
+			}
+
+			// Update line textures
+			List<Sidedef> newsides = General.Map.Map.GetMarkedSidedefs(true);
+			foreach(Sidedef side in newsides)
+			{
+				// Clear any unneeded textures
+				side.RemoveUnneededTextures(side.Other != null, false, true);
+
+				// Set middle texture if needed
+				if(side.MiddleRequired() && side.MiddleTexture == "-")
+				{
+					// Find adjacent texture (any)
+					string tex = GetAdjacentMiddleTexture(side.Line.Start);
+					if(tex == "-") tex = GetAdjacentMiddleTexture(side.Line.End);
+
+					// If no adjacent texture, get default from game configuration
+					if(tex == "-") tex = General.Settings.DefaultTexture;
+
+					// Set texture
+					side.SetTextureMid(tex);
+				}
+
+				// Update sided flags
+				side.Line.ApplySidedFlags();
+			}
+
+			// Remove any extra sectors
+			General.Map.Map.RemoveUnusedSectors(false);
+		}
+
+		//mxd. Try to create outer sidedefs if needed
+		private static void CorrectOuterSides(HashSet<Linedef> changedlines)
+		{
+			HashSet<Linedef> linesmissingfront = new HashSet<Linedef>();
+			HashSet<Linedef> linesmissingback = new HashSet<Linedef>();
+
+			// Collect lines without front/back sides
+			foreach(Linedef line in changedlines)
+			{
+				if(line.Back == null) linesmissingback.Add(line);
+				if(line.Front == null) linesmissingfront.Add(line);
+			}
+
+			// Anything to do?
+			if(linesmissingfront.Count == 0 && linesmissingback.Count == 0) return;
+
+			// Let's use a blockmap...
+			RectangleF area = CreateArea(linesmissingfront);
+			area = IncreaseArea(area, linesmissingback);
+			BlockMap<BlockEntry> blockmap = new BlockMap<BlockEntry>(area);
+			blockmap.AddSectorsSet(General.Map.Map.Sectors);
+
+			// Find sectors to join singlesided lines
+			Dictionary<Linedef, Sector> linefrontsectorref = new Dictionary<Linedef, Sector>();
+			foreach(Linedef line in linesmissingfront)
+			{
+				// Line is now inside a sector?
+				Sector nearest = FindSectorContaining(blockmap, line);
+
+				// We can reattach our line!
+				if(nearest != null) linefrontsectorref[line] = nearest;
+			}
+
+			Dictionary<Linedef, Sector> linebacksectorref = new Dictionary<Linedef, Sector>();
+			foreach(Linedef line in linesmissingback)
+			{
+				// Line is now inside a sector?
+				Sector nearest = FindSectorContaining(blockmap, line);
+
+				// We can reattach our line!
+				if(nearest != null) linebacksectorref[line] = nearest;
+			}
+
+			// Check single-sided lines. Add new sidedefs if necessary
+			// Key is dragged single-sided line, value is a sector dragged line ended up in.
+			foreach(KeyValuePair<Linedef, Sector> group in linefrontsectorref)
+			{
+				Linedef line = group.Key;
+
+				// Create new sidedef
+				Sidedef newside = General.Map.Map.CreateSidedef(line, true, group.Value);
+
+				// Copy props from the other side
+				Sidedef propssource = (line.Front ?? line.Back);
+				propssource.CopyPropertiesTo(newside);
+
+				// Correct the linedef
+				if((line.Front == null) && (line.Back != null))
+				{
+					line.FlipVertices();
+					line.FlipSidedefs();
+				}
+
+				// Adjust textures
+				if(line.Front != null) line.Front.RemoveUnneededTextures(line.Back != null, false, true);
+				if(line.Back != null) line.Back.RemoveUnneededTextures(line.Front != null, false, true);
+
+				// Correct the sided flags
+				line.ApplySidedFlags();
+			}
+
+			foreach(KeyValuePair<Linedef, Sector> group in linebacksectorref)
+			{
+				Linedef line = group.Key;
+
+				// Create new sidedef
+				Sidedef newside = General.Map.Map.CreateSidedef(line, false, group.Value);
+
+				// Copy props from the other side
+				Sidedef propssource = (line.Front ?? line.Back);
+				propssource.CopyPropertiesTo(newside);
+
+				// Correct the linedef
+				if((line.Front == null) && (line.Back != null))
+				{
+					line.FlipVertices();
+					line.FlipSidedefs();
+				}
+
+				// Adjust textures
+				if(line.Front != null) line.Front.RemoveUnneededTextures(line.Back != null, false, true);
+				if(line.Back != null) line.Back.RemoveUnneededTextures(line.Front != null, false, true);
+
+				// Correct the sided flags
+				line.ApplySidedFlags();
+			}
+		}
+
+		//mxd
+		private static Sector FindSectorContaining(BlockMap<BlockEntry> sectorsmap, Linedef line)
+		{
+			HashSet<BlockEntry> blocks = new HashSet<BlockEntry>
+			{
+				sectorsmap.GetBlockAt(line.Start.Position),
+				sectorsmap.GetBlockAt(line.End.Position),
+			};
+
+			foreach(BlockEntry be in blocks)
+			{
+				foreach(Sector sector in be.Sectors)
+				{
+					// Check if target line is inside the found sector
+					if(sector.Intersect(line.Start.Position, false) && sector.Intersect(line.End.Position, false))
+						return sector;
+				}
+			}
+
+			return null;
+		}
+
+		//mxd
+		private static string GetAdjacentMiddleTexture(Vertex v)
+		{
+			// Go through adjacent lines
+			foreach(Linedef l in v.Linedefs)
+			{
+				if(l.Front != null && l.Front.MiddleTexture != "-") return l.Front.MiddleTexture;
+				if(l.Back != null && l.Back.MiddleTexture != "-") return l.Back.MiddleTexture;
+			}
+
+			return "-";
 		}
 		
 		#endregion
@@ -2045,40 +2664,38 @@ namespace CodeImp.DoomBuilder.Map
 					// Check if these vertices have lines that overlap
 					foreach(Linedef l2 in l1.Start.Linedefs)
 					{
+						//mxd. The same line?
+						if(l1.Index == l2.Index) continue;
+						
 						// Sharing vertices?
-						if((l1.End == l2.End) ||
-						   (l1.End == l2.Start))
+						if(l1.End == l2.End || l1.End == l2.Start)
 						{
-							// Not the same line?
-							if(l1 != l2)
+							bool oppositedirection = (l1.End == l2.Start);
+							bool l2marked = l2.Marked;
+
+							// Merge these two linedefs
+							while(lines.Remove(l2));
+							if(!l2.Join(l1)) return false;
+
+							// If l2 was marked as new geometry, we have to make sure
+							// that l1's FrontInterior is correct for the drawing procedure
+							if(l2marked) 
 							{
-								bool oppositedirection = (l1.End == l2.Start);
-								bool l2marked = l2.Marked;
-								
-								// Merge these two linedefs
-								while(lines.Remove(l2)) ;
-								if(!l2.Join(l1)) return false;
-								
-								// If l2 was marked as new geometry, we have to make sure
-								// that l1's FrontInterior is correct for the drawing procedure
-								if(l2marked)
-								{
-									l1.FrontInterior = l2.FrontInterior ^ oppositedirection;
-								}
-								// If l1 is marked as new geometry, we may need to flip it to preserve
-								// orientation of the original geometry, and update its FrontInterior
-								else if(l1.Marked)
-								{
-									if(oppositedirection)
-									{
-										l1.FlipVertices();		// This also flips FrontInterior
-										l1.FlipSidedefs();
-									}
-								}
-								
-								joined = true;
-								break;
+								l1.FrontInterior = l2.FrontInterior ^ oppositedirection;
 							}
+							// If l1 is marked as new geometry, we may need to flip it to preserve
+							// orientation of the original geometry, and update its FrontInterior
+							else if(l1.Marked) 
+							{
+								if(oppositedirection) 
+								{
+									l1.FlipVertices();		// This also flips FrontInterior
+									l1.FlipSidedefs();
+								}
+							}
+
+							joined = true;
+							break;
 						}
 					}
 					
@@ -2088,40 +2705,38 @@ namespace CodeImp.DoomBuilder.Map
 					// Check if these vertices have lines that overlap
 					foreach(Linedef l2 in l1.End.Linedefs)
 					{
+						//mxd. The same line?
+						if(l1.Index == l2.Index) continue;
+						
 						// Sharing vertices?
-						if((l1.Start == l2.End) ||
-						   (l1.Start == l2.Start))
+						if(l1.Start == l2.End || l1.Start == l2.Start)
 						{
-							// Not the same line?
-							if(l1 != l2)
+							bool oppositedirection = (l1.Start == l2.End);
+							bool l2marked = l2.Marked;
+
+							// Merge these two linedefs
+							while(lines.Remove(l2));
+							if(!l2.Join(l1)) return false;
+
+							// If l2 was marked as new geometry, we have to make sure
+							// that l1's FrontInterior is correct for the drawing procedure
+							if(l2marked) 
 							{
-								bool oppositedirection = (l1.Start == l2.End);
-								bool l2marked = l2.Marked;
-								
-								// Merge these two linedefs
-								while(lines.Remove(l2)) ;
-								if(!l2.Join(l1)) return false;
-
-								// If l2 was marked as new geometry, we have to make sure
-								// that l1's FrontInterior is correct for the drawing procedure
-								if(l2marked)
-								{
-									l1.FrontInterior = l2.FrontInterior ^ oppositedirection;
-								}
-								// If l1 is marked as new geometry, we may need to flip it to preserve
-								// orientation of the original geometry, and update its FrontInterior
-								else if(l1.Marked)
-								{
-									if(oppositedirection)
-									{
-										l1.FlipVertices();		// This also flips FrontInterior
-										l1.FlipSidedefs();
-									}
-								}
-
-								joined = true;
-								break;
+								l1.FrontInterior = l2.FrontInterior ^ oppositedirection;
 							}
+							// If l1 is marked as new geometry, we may need to flip it to preserve
+							// orientation of the original geometry, and update its FrontInterior
+							else if(l1.Marked) 
+							{
+								if(oppositedirection) 
+								{
+									l1.FlipVertices();		// This also flips FrontInterior
+									l1.FlipSidedefs();
+								}
+							}
+
+							joined = true;
+							break;
 						}
 					}
 					
@@ -2150,8 +2765,8 @@ namespace CodeImp.DoomBuilder.Map
 				// Go for all the lines
 				foreach(Linedef l in lines)
 				{
-					// Check if referencing the same vertex twice
-					if(l.Start == l.End)
+					// Check if referencing the same vertex twice (mxd. Or if both verts are null)
+					if(l.Start == l.End || l.Start.Position == l.End.Position)
 					{
 						// Remove this line
 						while(lines.Remove(l));
@@ -2182,46 +2797,78 @@ namespace CodeImp.DoomBuilder.Map
 
 			do
 			{
+				//mxd. Create blockmap
+				ICollection<Vertex> biggerset, smallerset;
+				bool keepsmaller;
+				if(set1.Count > set2.Count)
+				{
+					biggerset = set1;
+					smallerset = set2;
+					keepsmaller = !keepsecond;
+				}
+				else
+				{
+					biggerset = set2;
+					smallerset = set1;
+					keepsmaller = keepsecond;
+				}
+				
+				RectangleF area = CreateArea(biggerset);
+				BlockMap<BlockEntry> blockmap = new BlockMap<BlockEntry>(area);
+				blockmap.AddVerticesSet(biggerset);
+				
 				// No joins yet
 				joined = false;
 
-				// Go for all vertices in the first set
-				foreach(Vertex v1 in set1)
+				// Go for all vertices in the smaller set
+				foreach(Vertex v1 in smallerset)
 				{
-					// Go for all vertices in the second set
-					foreach(Vertex v2 in set2)
+					HashSet<BlockEntry> blocks = new HashSet<BlockEntry>
 					{
-						// Check if vertices are close enough
-						if(v1.DistanceToSq(v2.Position) <= joindist2)
+						blockmap.GetBlockAt(v1.Position), 
+						blockmap.GetBlockAt(new Vector2D(v1.Position.x + joindist, v1.Position.y + joindist)), 
+						blockmap.GetBlockAt(new Vector2D(v1.Position.x + joindist, v1.Position.y - joindist)), 
+						blockmap.GetBlockAt(new Vector2D(v1.Position.x - joindist, v1.Position.y + joindist)), 
+						blockmap.GetBlockAt(new Vector2D(v1.Position.x - joindist, v1.Position.y - joindist))
+					};
+
+					foreach(BlockEntry be in blocks)
+					{
+						if(be == null) continue;
+						foreach(Vertex v2 in be.Vertices)
 						{
-							// Check if not the same vertex
-							if(v1 != v2)
+							// Check if vertices are close enough
+							if(v1.DistanceToSq(v2.Position) <= joindist2)
 							{
-								// Move the second vertex to match the first
-								v2.Move(v1.Position);
-								
-								// Check which one to keep
-								if(keepsecond)
+								// Check if not the same vertex
+								if(v1 != v2)
 								{
-									// Join the first into the second
-									// Second is kept, first is removed
-									v1.Join(v2);
-									set1.Remove(v1);
-									set2.Remove(v1);
+									// Move the second vertex to match the first
+									v2.Move(v1.Position);
+
+									// Check which one to keep
+									if(keepsmaller)
+									{
+										// Join the first into the second
+										// Second is kept, first is removed
+										v1.Join(v2);
+										biggerset.Remove(v1);
+										smallerset.Remove(v1);
+									}
+									else
+									{
+										// Join the second into the first
+										// First is kept, second is removed
+										v2.Join(v1);
+										biggerset.Remove(v2);
+										smallerset.Remove(v2);
+									}
+
+									// Count the join
+									joinsdone++;
+									joined = true;
+									break;
 								}
-								else
-								{
-									// Join the second into the first
-									// First is kept, second is removed
-									v2.Join(v1);
-									set1.Remove(v2);
-									set2.Remove(v2);
-								}
-								
-								// Count the join
-								joinsdone++;
-								joined = true;
-								break;
 							}
 						}
 					}
@@ -2231,6 +2878,53 @@ namespace CodeImp.DoomBuilder.Map
 				}
 			}
 			while(joined);
+
+			// Return result
+			return joinsdone;
+		}
+
+		/// <summary>This joins nearby vertices in the same collection </summary>
+		public static int JoinVertices(List<Vertex> set, float joindist) 
+		{
+			float joindist2 = joindist * joindist;
+			int joinsdone = 0;
+			bool joined;
+
+			do 
+			{
+				// No joins yet
+				joined = false;
+
+				// Go for all vertices in the first set
+				for(int i = 0; i < set.Count - 1; i++) 
+				{
+					for(int c = i + 1; c < set.Count; c++) 
+					{
+						Vertex v1 = set[i];
+						Vertex v2 = set[c];
+
+						// Check if vertices are close enough
+						if(v1.DistanceToSq(v2.Position) <= joindist2) 
+						{
+							// Check if not the same vertex
+							if(v1.Index != v2.Index) 
+							{
+								// Move the second vertex to match the first
+								v2.Move(v1.Position);
+
+								// Join the second into the first
+								v2.Join(v1);
+								set.Remove(v2);
+
+								// Count the join
+								joinsdone++;
+								joined = true;
+								break;
+							}
+						}
+					}
+				}
+			} while(joined);
 
 			// Return result
 			return joinsdone;
@@ -2260,67 +2954,304 @@ namespace CodeImp.DoomBuilder.Map
 
 		/// <summary>This splits the given lines with the given vertices. All affected lines
 		/// will be added to changedlines. Returns false when the operation failed.</summary>
-		public static bool SplitLinesByVertices(ICollection<Linedef> lines, ICollection<Vertex> verts, float splitdist, ICollection<Linedef> changedlines)
+		public static bool SplitLinesByVertices(ICollection<Linedef> lines, ICollection<Vertex> verts, float splitdist, ICollection<Linedef> changedlines) { return SplitLinesByVertices(lines, verts, splitdist, changedlines, MergeGeometryMode.CLASSIC); }
+		public static bool SplitLinesByVertices(ICollection<Linedef> lines, ICollection<Vertex> verts, float splitdist, ICollection<Linedef> changedlines, MergeGeometryMode mergemode)
 		{
+			if(verts.Count == 0 || lines.Count == 0) return true; //mxd
+			
 			float splitdist2 = splitdist * splitdist;
-			bool splitted;
 
-			do
+			//mxd. Create blockmap
+			RectangleF area = CreateArea(lines);
+			IncreaseArea(area, verts);
+			BlockMap<BlockEntry> blockmap = new BlockMap<BlockEntry>(area);
+			blockmap.AddVerticesSet(verts);
+			blockmap.AddLinedefsSet(lines);
+			int bmWidth = blockmap.Size.Width;
+			int bmHeight = blockmap.Size.Height;
+			BlockEntry[,] bmap = blockmap.Map;
+
+			//mxd
+			HashSet<Vertex> splitverts = new HashSet<Vertex>();
+			HashSet<Sector> changedsectors = (mergemode == MergeGeometryMode.REPLACE ? General.Map.Map.GetSectorsFromLinedefs(changedlines) : new HashSet<Sector>());
+			HashSet<Vertex> lineverts = new HashSet<Vertex>();
+			foreach(Linedef l in lines)
 			{
-				// No split yet
-				splitted = false;
-				
-				// Go for all the lines
-				foreach(Linedef l in lines)
+				lineverts.Add(l.Start);
+				lineverts.Add(l.End);
+			}
+
+			for(int w = 0; w < bmWidth; w++) 
+			{
+				for(int h = 0; h < bmHeight; h++) 
 				{
-					// Go for all the vertices
-					foreach(Vertex v in verts)
+					BlockEntry block = bmap[w, h];
+					if(block.Vertices.Count == 0 || block.Lines.Count == 0) continue;
+
+					// Go for all the lines
+					for(int i = 0; i < block.Lines.Count; i++)
 					{
-						// Check if v is close enough to l for splitting
-						if(l.DistanceToSq(v.Position, true) <= splitdist2)
+						Linedef l = block.Lines[i];
+						
+						// Go for all the vertices
+						for(int c = 0; c < block.Vertices.Count; c++)
 						{
-							// Line is not already referencing v?
-							Vector2D deltastart = l.Start.Position - v.Position;
-							Vector2D deltaend = l.End.Position - v.Position;
-							if(((Math.Abs(deltastart.x) > 0.001f) ||
-							    (Math.Abs(deltastart.y) > 0.001f)) &&
-							   ((Math.Abs(deltaend.x) > 0.001f) ||
-							    (Math.Abs(deltaend.y) > 0.001f)))
+							Vertex v = block.Vertices[c];
+
+							// Check if v is close enough to l for splitting
+							if(l.DistanceToSq(v.Position, true) <= splitdist2) 
 							{
-								// Split line l with vertex v
-								Linedef nl = l.Split(v);
-								if(nl == null) return false;
-
-								// Add the new line to the list
-								lines.Add(nl);
-
-								// Both lines must be updated because their new length
-								// is relevant for next iterations!
-								l.UpdateCache();
-								nl.UpdateCache();
-
-								// Add both lines to changedlines
-								if(changedlines != null)
+								// Line is not already referencing v?
+								Vector2D deltastart = l.Start.Position - v.Position;
+								Vector2D deltaend = l.End.Position - v.Position;
+								if(((Math.Abs(deltastart.x) > 0.001f) || (Math.Abs(deltastart.y) > 0.001f)) &&
+								   ((Math.Abs(deltaend.x) > 0.001f) || (Math.Abs(deltaend.y) > 0.001f))) 
 								{
-									changedlines.Add(l);
-									changedlines.Add(nl);
+									// Split line l with vertex v
+									Linedef nl = l.Split(v);
+									if(nl == null) return false;
+									v.Marked = true; //mxd
+									splitverts.Add(v); //mxd
+
+									// Add the new line to the list
+									lines.Add(nl);
+									blockmap.AddLinedef(nl);
+
+									// Both lines must be updated because their new length is relevant for next iterations!
+									l.UpdateCache();
+									nl.UpdateCache();
+
+									// Add both lines to changedlines
+									if(changedlines != null) 
+									{
+										changedlines.Add(l);
+										changedlines.Add(nl);
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			//mxd. Remove lines, which are inside affected sectors
+			if(mergemode == MergeGeometryMode.REPLACE && changedsectors.Count > 0)
+			{
+				HashSet<Linedef> alllines = new HashSet<Linedef>(lines);
+				if(changedlines != null) alllines.UnionWith(changedlines);
+
+				foreach(Linedef l in alllines) l.UpdateCache();
+				foreach(Sector s in changedsectors) s.UpdateBBox();
+				foreach(Linedef l in alllines)
+				{
+					// Remove line when it's start, center and end are inside a changed sector and neither side references it
+					if(l.Start != null && l.End != null &&
+					  (l.Front == null || !changedsectors.Contains(l.Front.Sector)) &&
+					  (l.Back == null || !changedsectors.Contains(l.Back.Sector)))
+					{
+						foreach(Sector s in changedsectors)
+						{
+							if(s.Intersect(l.Start.Position) && s.Intersect(l.End.Position) && s.Intersect(l.GetCenterPoint()))
+							{
+								Vertex[] tocheck = { l.Start, l.End };
+								while(lines.Remove(l));
+								if(changedlines != null) while(changedlines.Remove(l));
+								l.Dispose();
+
+								foreach(Vertex v in tocheck)
+								{
+									// If the newly created vertex only has 2 linedefs attached, then merge the linedefs
+									if(!v.IsDisposed && v.Linedefs.Count == 2 && splitverts.Contains(v))
+									{
+										Linedef ld1 = General.GetByIndex(v.Linedefs, 0);
+										Linedef ld2 = General.GetByIndex(v.Linedefs, 1);
+										if(!ld1.Marked && !ld2.Marked)
+										{
+											Vertex v2 = (ld2.Start == v) ? ld2.End : ld2.Start;
+											if(ld1.Start == v) ld1.SetStartVertex(v2); else ld1.SetEndVertex(v2);
+											while(lines.Remove(ld2));
+											if(changedlines != null) while(changedlines.Remove(ld2));
+											ld2.Dispose();
+
+											// Trash vertex
+											v.Dispose();
+                                        }
+                                    }
 								}
 
-								// Count the split
-								splitted = true;
 								break;
 							}
 						}
 					}
-
-					// Will have to restart when splitted
-					// TODO: If we make (linked) lists from the collections first,
-					// we don't have to restart when splitted?
-					if(splitted) break;
 				}
 			}
-			while(splitted);
+
+            // [ZZ] note: disposing a vertex means also disposing all attached linedefs!
+            //      we need to iterate through our lines collection and make sure no disposed linedefs exist there.
+            //      also, just in case, do it for vertices as well, because vertices can be chain-disposed.
+            foreach (Linedef line in lines.Where(line => line.IsDisposed).ToList())
+                while (lines.Remove(line));
+            foreach (Vertex vert in verts.Where(vert => vert.IsDisposed).ToList())
+                while (verts.Remove(vert));
+
+            return true;
+		}
+
+		/// <summary>Splits lines by lines. Adds new lines to the second collection. Returns false when the operation failed.</summary>
+		public static bool SplitLinesByLines(ICollection<Linedef> lines, HashSet<Linedef> changedlines, MergeGeometryMode mergemode) //mxd
+		{
+			if(lines.Count == 0 || changedlines.Count == 0 || mergemode == MergeGeometryMode.CLASSIC) return true;
 			
+			// Create blockmap
+			HashSet<Vertex> verts = new HashSet<Vertex>(); //mxd
+			foreach(Linedef l in lines)
+			{
+				verts.Add(l.Start);
+				verts.Add(l.End);
+			}
+			foreach(Linedef l in changedlines)
+			{
+				verts.Add(l.Start);
+				verts.Add(l.End);
+			}
+
+			RectangleF area = RectangleF.Union(CreateArea(lines), CreateArea(changedlines));
+			BlockMap<BlockEntry> blockmap = new BlockMap<BlockEntry>(area);
+			blockmap.AddLinedefsSet(lines);
+			blockmap.AddLinedefsSet(changedlines);
+			blockmap.AddVerticesSet(verts); //mxd
+			int bmWidth = blockmap.Size.Width;
+			int bmHeight = blockmap.Size.Height;
+			BlockEntry[,] bmap = blockmap.Map;
+
+			//mxd
+			HashSet<Vertex> splitverts = new HashSet<Vertex>();
+			HashSet<Sector> changedsectors = (mergemode == MergeGeometryMode.REPLACE ? General.Map.Map.GetSectorsFromLinedefs(changedlines) : new HashSet<Sector>());
+
+			// Check for intersections
+			for(int w = 0; w < bmWidth; w++)
+			{
+				for(int h = 0; h < bmHeight; h++)
+				{
+					BlockEntry block = bmap[w, h];
+					if(block.Lines.Count == 0) continue;
+
+					for(int i = 0; i < block.Lines.Count; i++)
+					{
+						Linedef l1 = block.Lines[i];
+						for(int c = 0; c < block.Lines.Count; c++)
+						{
+							if(i == c) continue;
+
+							Linedef l2 = block.Lines[c];
+							if(l1 == l2 
+								|| l1.Start.Position == l2.Start.Position
+								|| l1.Start.Position == l2.End.Position
+								|| l1.End.Position == l2.Start.Position
+								|| l1.End.Position == l2.End.Position) continue;
+
+							// Check for intersection
+							Vector2D intersection = Line2D.GetIntersectionPoint(new Line2D(l1), new Line2D(l2), true);
+							if(!float.IsNaN(intersection.x))
+							{
+								//mxd. Round to map format precision
+								intersection.x = (float)Math.Round(intersection.x, General.Map.FormatInterface.VertexDecimals);
+								intersection.y = (float)Math.Round(intersection.y, General.Map.FormatInterface.VertexDecimals);
+
+								//mxd. Skip when intersection matches start/end position.
+								// Otherwise infinite ammount of 0-length lines will be created...
+								if( l1.Start.Position == intersection || l1.End.Position == intersection ||
+									l2.Start.Position == intersection || l2.End.Position == intersection) continue;
+
+								//mxd. Do we already have a vertex here?
+								bool existingvert = false;
+								Vertex splitvertex = null;
+								foreach(Vertex v in block.Vertices)
+								{
+									if(v.Position == intersection)
+									{
+										splitvertex = v;
+										existingvert = true;
+										break;
+									}
+								}
+
+								//mxd. Create split vertex?
+								if(splitvertex == null) splitvertex = General.Map.Map.CreateVertex(intersection);
+								if(splitvertex == null) return false;
+
+								// Split both lines
+								Linedef nl1 = l1.Split(splitvertex);
+								if(nl1 == null) return false;
+
+								Linedef nl2 = l2.Split(splitvertex);
+								if(nl2 == null) return false;
+
+								// Mark split vertex?
+								if(!existingvert)
+								{
+									splitvertex.Marked = true;
+									splitverts.Add(splitvertex); //mxd
+								}
+
+								// Add to the second collection
+								changedlines.Add(nl1);
+								changedlines.Add(nl2);
+
+								// And to the block entry
+								blockmap.AddLinedef(nl1);
+								blockmap.AddLinedef(nl2);
+							}
+						}
+					}
+				}
+			}
+
+			//mxd. Remove lines, which are inside affected sectors
+			if(mergemode == MergeGeometryMode.REPLACE)
+			{
+				HashSet<Linedef> alllines = new HashSet<Linedef>(lines);
+				alllines.UnionWith(changedlines);
+
+				foreach(Linedef l in alllines) l.UpdateCache();
+				foreach(Sector s in changedsectors) s.UpdateBBox();
+				foreach(Linedef l in alllines)
+				{
+					// Remove line when it's start, center and end are inside a changed sector and neither side references it
+					if(l.Start != null && l.End != null 
+						&& (l.Front == null || !changedsectors.Contains(l.Front.Sector)) 
+						&& (l.Back == null || !changedsectors.Contains(l.Back.Sector)))
+					{
+						foreach(Sector s in changedsectors)
+						{
+							if(s.Intersect(l.Start.Position) && s.Intersect(l.End.Position) && s.Intersect(l.GetCenterPoint()))
+							{
+								Vertex[] tocheck = { l.Start, l.End };
+								l.Dispose();
+
+								foreach(Vertex v in tocheck)
+								{
+									// If the newly created vertex only has 2 linedefs attached, then merge the linedefs
+									if(!v.IsDisposed && v.Linedefs.Count == 2 && splitverts.Contains(v))
+									{
+										Linedef ld1 = General.GetByIndex(v.Linedefs, 0);
+										Linedef ld2 = General.GetByIndex(v.Linedefs, 1);
+										Vertex v2 = (ld2.Start == v) ? ld2.End : ld2.Start;
+										if(ld1.Start == v) ld1.SetStartVertex(v2); else ld1.SetEndVertex(v2);
+										ld2.Dispose();
+
+										// Trash vertex
+										v.Dispose();
+									}
+								}
+
+								break;
+							}
+						}
+					}
+				}
+			}
+
 			return true;
 		}
 
@@ -2358,6 +3289,62 @@ namespace CodeImp.DoomBuilder.Map
 		}
 
 		/// <summary>This finds the line closest to the specified position.</summary>
+		public static Linedef NearestLinedef(BlockMap<BlockEntry> selectionmap, Vector2D pos) //mxd
+		{
+			Linedef closest = null;
+			float distance = float.MaxValue;
+
+			Point p = selectionmap.GetBlockCoordinates(pos);
+			int minx = p.X;
+			int maxx = p.X;
+			int miny = p.Y;
+			int maxy = p.Y;
+			int step = 0;
+
+			// Check square block ranges around pos...
+			while(true)
+			{
+				bool noblocksfound = true;
+				for(int x = minx; x < maxx + 1; x++)
+				{
+					for(int y = miny; y < maxy + 1; y++)
+					{
+						// Skip inner blocks...
+						if(x > minx && x < maxx && y > miny && y < maxy) continue;
+						if(!selectionmap.IsInRange(new Point(x, y))) continue;
+
+						// Go for all linedefs in block
+						BlockEntry be = selectionmap.Map[x, y];
+						foreach(Linedef l in be.Lines)
+						{
+							// Calculate distance and check if closer than previous find
+							float d = l.SafeDistanceToSq(pos, true);
+							if(d < distance)
+							{
+								// This one is closer
+								closest = l;
+								distance = d;
+							}
+						}
+
+						noblocksfound = false;
+					}
+				}
+
+				// Abort if line was found or when outside of blockmap range...
+				// Check at least 3x3 blocks, because there's a possibility that a line closer to pos exists in a nearby block than in the first block
+				if(noblocksfound || (closest != null && step > 0)) return closest;
+
+				// Increase search range...
+				minx--;
+				maxx++;
+				miny--;
+				maxy++;
+				step++;
+			}
+		}
+
+		/// <summary>This finds the line closest to the specified position.</summary>
 		public static Linedef NearestLinedef(ICollection<Linedef> selection, Vector2D pos)
 		{
 			Linedef closest = null;
@@ -2386,14 +3373,13 @@ namespace CodeImp.DoomBuilder.Map
 			Linedef closest = null;
 			float distance = float.MaxValue;
 			float maxrangesq = maxrange * maxrange;
-			float d;
 
 			// Go for all linedefs in selection
 			foreach(Linedef l in selection)
 			{
 				// Calculate distance and check if closer than previous find
-				d = l.SafeDistanceToSq(pos, true);
-				if((d <= maxrangesq) && (d < distance))
+				float d = l.SafeDistanceToSq(pos, true);
+				if(d < distance && d <= maxrangesq)
 				{
 					// This one is closer
 					closest = l;
@@ -2405,18 +3391,83 @@ namespace CodeImp.DoomBuilder.Map
 			return closest;
 		}
 
+		/// <summary>This finds the line closest to the specified position.</summary>
+		public static Linedef NearestLinedefRange(BlockMap<BlockEntry> selectionmap, Vector2D pos, float maxrange) //mxd
+		{
+			Linedef closest = null;
+			float distance = float.MaxValue;
+			float maxrangesq = maxrange * maxrange;
+			HashSet<Linedef> processed = new HashSet<Linedef>();
+			
+			HashSet<BlockEntry> blocks = new HashSet<BlockEntry>
+			{
+				selectionmap.GetBlockAt(pos), 
+				selectionmap.GetBlockAt(new Vector2D(pos.x + maxrange, pos.y + maxrange)), 
+				selectionmap.GetBlockAt(new Vector2D(pos.x + maxrange, pos.y - maxrange)), 
+				selectionmap.GetBlockAt(new Vector2D(pos.x - maxrange, pos.y + maxrange)), 
+				selectionmap.GetBlockAt(new Vector2D(pos.x - maxrange, pos.y - maxrange))
+			};
+
+			foreach(BlockEntry be in blocks)
+			{
+				if(be == null) continue;
+
+				foreach(Linedef l in be.Lines)
+				{
+					if(processed.Contains(l)) continue;
+					
+					// Calculate distance and check if closer than previous find
+					float d = l.SafeDistanceToSq(pos, true);
+					if(d < distance && d <= maxrangesq)
+					{
+						// This one is closer
+						closest = l;
+						distance = d;
+					}
+
+					processed.Add(l);
+				}
+			}
+
+			// Return result
+			return closest;
+		}
+
+		/// <summary>mxd. This finds the line closest to the specified position excluding given list of linedefs.</summary>
+		public Linedef NearestLinedef(Vector2D pos, HashSet<Linedef> linesToExclude) 
+		{
+			Linedef closest = null;
+			float distance = float.MaxValue;
+
+			// Go for all linedefs in selection
+			foreach(Linedef l in linedefs) 
+			{
+				if(linesToExclude.Contains(l)) continue;
+				// Calculate distance and check if closer than previous find
+				float d = l.SafeDistanceToSq(pos, true);
+				if(d < distance) 
+				{
+					// This one is closer
+					closest = l;
+					distance = d;
+				}
+			}
+
+			// Return result
+			return closest;
+		}
+
 		/// <summary>This finds the vertex closest to the specified position.</summary>
 		public static Vertex NearestVertex(ICollection<Vertex> selection, Vector2D pos)
 		{
 			Vertex closest = null;
 			float distance = float.MaxValue;
-			float d;
-			
+
 			// Go for all vertices in selection
 			foreach(Vertex v in selection)
 			{
 				// Calculate distance and check if closer than previous find
-				d = v.DistanceToSq(pos);
+				float d = v.DistanceToSq(pos);
 				if(d < distance)
 				{
 					// This one is closer
@@ -2434,14 +3485,38 @@ namespace CodeImp.DoomBuilder.Map
 		{
 			Thing closest = null;
 			float distance = float.MaxValue;
-			float d;
 
 			// Go for all things in selection
 			foreach(Thing t in selection)
 			{
 				// Calculate distance and check if closer than previous find
-				d = t.DistanceToSq(pos);
+				float d = t.DistanceToSq(pos);
 				if(d < distance)
+				{
+					// This one is closer
+					closest = t;
+					distance = d;
+				}
+			}
+
+			// Return result
+			return closest;
+		}
+
+		/// <summary>mxd. This finds the thing closest to the specified thing.</summary>
+		public static Thing NearestThing(ICollection<Thing> selection, Thing thing) 
+		{
+			Thing closest = null;
+			float distance = float.MaxValue;
+
+			// Go for all things in selection
+			foreach(Thing t in selection) 
+			{
+				if(t == thing) continue;
+
+				// Calculate distance and check if closer than previous find
+				float d = t.DistanceToSq(thing.Position);
+				if(d < distance) 
 				{
 					// This one is closer
 					closest = t;
@@ -2459,25 +3534,25 @@ namespace CodeImp.DoomBuilder.Map
 			RectangleF range = RectangleF.FromLTRB(pos.x - maxrange, pos.y - maxrange, pos.x + maxrange, pos.y + maxrange);
 			Vertex closest = null;
 			float distance = float.MaxValue;
-			float d;
 
 			// Go for all vertices in selection
 			foreach(Vertex v in selection)
 			{
-				// Within range?
-				if((v.Position.x >= range.Left) && (v.Position.x <= range.Right))
+				float px = v.Position.x;
+				float py = v.Position.y;
+				
+				//mxd. Within range?
+				if((v.Position.x < range.Left) || (v.Position.x > range.Right) 
+					|| (v.Position.y < range.Top) || (v.Position.y > range.Bottom))
+					continue;
+
+				// Close than previous find?
+				float d = Math.Abs(px - pos.x) + Math.Abs(py - pos.y);
+				if(d < distance) 
 				{
-					if((v.Position.y >= range.Top) && (v.Position.y <= range.Bottom))
-					{
-						// Close than previous find?
-						d = Math.Abs(v.Position.x - pos.x) + Math.Abs(v.Position.y - pos.y);
-						if(d < distance)
-						{
-							// This one is closer
-							closest = v;
-							distance = d;
-						}
-					}
+					// This one is closer
+					closest = v;
+					distance = d;
 				}
 			}
 
@@ -2491,25 +3566,34 @@ namespace CodeImp.DoomBuilder.Map
 			RectangleF range = RectangleF.FromLTRB(pos.x - maxrange, pos.y - maxrange, pos.x + maxrange, pos.y + maxrange);
 			Thing closest = null;
 			float distance = float.MaxValue;
-			float d;
+			float size = float.MaxValue; //mxd
 
-			// Go for all vertices in selection
+			// Go for all things in selection
 			foreach(Thing t in selection)
 			{
-				// Within range?
-				if((t.Position.x >= (range.Left - t.Size)) && (t.Position.x <= (range.Right + t.Size)))
+				float px = t.Position.x;
+				float py = t.Position.y;
+
+				//mxd. Determine displayed size
+				float ts;
+				if(t.FixedSize && General.Map.Renderer2D.Scale > 1.0f)
+					ts = t.Size / General.Map.Renderer2D.Scale;
+				else if(General.Settings.FixedThingsScale && t.Size * General.Map.Renderer2D.Scale > Renderer2D.FIXED_THING_SIZE)
+					ts = Renderer2D.FIXED_THING_SIZE / General.Map.Renderer2D.Scale;
+				else
+					ts = t.Size;
+
+				//mxd. Within range?
+				if(px < range.Left - ts || px > range.Right + ts || py < range.Top - ts || py > range.Bottom + ts) continue;
+
+				// Closer than previous find? mxd. Or smaller when distance is the same?
+				float d = Math.Abs(px - pos.x) + Math.Abs(py - pos.y);
+				if(d < distance || (d == distance && ts < size))
 				{
-					if((t.Position.y >= (range.Top - t.Size)) && (t.Position.y <= (range.Bottom + t.Size)))
-					{
-						// Close than previous find?
-						d = Math.Abs(t.Position.x - pos.x) + Math.Abs(t.Position.y - pos.y);
-						if(d < distance)
-						{
-							// This one is closer
-							closest = t;
-							distance = d;
-						}
-					}
+					// This one is closer
+					closest = t;
+					distance = d;
+					size = ts; //mxd
 				}
 			}
 
@@ -2524,8 +3608,14 @@ namespace CodeImp.DoomBuilder.Map
 		/// <summary>This snaps all vertices to the map format accuracy. Call this to ensure the vertices are at valid coordinates.</summary>
 		public void SnapAllToAccuracy()
 		{
-			foreach(Vertex v in vertices) v.SnapToAccuracy();
-			foreach(Thing t in things) t.SnapToAccuracy();
+			SnapAllToAccuracy(true);
+		}
+
+		/// <summary>This snaps all vertices to the map format accuracy. Call this to ensure the vertices are at valid coordinates.</summary>
+		public void SnapAllToAccuracy(bool usepreciseposition)
+		{
+			foreach(Vertex v in vertices) v.SnapToAccuracy(usepreciseposition);
+			foreach(Thing t in things) t.SnapToAccuracy(usepreciseposition);
 		}
 
 		/// <summary>This returns the next unused tag number.</summary>
@@ -2535,6 +3625,70 @@ namespace CodeImp.DoomBuilder.Map
 			ForAllTags(NewTagHandler, false, usedtags);
 			ForAllTags(NewTagHandler, true, usedtags);
 			
+			// Now find the first unused index
+			for(int i = 1; i <= General.Map.FormatInterface.MaxTag; i++)
+				if(!usedtags.ContainsKey(i)) return i;
+			
+			// All tags used!
+			return 0;
+		}
+
+		//mxd
+		/// <summary>This returns the next unused tag number.</summary>
+		public int GetNewTag(List<int> moreusedtags)
+		{
+			Dictionary<int, bool> usedtags = new Dictionary<int, bool>();
+			foreach(int t in moreusedtags) if(!usedtags.ContainsKey(t)) usedtags.Add(t, true); 
+			ForAllTags(NewTagHandler, false, usedtags);
+			ForAllTags(NewTagHandler, true, usedtags);
+
+			// Now find the first unused index
+			for(int i = 1; i <= General.Map.FormatInterface.MaxTag; i++)
+				if(!usedtags.ContainsKey(i)) return i;
+
+			// All tags used!
+			return 0;
+		}
+
+		//mxd
+		/// <summary>This returns the tag number, which is not used by any map element of given type. This method doesn't check action arguments!</summary>
+		public int GetNewTag(UniversalType elementType) 
+		{
+			Dictionary<int, bool> usedtags = new Dictionary<int, bool>();
+
+			switch(elementType) 
+			{
+				case UniversalType.ThingTag:
+					for(int i = 0; i < things.Length; i++) 
+					{
+						if(things[i].Tag > 0 && !usedtags.ContainsKey(things[i].Tag))
+							usedtags.Add(things[i].Tag, false);
+					}
+					break;
+
+				case UniversalType.LinedefTag:
+					for(int i = 0; i < linedefs.Length; i++) 
+					{
+						foreach(int tag in linedefs[i].Tags)
+						{
+							if(tag == 0) continue;
+							if(!usedtags.ContainsKey(tag)) usedtags.Add(tag, false);
+						}
+					}
+					break;
+
+				case UniversalType.SectorTag:
+					for(int i = 0; i < sectors.Length; i++) 
+					{
+						foreach(int tag in sectors[i].Tags)
+						{
+							if(tag == 0) continue;
+							if(!usedtags.ContainsKey(tag)) usedtags.Add(tag, false);
+						}
+					}
+					break;
+			}
+
 			// Now find the first unused index
 			for(int i = 1; i <= General.Map.FormatInterface.MaxTag; i++)
 				if(!usedtags.ContainsKey(i)) return i;
@@ -2605,7 +3759,7 @@ namespace CodeImp.DoomBuilder.Map
 		}
 
 		// Handler for finding a new tag
-		private void NewTagHandler(MapElement element, bool actionargument, UniversalType type, ref int value, Dictionary<int, bool> usedtags)
+		private static void NewTagHandler(MapElement element, bool actionargument, UniversalType type, ref int value, Dictionary<int, bool> usedtags)
 		{
 			usedtags[value] = true;
 		}
@@ -2613,30 +3767,46 @@ namespace CodeImp.DoomBuilder.Map
 		/// <summary>This calls a function for all tag fields in the marked or unmarked geometry. The obj parameter can be anything you wish to pass on to your TagHandler function.</summary>
 		public void ForAllTags<T>(TagHandler<T> handler, bool marked, T obj)
 		{
-			// Remove tags from sectors
+			// Call handler on sectors tags
 			foreach(Sector s in sectors)
+			{
 				if(s.Marked == marked)
 				{
-					int tag = s.Tag;
-					handler(s, false, UniversalType.SectorTag, ref tag, obj);
-					if(tag != s.Tag) s.Tag = tag;
+					//mxd. Multiple tags support...
+					bool changed = false;
+					// Make a copy of tags, otherwise BeforePropsChange will be triggered after tag changes
+					List<int> tags = new List<int>(s.Tags);
+					for(int i = 0; i < tags.Count; i++)
+					{
+						int tag = tags[i];
+						handler(s, false, UniversalType.SectorTag, ref tag, obj);
+						if(tag != tags[i])
+						{
+							tags[i] = tag;
+							changed = true;
+						}
+					}
+
+					if(changed) s.Tags = tags.Distinct().ToList();
 				}
-			
-			// Remove tags from things
+			}
+
+			// Call handler on things tags
 			if(General.Map.FormatInterface.HasThingTag)
 			{
 				foreach(Thing t in things)
+				{
 					if(t.Marked == marked)
 					{
 						int tag = t.Tag;
 						handler(t, false, UniversalType.ThingTag, ref tag, obj);
 						if(tag != t.Tag) t.Tag = tag;
 					}
+				}
 			}
 
-			// Remove tags from thing actions
-			if(General.Map.FormatInterface.HasThingAction &&
-			   General.Map.FormatInterface.HasActionArgs)
+			// Call handler on things action
+			if(General.Map.FormatInterface.HasThingAction && General.Map.FormatInterface.HasActionArgs)
 			{
 				foreach(Thing t in things)
 				{
@@ -2644,29 +3814,46 @@ namespace CodeImp.DoomBuilder.Map
 					{
 						LinedefActionInfo info = General.Map.Config.GetLinedefActionInfo(t.Action);
 						for(int i = 0; i < Thing.NUM_ARGS; i++)
+						{
 							if(info.Args[i].Used && CheckIsTagType(info.Args[i].Type))
 							{
 								int tag = t.Args[i];
 								handler(t, true, (UniversalType)(info.Args[i].Type), ref tag, obj);
 								if(tag != t.Args[i]) t.Args[i] = tag;
 							}
+						}
 					}
 				}
 			}
 
-			// Remove tags from linedefs
+			// Call handler on linedefs tags
 			if(General.Map.FormatInterface.HasLinedefTag)
 			{
 				foreach(Linedef l in linedefs)
+				{
 					if(l.Marked == marked)
 					{
-						int tag = l.Tag;
-						handler(l, false, UniversalType.LinedefTag, ref tag, obj);
-						if(tag != l.Tag) l.Tag = tag;
+						//mxd. Multiple tags support...
+						bool changed = false;
+						// Make a copy of tags, otherwise BeforePropsChange will be triggered after tag changes
+						List<int> tags = new List<int>(l.Tags);
+						for(int i = 0; i < tags.Count; i++)
+						{
+							int tag = tags[i];
+							handler(l, false, UniversalType.LinedefTag, ref tag, obj);
+							if(tag != tags[i])
+							{
+								tags[i] = tag;
+								changed = true;
+							}
+						}
+
+						if(changed) l.Tags = tags.Distinct().ToList();
 					}
+				}
 			}
 
-			// Remove tags from linedef actions
+			// Call handler on linedefs action
 			if(General.Map.FormatInterface.HasActionArgs)
 			{
 				foreach(Linedef l in linedefs)
@@ -2675,19 +3862,21 @@ namespace CodeImp.DoomBuilder.Map
 					{
 						LinedefActionInfo info = General.Map.Config.GetLinedefActionInfo(l.Action);
 						for(int i = 0; i < Linedef.NUM_ARGS; i++)
+						{
 							if(info.Args[i].Used && CheckIsTagType(info.Args[i].Type))
 							{
 								int tag = l.Args[i];
 								handler(l, true, (UniversalType)(info.Args[i].Type), ref tag, obj);
 								if(tag != l.Args[i]) l.Args[i] = tag;
 							}
+						}
 					}
 				}
 			}
 		}
 		
 		// This checks if the given action argument type is a tag type
-		private bool CheckIsTagType(int argtype)
+		private static bool CheckIsTagType(int argtype)
 		{
 			return (argtype == (int)UniversalType.LinedefTag) ||
 				   (argtype == (int)UniversalType.SectorTag) ||
@@ -2696,7 +3885,7 @@ namespace CodeImp.DoomBuilder.Map
 		
 		/// <summary>This makes a list of lines related to marked vertices.
 		/// A line is unstable when one vertex is marked and the other isn't.</summary>
-		public ICollection<Linedef> LinedefsFromMarkedVertices(bool includeunselected, bool includestable, bool includeunstable)
+		public List<Linedef> LinedefsFromMarkedVertices(bool includeunmarked, bool includestable, bool includeunstable)
 		{
 			List<Linedef> list = new List<Linedef>((numlinedefs / 2) + 1);
 			
@@ -2706,7 +3895,7 @@ namespace CodeImp.DoomBuilder.Map
 				// Check if this is to be included
 				if((includestable && (l.Start.Marked && l.End.Marked)) ||
 				   (includeunstable && (l.Start.Marked ^ l.End.Marked)) ||
-				   (includeunselected && (!l.Start.Marked && !l.End.Marked)))
+				   (includeunmarked && (!l.Start.Marked && !l.End.Marked)))
 				{
 					// Add to list
 					list.Add(l);
@@ -2748,6 +3937,94 @@ namespace CodeImp.DoomBuilder.Map
 			return new List<Linedef>(lines.Values);
 		}
 
+		//mxd
+		/// <summary>This returns a sector if given coordinates are inside one.</summary>
+		public Sector GetSectorByCoordinates(Vector2D pos) 
+		{
+			foreach(Sector s in sectors) 
+			{
+				if(s.Intersect(pos)) return s;
+			}
+			return null;
+		}
+
+		//mxd
+		/// <summary>This returns a sector if given coordinates are inside one.</summary>
+		public Sector GetSectorByCoordinates(Vector2D pos, VisualBlockMap blockmap) 
+		{
+			// Find nearest sectors using the blockmap
+			List<Sector> possiblesectors = blockmap.GetBlock(blockmap.GetBlockCoordinates(pos)).Sectors;
+			foreach(Sector s in possiblesectors) 
+			{
+				if(s.Intersect(pos)) return s;
+			}
+
+			return null;
+		}
+
+		//mxd
+		/// <summary>Gets unselected sectors, which have all their linedefs selected</summary>
+		public HashSet<Sector> GetUnselectedSectorsFromLinedefs(IEnumerable<Linedef> lines)
+		{
+			HashSet<Sector> result = new HashSet<Sector>();
+			Dictionary<Sector, HashSet<Sidedef>> sectorsbysides = new Dictionary<Sector, HashSet<Sidedef>>();
+			HashSet<Sector> selectedsectors = new HashSet<Sector>(General.Map.Map.GetSelectedSectors(true));
+
+			// Collect unselected sectors, which sidedefs belong to selected lines 
+			foreach(Linedef line in lines)
+			{
+				if(line.Front != null && line.Front.Sector != null && !selectedsectors.Contains(line.Front.Sector))
+				{
+					if(!sectorsbysides.ContainsKey(line.Front.Sector)) sectorsbysides.Add(line.Front.Sector, new HashSet<Sidedef>());
+					sectorsbysides[line.Front.Sector].Add(line.Front);
+				}
+				if(line.Back != null && line.Back.Sector != null && !selectedsectors.Contains(line.Back.Sector))
+				{
+					if(!sectorsbysides.ContainsKey(line.Back.Sector)) sectorsbysides.Add(line.Back.Sector, new HashSet<Sidedef>());
+					sectorsbysides[line.Back.Sector].Add(line.Back);
+				}
+			}
+
+			// Add sectors, which have all their lines selected
+			foreach(var group in sectorsbysides)
+			{
+				if(group.Key.Sidedefs.Count == group.Value.Count) result.Add(group.Key);
+			}
+
+			return result;
+		}
+
+		//mxd
+		/// <summary>Gets sectors, which have all their linedefs selected</summary>
+		public HashSet<Sector> GetSectorsFromLinedefs(IEnumerable<Linedef> lines)
+		{
+			HashSet<Sector> result = new HashSet<Sector>();
+			Dictionary<Sector, HashSet<Sidedef>> sectorsbysides = new Dictionary<Sector, HashSet<Sidedef>>();
+
+			// Collect unselected sectors, which sidedefs belong to selected lines 
+			foreach(Linedef line in lines)
+			{
+				if(line.Front != null && line.Front.Sector != null)
+				{
+					if(!sectorsbysides.ContainsKey(line.Front.Sector)) sectorsbysides.Add(line.Front.Sector, new HashSet<Sidedef>());
+					sectorsbysides[line.Front.Sector].Add(line.Front);
+				}
+				if(line.Back != null && line.Back.Sector != null)
+				{
+					if(!sectorsbysides.ContainsKey(line.Back.Sector)) sectorsbysides.Add(line.Back.Sector, new HashSet<Sidedef>());
+					sectorsbysides[line.Back.Sector].Add(line.Back);
+				}
+			}
+
+			// Add sectors, which have all their lines selected
+			foreach(var group in sectorsbysides)
+			{
+				if(group.Key.Sidedefs.Count == group.Value.Count) result.Add(group.Key);
+			}
+
+			return result;
+		}
+
 		/// <summary>This finds the line closest to the specified position.</summary>
 		public Linedef NearestLinedef(Vector2D pos) { return MapSet.NearestLinedef(linedefs, pos); }
 
@@ -2769,13 +4046,12 @@ namespace CodeImp.DoomBuilder.Map
 			Linedef closest = null;
 			distance = float.MaxValue;
 			float maxrangesq = maxrange * maxrange;
-			float d;
 
 			// Go for all linedefs in selection
 			foreach(Linedef l in linedefs)
 			{
 				// Calculate distance and check if closer than previous find
-				d = l.SafeDistanceToSq(pos, true);
+				float d = l.SafeDistanceToSq(pos, true);
 				if((d <= maxrangesq) && (d < distance))
 				{
 					// Check if not selected
@@ -2800,7 +4076,7 @@ namespace CodeImp.DoomBuilder.Map
 		{
 			Dictionary<uint, List<Sidedef>> storedsides = new Dictionary<uint, List<Sidedef>>(numsidedefs);
 			int originalsidescount = numsidedefs;
-			double starttime = General.stopwatch.Elapsed.TotalMilliseconds;
+			long starttime = Clock.CurrentTime;
 
 			BeginAddRemove();
 			
@@ -2809,6 +4085,14 @@ namespace CodeImp.DoomBuilder.Map
 			{
 				Sidedef stored = null;
 				Sidedef snsd = sidedefs[sn];
+
+				//mxd. Skip sidedef if it belongs to a linedef with an action or tag?
+				if(!General.Map.Config.SidedefCompressionIgnoresAction && (snsd.Line.Action != 0 || snsd.Line.Tag != 0))
+				{
+					// Next!
+					sn++;
+					continue;
+				}
 
 				// Check if checksum is stored
 				bool samesidedef = false;
@@ -2820,7 +4104,7 @@ namespace CodeImp.DoomBuilder.Map
 					foreach(Sidedef os in othersides)
 					{
 						// They must be in the same sector
-						if (snsd.Sector == os.Sector)
+						if(snsd.Sector == os.Sector)
 						{
 							// Check if sidedefs are really the same
 							stored = os;
@@ -2830,14 +4114,14 @@ namespace CodeImp.DoomBuilder.Map
 							SerializerStream otherdata = new SerializerStream(othermem);
 							snsd.ReadWrite(sidedata);
 							os.ReadWrite(otherdata);
-							if (sidemem.Length == othermem.Length)
+							if(sidemem.Length == othermem.Length)
 							{
 								samesidedef = true;
 								sidemem.Seek(0, SeekOrigin.Begin);
 								othermem.Seek(0, SeekOrigin.Begin);
-								for (int i = 0; i < sidemem.Length; i++)
+								for(int i = 0; i < sidemem.Length; i++)
 								{
-									if (sidemem.ReadByte() != othermem.ReadByte())
+									if(sidemem.ReadByte() != othermem.ReadByte())
 									{
 										samesidedef = false;
 										break;
@@ -2845,7 +4129,7 @@ namespace CodeImp.DoomBuilder.Map
 								}
 							}
 
-							if (samesidedef) break;
+							if(samesidedef) break;
 						}
 					}
 				}
@@ -2875,8 +4159,7 @@ namespace CodeImp.DoomBuilder.Map
 					}
 					else
 					{
-						List<Sidedef> newlist = new List<Sidedef>(4);
-						newlist.Add(snsd);
+						List<Sidedef> newlist = new List<Sidedef>(4) {snsd};
 						storedsides.Add(checksum, newlist);
 					}
 					
@@ -2888,27 +4171,27 @@ namespace CodeImp.DoomBuilder.Map
 			EndAddRemove();
 
 			// Output info
-			double endtime = General.stopwatch.ElapsedMilliseconds;
-			double deltatimesec = (endtime - starttime) / 1000.0d;
-			float ratio = 100.0f - (((float)numsidedefs / (float)originalsidescount) * 100.0f);
+			long endtime = Clock.CurrentTime;
+			float deltatimesec = (endtime - starttime) / 1000.0f;
+			float ratio = 100.0f - ((numsidedefs / (float)originalsidescount) * 100.0f);
 			General.WriteLogLine("Sidedefs compressed: " + numsidedefs + " remaining out of " + originalsidescount + " (" + ratio.ToString("########0.00") + "%) in " + deltatimesec.ToString("########0.00") + " seconds");
 		}
 
 		// This converts flags and activations to UDMF fields
-		internal void TranslateToUDMF()
+		internal void TranslateToUDMF(Type previousmapformatinterfacetype)
 		{
-            // FUCK UDMF
-			//foreach(Linedef l in linedefs) l.TranslateToUDMF();
-			//foreach(Thing t in things) t.TranslateToUDMF();
+			foreach(Linedef l in linedefs) l.TranslateToUDMF(previousmapformatinterfacetype);
+			foreach(Thing t in things) t.TranslateToUDMF();
 		}
 
 		// This converts UDMF fields back into flags and activations
 		// NOTE: Only converts the marked items
 		internal void TranslateFromUDMF()
 		{
-            // FUCK UDMF
-			//foreach(Linedef l in linedefs) if(l.Marked) l.TranslateFromUDMF();
-			//foreach(Thing t in things) if(t.Marked) t.TranslateFromUDMF();
+			foreach(Linedef l in linedefs) if(l.Marked) l.TranslateFromUDMF();
+			foreach(Sidedef s in sidedefs) if(s.Marked) s.TranslateFromUDMF(); //mxd
+			foreach(Sector s in sectors) if(s.Marked) s.TranslateFromUDMF(); //mxd
+			foreach(Thing t in things) if(t.Marked) t.TranslateFromUDMF();
 		}
 
 		/// <summary>This removes unused vertices.</summary>
@@ -2923,6 +4206,12 @@ namespace CodeImp.DoomBuilder.Map
 				else
 					index--;
 			}
+		}
+
+		//mxd
+		public void UpdateCustomLinedefColors() 
+		{
+			foreach(Linedef l in linedefs) l.UpdateColorPreset();
 		}
 		
 		#endregion

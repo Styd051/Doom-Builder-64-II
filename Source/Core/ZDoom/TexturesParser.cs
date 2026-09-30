@@ -17,15 +17,10 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Data;
 using System.IO;
-using System.Diagnostics;
-using CodeImp.DoomBuilder.Compilers;
+using CodeImp.DoomBuilder.Config;
+using CodeImp.DoomBuilder.Data;
 
 #endregion
 
@@ -43,17 +38,20 @@ namespace CodeImp.DoomBuilder.ZDoom
 		
 		#region ================== Variables
 
-		private Dictionary<string, TextureStructure> textures;
-		private Dictionary<string, TextureStructure> flats;
-		private Dictionary<string, TextureStructure> sprites;
+		private readonly Dictionary<string, TextureStructure> textures;
+		private readonly Dictionary<string, TextureStructure> flats;
+		private readonly Dictionary<string, TextureStructure> sprites;
+		private readonly char[] pathtrimchars = {'_', '.', ' ', '-'}; //mxd
 
 		#endregion
 		
 		#region ================== Properties
 
-		public ICollection<TextureStructure> Textures { get { return textures.Values; } }
-		public ICollection<TextureStructure> Flats { get { return flats.Values; } }
-		public ICollection<TextureStructure> Sprites { get { return sprites.Values; } }
+		internal override ScriptType ScriptType { get { return ScriptType.TEXTURES; } } //mxd
+		
+		public IEnumerable<TextureStructure> Textures { get { return textures.Values; } }
+		public IEnumerable<TextureStructure> Flats { get { return flats.Values; } }
+		public IEnumerable<TextureStructure> Sprites { get { return sprites.Values; } }
 		
 		#endregion
 		
@@ -63,13 +61,13 @@ namespace CodeImp.DoomBuilder.ZDoom
 		public TexturesParser()
 		{
 			// Syntax
-			whitespace = "\n \t\r";
+			whitespace = "\n \t\r\u00A0"; //mxd. non-breaking space is also space :)
 			specialtokens = ",{}\n";
 
 			// Initialize
-			textures = new Dictionary<string, TextureStructure>();
-			flats = new Dictionary<string, TextureStructure>();
-			sprites = new Dictionary<string, TextureStructure>();
+			textures = new Dictionary<string, TextureStructure>(StringComparer.Ordinal);
+			flats = new Dictionary<string, TextureStructure>(StringComparer.Ordinal);
+			sprites = new Dictionary<string, TextureStructure>(StringComparer.Ordinal);
 		}
 		
 		#endregion
@@ -78,112 +76,173 @@ namespace CodeImp.DoomBuilder.ZDoom
 
 		// This parses the given stream
 		// Returns false on errors
-		public override bool Parse(Stream stream, string sourcefilename)
+		public override bool Parse(TextResourceData data, bool clearerrors)
 		{
-			base.Parse(stream, sourcefilename);
+			//mxd. Already parsed?
+			if(!base.AddTextResource(data))
+			{
+				if(clearerrors) ClearError();
+				return true;
+			}
+
+			// Cannot process?
+			if(!base.Parse(data, clearerrors)) return false;
+
+			//mxd. Make vitrual path from filename
+			string virtualpath;
+			if(data.LumpIndex != -1) // It's TEXTURES lump
+			{
+				virtualpath = data.Filename;
+			}
+			else // If it's actual filename, try to use extension(s) as virtualpath
+			{
+				virtualpath = Path.GetFileName(data.Filename);
+				if(!string.IsNullOrEmpty(virtualpath)) virtualpath = virtualpath.Substring(8).TrimStart(pathtrimchars);
+				if(!string.IsNullOrEmpty(virtualpath) && virtualpath.ToLowerInvariant() == "txt") virtualpath = string.Empty;
+				if(string.IsNullOrEmpty(virtualpath)) virtualpath = "[TEXTURES]";
+			}
 			
 			// Continue until at the end of the stream
 			while(SkipWhitespace(true))
 			{
 				// Read a token
 				string objdeclaration = ReadToken();
-				if(objdeclaration != null)
+				if(!string.IsNullOrEmpty(objdeclaration))
 				{
 					objdeclaration = objdeclaration.ToLowerInvariant();
-					if(objdeclaration == "texture")
+					switch(objdeclaration)
 					{
-						// Read texture structure
-						TextureStructure tx = new TextureStructure(this, "texture");
-						if(this.HasError) break;
+						case "texture":
+						{
+							// Read texture structure
+							TextureStructure tx = new TextureStructure(this, "texture", virtualpath);
+							if(this.HasError) return false;
 
-						// if a limit for the texture name length is set make sure that it's not exceeded
-						if ((General.Map.Config.MaxTextureNamelength > 0) && (tx.Name.Length > General.Map.Config.MaxTextureNamelength))
-						{
-							General.ErrorLogger.Add(ErrorType.Error, "Texture name \"" + tx.Name + "\" too long. Texture names must have a length of " + General.Map.Config.MaxTextureNamelength.ToString() + " characters or less");
-						}
-						else
-						{
+							// if a limit for the texture name length is set make sure that it's not exceeded
+							if(tx.Name.Length > General.Map.Config.MaxTextureNameLength)
+							{
+								ReportError("Texture name \"" + tx.Name + "\" too long. Texture names must have a length of " + General.Map.Config.MaxTextureNameLength + " characters or less");
+								return false;
+							}
+
+							//mxd. Can't load image without name
+							if(string.IsNullOrEmpty(tx.Name))
+							{
+								ReportError("Can't load an unnamed texture. Please consider giving names to your resources");
+								return false;
+							}
+
 							// Add the texture
 							textures[tx.Name] = tx;
-							flats[tx.Name] = tx;
+							if(!General.Map.Config.MixTexturesFlats) flats[tx.Name] = tx; //mxd. If MixTexturesFlats is set, textures and flats will be mixed in DataManager anyway
 						}
-					}
-					else if(objdeclaration == "sprite")
-					{
-						// Read sprite structure
-						TextureStructure tx = new TextureStructure(this, "sprite");
-						if(this.HasError) break;
+						break;
 
-						// if a limit for the sprite name length is set make sure that it's not exceeded
-						if ((General.Map.Config.MaxTextureNamelength > 0) && (tx.Name.Length > General.Map.Config.MaxTextureNamelength))
+						case "sprite":
 						{
-							General.ErrorLogger.Add(ErrorType.Error, "Sprite name \"" + tx.Name + "\" too long. Sprite names must have a length of " +  General.Map.Config.MaxTextureNamelength.ToString() + " characters or less");
-						}
-						else
-						{
+							// Read sprite structure
+							TextureStructure tx = new TextureStructure(this, "sprite", virtualpath);
+							if(this.HasError) return false;
+
+							//mxd. Sprite name length must be either 6 or 8 chars
+							if(tx.Name.Length != 6 && tx.Name.Length != 8)
+							{
+								ReportError("Sprite name \"" + tx.Name + "\" is incorrect. Sprite names must have a length of 6 or 8 characters");
+								return false;
+							}
+
+							//mxd. Can't load image without name
+							if(string.IsNullOrEmpty(tx.Name))
+							{
+								ReportError("Can't load an unnamed sprite. Please consider giving names to your resources");
+								return false;
+							}
+
 							// Add the sprite
 							sprites[tx.Name] = tx;
 						}
-					}
-					else if(objdeclaration == "walltexture")
-					{
-						// Read walltexture structure
-						TextureStructure tx = new TextureStructure(this, "walltexture");
-						if(this.HasError) break;
+						break;
 
-						// if a limit for the walltexture name length is set make sure that it's not exceeded
-						if((General.Map.Config.MaxTextureNamelength > 0) && (tx.Name.Length > General.Map.Config.MaxTextureNamelength))
+						case "walltexture":
 						{
-							General.ErrorLogger.Add(ErrorType.Error, "WallTexture name \"" + tx.Name + "\" too long. WallTexture names must have a length of " + General.Map.Config.MaxTextureNamelength.ToString() + " characters or less");
-						}
-						else
-						{
+							// Read walltexture structure
+							TextureStructure tx = new TextureStructure(this, "walltexture", virtualpath);
+							if(this.HasError) return false;
+
+							// if a limit for the walltexture name length is set make sure that it's not exceeded
+							if(tx.Name.Length > General.Map.Config.MaxTextureNameLength)
+							{
+								ReportError("WallTexture name \"" + tx.Name + "\" too long. WallTexture names must have a length of " + General.Map.Config.MaxTextureNameLength + " characters or less");
+								return false;
+							}
+
+							//mxd. Can't load image without name
+							if(string.IsNullOrEmpty(tx.Name))
+							{
+								ReportError("Can't load an unnamed WallTexture. Please consider giving names to your resources");
+								return false;
+							}
+
 							// Add the walltexture
 							if(!textures.ContainsKey(tx.Name) || (textures[tx.Name].TypeName != "texture"))
 								textures[tx.Name] = tx;
 						}
-					}
-					else if(objdeclaration == "flat")
-					{
-						// Read flat structure
-						TextureStructure tx = new TextureStructure(this, "flat");
-						if(this.HasError) break;
+						break;
 
-						// if a limit for the flat name length is set make sure that it's not exceeded
-						if((General.Map.Config.MaxTextureNamelength > 0) && (tx.Name.Length > General.Map.Config.MaxTextureNamelength))
+						case "flat":
 						{
-							General.ErrorLogger.Add(ErrorType.Error, "Flat name \"" + tx.Name + "\" too long. Flat names must have a length of " + General.Map.Config.MaxTextureNamelength.ToString() + " characters or less");
-						}
-						else
-						{
+							// Read flat structure
+							TextureStructure tx = new TextureStructure(this, "flat", virtualpath);
+							if(this.HasError) return false;
+
+							// if a limit for the flat name length is set make sure that it's not exceeded
+							if(tx.Name.Length > General.Map.Config.MaxTextureNameLength)
+							{
+								ReportError("Flat name \"" + tx.Name + "\" too long. Flat names must have a length of " + General.Map.Config.MaxTextureNameLength + " characters or less");
+								return false;
+							}
+
+							//mxd. Can't load image without name
+							if(string.IsNullOrEmpty(tx.Name))
+							{
+								ReportError("Can't load an unnamed flat. Please consider giving names to your resources");
+								return false;
+							}
+
 							// Add the flat
 							if(!flats.ContainsKey(tx.Name) || (flats[tx.Name].TypeName != "texture"))
 								flats[tx.Name] = tx;
 						}
-					}
-					else
-					{
-						// Unknown structure!
-						// Best we can do now is just find the first { and then
-						// follow the scopes until the matching } is found
-						string token2;
-						do
+						break;
+
+						case "$gzdb_skip": return !this.HasError;
+						
+						default:
 						{
-							if(!SkipWhitespace(true)) break;
-							token2 = ReadToken();
-							if(token2 == null) break;
+							// Unknown structure!
+							// Best we can do now is just find the first { and then
+							// follow the scopes until the matching } is found
+							string token2;
+							do
+							{
+								if(!SkipWhitespace(true)) break;
+								token2 = ReadToken();
+								if(string.IsNullOrEmpty(token2)) break;
+							}
+							while(token2 != "{");
+
+							int scopelevel = 1;
+							do
+							{
+								if(!SkipWhitespace(true)) break;
+								token2 = ReadToken();
+								if(string.IsNullOrEmpty(token2)) break;
+								if(token2 == "{") scopelevel++;
+								if(token2 == "}") scopelevel--;
+							}
+							while(scopelevel > 0);
 						}
-						while(token2 != "{");
-						int scopelevel = 1;
-						do
-						{
-							if(!SkipWhitespace(true)) break;
-							token2 = ReadToken();
-							if(token2 == null) break;
-							if(token2 == "{") scopelevel++;
-							if(token2 == "}") scopelevel--;
-						}
-						while(scopelevel > 0);
+						break;
 					}
 				}
 			}

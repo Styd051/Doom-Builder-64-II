@@ -17,21 +17,13 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Text;
 using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Rendering;
 using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Editing;
 using CodeImp.DoomBuilder.VisualModes;
-using CodeImp.DoomBuilder.Config;
 using CodeImp.DoomBuilder.Data;
 
 #endregion
@@ -46,28 +38,29 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		
 		#region ================== Variables
 
-		protected BaseVisualMode mode;
+		private readonly BaseVisualMode mode;
 		
-		private ThingTypeInfo info;
 		private bool isloaded;
-		private ImageData sprite;
+		private bool nointeraction; //mxd
+		private ImageData[] sprites;
 		private float cageradius2;
 		private Vector2D pos2d;
 		private Vector3D boxp1;
 		private Vector3D boxp2;
+		private static List<BaseVisualThing> updateList; //mxd
 		
 		// Undo/redo
 		private int undoticket;
 
 		// If this is set to true, the thing will be rebuilt after the action is performed.
-		protected bool changed;
+		private bool changed;
 
 		#endregion
 		
 		#region ================== Properties
 
 		public bool Changed { get { return changed; } set { changed |= value; } }
-		
+
 		#endregion
 		
 		#region ================== Constructor / Setup
@@ -76,126 +69,335 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		public BaseVisualThing(BaseVisualMode mode, Thing t) : base(t)
 		{
 			this.mode = mode;
-			
-			Rebuild();
-			
+
+			// Find thing information
+			info = General.Map.Data.GetThingInfo(Thing.Type);
+
+			//mxd. When true, the thing can be moved below floor/above ceiling
+			nointeraction = (info.Actor != null && info.Actor.GetFlagValue("nointeraction", false));
+
+			//mxd. Find sprite textures
+			sprites = new ImageData[info.SpriteFrame.Length];
+			for(int i = 0; i < info.SpriteFrame.Length; i++)
+			{
+				sprites[i] = General.Map.Data.GetSpriteImage(info.SpriteFrame[i].Sprite);
+				if(sprites[i] != null) sprites[i].AddReference();
+			}
+
+			//mxd
+			if(mode.UseSelectionFromClassicMode && t.Selected)
+			{
+				this.selected = true;
+				mode.AddSelectedObject(this);
+			}
+
 			// We have no destructor
 			GC.SuppressFinalize(this);
 		}
 		
 		// This builds the thing geometry. Returns false when nothing was created.
-		public virtual bool Setup()
+		public bool Setup()
 		{
-			int sectorcolor = 0;
-			
-			// Must have a width and height!
-			if((info.Radius < 0.1f) || (info.Height < 0.1f)) return false;
-
 			// Find the sector in which the thing resides
 			Thing.DetermineSector(mode.BlockMap);
-
-			if(sprite != null)
+			
+			//mxd. If the thing is inside a sector, apply DECORATE/UDMF alpha/renderstyle overrides
+			byte alpha = 255;
+			if(Thing.Sector != null)
 			{
-				if(Thing.Sector != null)
+				string renderstyle = info.RenderStyle;
+				alpha = info.AlphaByte;
+				
+				if(General.Map.UDMF)
 				{
-					// Use sector brightness for color shading
-					//byte brightness = (byte)General.Clamp(Thing.Sector.Brightness, 0, 255);
-					//sectorcolor = new PixelColor(255, brightness, brightness, brightness);
+					if(Thing.IsFlagSet("translucent"))
+					{
+						renderstyle = "translucent";
+						alpha = 64;
+					}
+					else if(Thing.IsFlagSet("invisible"))
+					{
+						renderstyle = "none";
+						alpha = 0;
+					}
+					else if(Thing.Fields.ContainsKey("renderstyle"))
+					{
+						renderstyle = Thing.Fields.GetValue("renderstyle", renderstyle);
+					}
 
-                    // villsa 9/11/11 (builder64) cameras/triggers are rendered full bright
-                    if (Thing.Type == 0 || Thing.Type == 89)
-                        sectorcolor = -1;
-                    else
-                        sectorcolor = Thing.Sector.ThingColor.GetColor();
+					if((renderstyle == "add" || renderstyle == "translucent" || renderstyle == "subtract" || renderstyle == "stencil") 
+						&& Thing.Fields.ContainsKey("alpha"))
+					{
+						alpha = (byte)(General.Clamp(Thing.Fields.GetValue("alpha", info.Alpha), 0f, 1f) * 255);
+					}
+				}
+				else if(General.Map.HEXEN)
+				{
+					if(Thing.IsFlagSet("2048"))
+					{
+						renderstyle = "translucent";
+						alpha = 64;
+					}
+					else if(Thing.IsFlagSet("4096"))
+					{
+						renderstyle = "none";
+						alpha = 0;
+					}
 				}
 
-                // styd: Add a feature when things have the nightmare flag, their sprites change color to green.
-                if (Thing.IsFlagSet("4096"))
-                {
-                    sectorcolor = new PixelColor(255, 64, 255, 0).ToInt();
-                }
+				// Set appropriate RenderPass
+				switch(renderstyle)
+				{
+					case "translucent":
+					case "subtract":
+					case "stencil":
+						RenderPass = RenderPass.Alpha;
+						break;
 
-                // villsa 9/11/11 (builder64) render camera/trigger icon
-                if (Thing.Type == 0 || Thing.Type == 89)
-                {
-                    if (Thing.Type == 89)
-                    {
-                        base.Texture = General.Map.Data.ThingTrigger;
-                    }
-                    else
-                    {
-                        base.Texture = General.Map.Data.ThingCamera;
-                    }
+					case "add":
+						RenderPass = RenderPass.Additive;
+						break;
 
-                    // Determine sprite size
-                    float radius = Math.Min(info.Radius, info.Height / 2f);
-                    float height = Math.Min(info.Radius * 2f, info.Height);
+					case "none":
+						RenderPass = RenderPass.Mask;
+						alpha = 0;
+						break;
 
-                    // Make vertices
-                    WorldVertex[] verts = new WorldVertex[6];
-                    verts[0] = new WorldVertex(-radius, 0.0f, 0.0f, sectorcolor, 0.0f, 1.0f);
-                    verts[1] = new WorldVertex(-radius, 0.0f, height, sectorcolor, 0.0f, 0.0f);
-                    verts[2] = new WorldVertex(+radius, 0.0f, height, sectorcolor, 1.0f, 0.0f);
-                    verts[3] = verts[0];
-                    verts[4] = verts[2];
-                    verts[5] = new WorldVertex(+radius, 0.0f, 0.0f, sectorcolor, 1.0f, 1.0f);
-                    SetVertices(verts);
-                }
-                else
-                {
-                    // Check if the texture is loaded
-                    sprite.LoadImage();
-                    isloaded = sprite.IsImageLoaded;
-                    if (isloaded)
-                    {
-                        float offsetx = 0.0f;
-                        float offsety = 0.0f;
-
-                        base.Texture = sprite;
-
-                        // Determine sprite size and offset
-                        float radius = sprite.ScaledWidth * 0.5f;
-                        float height = sprite.ScaledHeight;
-                        if (sprite is SpriteImage)
-                        {
-                            offsetx = (sprite as SpriteImage).OffsetX - radius;
-                            offsety = (sprite as SpriteImage).OffsetY - height;
-                        }
-
-                        // Make vertices
-                        WorldVertex[] verts = new WorldVertex[6];
-                        verts[0] = new WorldVertex(-radius + offsetx, 0.0f, 0.0f + offsety, sectorcolor, 0.0f, 1.0f);
-                        verts[1] = new WorldVertex(-radius + offsetx, 0.0f, height + offsety, sectorcolor, 0.0f, 0.0f);
-                        verts[2] = new WorldVertex(+radius + offsetx, 0.0f, height + offsety, sectorcolor, 1.0f, 0.0f);
-                        verts[3] = verts[0];
-                        verts[4] = verts[2];
-                        verts[5] = new WorldVertex(+radius + offsetx, 0.0f, 0.0f + offsety, sectorcolor, 1.0f, 1.0f);
-                        SetVertices(verts);
-                    }
-                    else
-                    {
-                        base.Texture = General.Map.Data.Hourglass3D;
-
-                        // Determine sprite size
-                        float radius = Math.Min(info.Radius, info.Height / 2f);
-                        float height = Math.Min(info.Radius * 2f, info.Height);
-
-                        // Make vertices
-                        WorldVertex[] verts = new WorldVertex[6];
-                        verts[0] = new WorldVertex(-radius, 0.0f, 0.0f, sectorcolor, 0.0f, 1.0f);
-                        verts[1] = new WorldVertex(-radius, 0.0f, height, sectorcolor, 0.0f, 0.0f);
-                        verts[2] = new WorldVertex(+radius, 0.0f, height, sectorcolor, 1.0f, 0.0f);
-                        verts[3] = verts[0];
-                        verts[4] = verts[2];
-                        verts[5] = new WorldVertex(+radius, 0.0f, 0.0f, sectorcolor, 1.0f, 1.0f);
-                        SetVertices(verts);
-                    }
-                }
+					// Many render styles are not supported yet...
+					default:
+						RenderPass = RenderPass.Mask;
+						alpha = 255;
+						break;
+				}
 			}
+
+			// Don't bother when alpha is unchanged, unless Additive RenderStyle is used
+			if(RenderPass != RenderPass.Additive && alpha == 255) RenderPass = RenderPass.Mask;
+
+			int sectorcolor = new PixelColor(alpha, 255, 255, 255).ToInt();
+			fogfactor = 0f; //mxd
+			
+			//mxd. Check thing size 
+			float thingradius = Thing.Size; // Thing.Size has ThingRadius arg override applied
+			thingheight = Thing.Height; // Thing.Height has ThingHeight arg override applied
+
+			if(thingradius < 0.1f || thingheight < 0.1f) 
+			{
+				thingradius = FIXED_RADIUS;
+				thingheight = FIXED_RADIUS;
+				sizeless = true;
+			} 
+			else 
+			{
+				sizeless = false;
+			}
+
+			if(Thing.Sector != null)
+			{
+				SectorData sd = mode.GetSectorData(Thing.Sector);
+				Plane floor = sd.Floor.plane; //mxd
+
+				if(!info.Bright)
+				{
+					Vector3D thingpos = new Vector3D(Thing.Position.x, Thing.Position.y, Thing.Position.z + sd.Floor.plane.GetZ(Thing.Position));
+					SectorLevel level = sd.GetLevelAboveOrAt(thingpos);
+
+					//mxd. Let's use point on floor plane instead of Thing.Sector.FloorHeight;
+					if(nointeraction && level == null && sd.LightLevels.Count > 0) level = sd.LightLevels[sd.LightLevels.Count - 1];
+
+					//mxd. Use the light level of the highest surface when a thing is above highest sector level.
+					if(level != null)
+					{
+						// TECH: In GZDoom, ceiling glow doesn't affect thing brightness 
+						// Use sector brightness for color shading
+						int brightness = level.brightnessbelow;
+
+						//mxd. Apply lightfloor value
+						// According to Graf, this is incorrect behaviour...
+						// TECH: In (G)ZDoom, this is ignored when ceiling texture is sky or a thing is below a 3D floor
+						// It's probably more involved than this, but for now let's do it only when there are no 3d floors in Thing.Sector...
+						/*if(General.Map.UDMF && sd.LightLevels.Count == 2 && Thing.Sector.CeilTexture != General.Map.Config.SkyFlatName)
+						{
+							if(sd.Sector.Fields.GetValue("lightfloorabsolute", false))
+								brightness = UniFields.GetInteger(sd.Sector.Fields, "lightfloor");
+							else
+								brightness += UniFields.GetInteger(sd.Sector.Fields, "lightfloor");
+						}*/
+
+						// Level is glowing
+						if(level.affectedbyglow && level.type == SectorLevelType.Floor)
+						{
+							// Extrafloor glow doesn't affect thing brightness
+							if(level.sector == Thing.Sector)
+							{
+								float planez = level.plane.GetZ(thingpos);
+
+								// Get glow brightness
+								int glowbrightness = sd.FloorGlow.Brightness / 2;
+								SectorLevel nexthigher = sd.GetLevelAbove(new Vector3D(thingpos, planez));
+
+								// Interpolate thing brightness between glow and regular ones
+								if(nexthigher != null)
+								{
+									float higherz = nexthigher.plane.GetZ(thingpos);
+									float delta = General.Clamp(1.0f - (thingpos.z - planez) / (higherz - planez), 0f, 1f);
+									brightness = (int)((glowbrightness + level.sector.Brightness / 2) * delta + nexthigher.sector.Brightness * (1.0f - delta));
+								}
+							}
+						}
+						// Level below this one is glowing. Only possible for floor glow(?)
+						else if(level.type == SectorLevelType.Glow)
+						{
+							// Interpolate thing brightness between glow and regular ones
+							if(sd.Floor != null && sd.FloorGlow != null)
+							{
+								// Get glow brightness
+								float glowz = level.plane.GetZ(thingpos);
+								float floorz = floor.GetZ(thingpos);
+								float delta = General.Clamp((thingpos.z - floorz) / (glowz - floorz), 0f, 1f);
+
+								brightness = (int)((sd.FloorGlow.Brightness / 2 + sd.Floor.sector.Brightness / 2) * (1.0f - delta) + sd.Floor.sector.Brightness * delta);
+							}
+						}
+
+						PixelColor areabrightness = PixelColor.FromInt(mode.CalculateBrightness(brightness));
+						PixelColor areacolor = PixelColor.Modulate(level.colorbelow, areabrightness);
+
+                        // [ZZ] if sector is using Doom64 lighting, apply thing color here.
+                        sectorcolor = PixelColor.Modulate(sd.ColorSprites, areacolor).WithAlpha(alpha).ToInt();
+
+						//mxd. Calculate fogfactor
+						fogfactor = VisualGeometry.CalculateFogFactor(level.sector, brightness);
+					}
+				}
+				//TECH: even Bright Thing frames are affected by custom fade...
+				else
+				{
+					Vector3D thingpos = new Vector3D(Thing.Position.x, Thing.Position.y, Thing.Position.z + sd.Floor.plane.GetZ(Thing.Position));
+					SectorLevel level = sd.GetLevelAboveOrAt(thingpos);
+
+					if(level != null && level.sector.FogMode > SectorFogMode.CLASSIC)
+					{
+						//mxd. Calculate fogfactor
+						fogfactor = VisualGeometry.CalculateFogFactor(level.sector, level.brightnessbelow);
+					}
+				}
+            }
+
+            //mxd. Create verts for all sprite angles
+            WorldVertex[][] allverts = new WorldVertex[info.SpriteFrame.Length][];
+			Vector2D[] alloffsets = new Vector2D[info.SpriteFrame.Length];
+			base.textures = new ImageData[info.SpriteFrame.Length];
+			isloaded = true;
+
+			for(int i = 0; i < sprites.Length; i++)
+			{
+				Vector2D offsets = new Vector2D();
+
+				// Check if the texture is loaded
+				ImageData sprite = sprites[i];
+				sprite.LoadImage();
+				if(sprite.IsImageLoaded)
+				{
+					base.textures[i] = sprite;
+
+					// Determine sprite size and offset
+					float radius = sprite.ScaledWidth * 0.5f;
+					float height = sprite.ScaledHeight;
+					ISpriteImage spriteimg = sprite as ISpriteImage;
+					if(spriteimg != null)
+					{
+						offsets.x = radius - spriteimg.OffsetX;
+						offsets.y = spriteimg.OffsetY - height;
+					}
+
+					// Scale by thing type/actor scale
+					// We do this after the offset x/y determination above, because that is entirely in sprite pixels space
+					radius *= info.SpriteScale.Width;
+					height *= info.SpriteScale.Height;
+					offsets.x *= info.SpriteScale.Width;
+					offsets.y *= info.SpriteScale.Height;
+
+					// Make vertices
+					WorldVertex[] verts = new WorldVertex[6];
+
+					//mxd. Sprite mirroring
+					float ul = (info.SpriteFrame[i].Mirror ? 1f : 0f);
+					float ur = (info.SpriteFrame[i].Mirror ? 0f : 1f);
+
+					if(sizeless) //mxd
+					{ 
+						float hh = height / 2;
+						verts[0] = new WorldVertex(-radius + offsets.x, 0.0f, offsets.y - hh, sectorcolor, ul, 1.0f);
+						verts[1] = new WorldVertex(-radius + offsets.x, 0.0f, hh + offsets.y, sectorcolor, ul, 0.0f);
+						verts[2] = new WorldVertex(+radius + offsets.x, 0.0f, hh + offsets.y, sectorcolor, ur, 0.0f);
+						verts[3] = verts[0];
+						verts[4] = verts[2];
+						verts[5] = new WorldVertex(+radius + offsets.x, 0.0f, offsets.y - hh, sectorcolor, ur, 1.0f);
+					} 
+					else 
+					{
+						verts[0] = new WorldVertex(-radius + offsets.x, 0.0f, offsets.y, sectorcolor, ul, 1.0f);
+						verts[1] = new WorldVertex(-radius + offsets.x, 0.0f, height + offsets.y, sectorcolor, ul, 0.0f);
+						verts[2] = new WorldVertex(+radius + offsets.x, 0.0f, height + offsets.y, sectorcolor, ur, 0.0f);
+						verts[3] = verts[0];
+						verts[4] = verts[2];
+						verts[5] = new WorldVertex(+radius + offsets.x, 0.0f, offsets.y, sectorcolor, ur, 1.0f);
+					}
+					allverts[i] = verts;
+				}
+				else
+				{
+					isloaded = false;
+					base.textures[i] = General.Map.Data.Hourglass3D;
+
+					// Determine sprite size
+					float radius = Math.Min(thingradius, thingheight / 2f);
+					float height = Math.Min(thingradius * 2f, thingheight);
+
+					//mxd. Determine sprite offsets
+					offsets.x = radius;
+					offsets.y = height / 2;
+
+					// Make vertices
+					WorldVertex[] verts = new WorldVertex[6];
+					verts[0] = new WorldVertex(-radius, 0.0f, 0.0f, sectorcolor, 0.0f, 1.0f);
+					verts[1] = new WorldVertex(-radius, 0.0f, height, sectorcolor, 0.0f, 0.0f);
+					verts[2] = new WorldVertex(+radius, 0.0f, height, sectorcolor, 1.0f, 0.0f);
+					verts[3] = verts[0];
+					verts[4] = verts[2];
+					verts[5] = new WorldVertex(+radius, 0.0f, 0.0f, sectorcolor, 1.0f, 1.0f);
+					allverts[i] = verts;
+				}
+
+				//mxd. Store offsets
+				alloffsets[i] = offsets;
+			}
+
+			//mxd
+			SetVertices(allverts, alloffsets/*, floor, ceiling*/);
 			
 			// Determine position
 			Vector3D pos = Thing.Position;
-			if(info.AbsoluteZ)
+			if(Thing.Type == 9501)
+			{
+				if(Thing.Sector != null) //mxd
+				{ 
+					// This is a special thing that needs special positioning
+					SectorData sd = mode.GetSectorData(Thing.Sector);
+					pos.z = sd.Ceiling.sector.CeilHeight + Thing.Position.z;
+				}
+			}
+			else if(Thing.Type == 9500)
+			{
+				if(Thing.Sector != null) //mxd
+				{ 
+					// This is a special thing that needs special positioning
+					SectorData sd = mode.GetSectorData(Thing.Sector);
+					pos.z = sd.Floor.sector.FloorHeight + Thing.Position.z;
+				}
+			}
+			else if(info.AbsoluteZ)
 			{
 				// Absolute Z position
 				pos.z = Thing.Position.z;
@@ -203,41 +405,61 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			else if(info.Hangs)
 			{
 				// Hang from ceiling
-				if(Thing.Sector != null) pos.z = Thing.Sector.CeilHeight - info.Height;
-				if(Thing.Position.z > 0) pos.z -= Thing.Position.z;
-				
-				// Check if below floor
-				if((Thing.Sector != null) && (pos.z < Thing.Sector.FloorHeight))
+				if(Thing.Sector != null)
 				{
-					// Put thing on the floor
-					pos.z = Thing.Sector.FloorHeight;
+					SectorData sd = mode.GetSectorData(Thing.Sector);
+					float maxz = sd.Ceiling.plane.GetZ(Thing.Position) - info.Height;
+					pos.z = maxz;
+
+					if(Thing.Position.z > 0 || nointeraction) pos.z -= Thing.Position.z;
+
+					// Check if below floor
+					if(!nointeraction)
+					{
+						float minz = sd.Floor.plane.GetZ(Thing.Position);
+						if(pos.z < minz) pos.z = Math.Min(minz, maxz);
+					}
 				}
 			}
 			else
 			{
 				// Stand on floor
-				if(Thing.Sector != null) pos.z = Thing.Sector.FloorHeight;
-				if(Thing.Position.z > 0) pos.z += Thing.Position.z;
-				
-				// Check if above ceiling
-				if((Thing.Sector != null) && ((pos.z + info.Height) > Thing.Sector.CeilHeight))
+				if(Thing.Sector != null)
 				{
-					// Put thing against ceiling
-					pos.z = Thing.Sector.CeilHeight - info.Height;
+					SectorData sd = mode.GetSectorData(Thing.Sector);
+					float minz = sd.Floor.plane.GetZ(Thing.Position);
+					pos.z = minz;
+
+					if(Thing.Position.z > 0 || nointeraction) pos.z += Thing.Position.z;
+
+					// Check if above ceiling
+					if(!nointeraction)
+					{
+						float maxz = sd.Ceiling.plane.GetZ(Thing.Position) - info.Height;
+						if(pos.z > maxz) pos.z = Math.Max(minz, maxz);
+					}
 				}
 			}
 			
 			// Apply settings
 			SetPosition(pos);
-			SetCageSize(info.Radius, info.Height);
 			SetCageColor(Thing.Color);
 
 			// Keep info for object picking
-			cageradius2 = info.Radius * Angle2D.SQRT2;
+			cageradius2 = thingradius * Angle2D.SQRT2;
 			cageradius2 = cageradius2 * cageradius2;
 			pos2d = pos;
-			boxp1 = new Vector3D(pos.x - info.Radius, pos.y - info.Radius, pos.z);
-			boxp2 = new Vector3D(pos.x + info.Radius, pos.y + info.Radius, pos.z + info.Height);
+
+			if(sizeless) //mxd
+			{ 
+				boxp1 = new Vector3D(pos.x - thingradius, pos.y - thingradius, pos.z - thingradius/2);
+				boxp2 = new Vector3D(pos.x + thingradius, pos.y + thingradius, pos.z + thingradius/2);
+			} 
+			else 
+			{
+				boxp1 = new Vector3D(pos.x - thingradius, pos.y - thingradius, pos.z);
+				boxp2 = new Vector3D(pos.x + thingradius, pos.y + thingradius, pos.z + thingheight);
+			}
 			
 			// Done
 			changed = false;
@@ -249,14 +471,14 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		{
 			if(!IsDisposed)
 			{
-				if(sprite != null)
+				if(sprites != null) //mxd
 				{
-					sprite.RemoveReference();
-					sprite = null;
+					foreach(ImageData sprite in sprites) sprite.RemoveReference();
+					sprites = null;
 				}
+
+				base.Dispose();
 			}
-			
-			base.Dispose();
 		}
 		
 		#endregion
@@ -269,15 +491,19 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			// Find thing information
 			info = General.Map.Data.GetThingInfo(Thing.Type);
 
-            // Find sprite texture
-            if(info.Sprite.Length > 0)
-            {
-                sprite = General.Map.Data.GetSpriteImage(info.Sprite, info.PalIndex);
-                if(sprite != null) sprite.AddReference();
-            }
+			//mxd. When true, the thing can be moved below floor/above ceiling
+			nointeraction = (info.Actor != null && info.Actor.GetFlagValue("nointeraction", false));
 
-            // Setup visual thing
-            Setup();
+			//mxd. Find sprite textures
+			sprites = new ImageData[info.SpriteFrame.Length];
+			for(int i = 0; i < info.SpriteFrame.Length; i++)
+			{
+				sprites[i] = General.Map.Data.GetSpriteImage(info.SpriteFrame[i].Sprite);
+				if(sprites[i] != null) sprites[i].AddReference();
+			}
+			
+			// Setup visual thing
+			Setup();
 		}
 		
 		// This updates the thing when needed
@@ -285,11 +511,18 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		{
 			if(!isloaded)
 			{
-				// Rebuild sprite geometry when sprite is loaded
-				if(sprite.IsImageLoaded)
+				//mxd. Rebuild sprite geometry when all sprites are loaded
+				isloaded = true;
+				foreach(ImageData sprite in sprites)
 				{
-					Setup();
+					if(!sprite.IsImageLoaded)
+					{
+						isloaded = false;
+						break;
+					}
 				}
+
+				if(isloaded) Setup();
 			}
 			
 			// Let the base update
@@ -299,6 +532,11 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// This performs a fast test in object picking
 		public override bool PickFastReject(Vector3D from, Vector3D to, Vector3D dir)
 		{
+			//mxd. Don't highlight when thing sprite is not rendered and thing cages are disabled 
+			if(!General.Map.Renderer3D.DrawThingCages && info.DistanceCheckSq < int.MaxValue
+				&& (Thing.Position - General.Map.VisualCamera.Position).GetLengthSq() > info.DistanceCheckSq)
+				return false;
+			
 			float distance2 = Line2D.GetDistanceToLineSq(from, to, pos2d, false);
 			return (distance2 <= cageradius2);
 		}
@@ -389,41 +627,45 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			u_ray = (tnear > 0.0f) ? tnear : tfar;
 			return true;
 		}
+
+		//mxd
+		public bool IsSelected() 
+		{
+			return selected;
+		}
 		
 		#endregion
 
 		#region ================== Events
 
 		// Unused
-		public virtual void OnSelectBegin() { }
-		public virtual void OnEditBegin() { }
-		public virtual void OnMouseMove(MouseEventArgs e) { }
-		public virtual void OnChangeTargetBrightness(bool up) { }
-		public virtual void OnChangeTextureOffset(int horizontal, int vertical) { }
-		public virtual void OnSelectTexture() { }
-		public virtual void OnCopyTexture() { }
-		public virtual void OnPasteTexture() { }
-        public virtual void OnCopyLight() { }   // villsa
-        public virtual void OnPasteLight() { }  // villsa
-		public virtual void OnCopyTextureOffsets() { }
-		public virtual void OnPasteTextureOffsets() { }
-		public virtual void OnTextureAlign(bool alignx, bool aligny) { }
-		public virtual void OnToggleUpperUnpegged() { }
-		public virtual void OnToggleLowerUnpegged() { }
-		public virtual void OnResetTextureOffset() { }
-		public virtual void OnProcess(double deltatime) { }
-		public virtual void OnTextureFloodfill() { }
-		public virtual void OnInsert() { }
-		public virtual void OnDelete() { }
-		public virtual void ApplyTexture(string texture) { }
-		public virtual void ApplyUpperUnpegged(bool set) { }
-		public virtual void ApplyLowerUnpegged(bool set) { }
+		public void OnSelectBegin() { }
+		public void OnEditBegin() { }
+		public void OnMouseMove(MouseEventArgs e) { }
+		public void OnChangeTargetBrightness(bool up) { }
+		public void OnChangeTextureOffset(int horizontal, int vertical, bool doSurfaceAngleCorrection) { }
+		public void OnSelectTexture() { }
+		public void OnCopyTexture() { }
+		public void OnPasteTexture() { }
+		public void OnCopyTextureOffsets() { }
+		public void OnPasteTextureOffsets() { }
+		public void OnTextureAlign(bool alignx, bool aligny) { }
+		public void OnToggleUpperUnpegged() { }
+		public void OnToggleLowerUnpegged() { }
+		public void OnProcess(long deltatime) { }
+		public void OnTextureFloodfill() { }
+		public void OnInsert() { }
+		public void OnTextureFit(FitTextureOptions options) { } //mxd
+		public void ApplyTexture(string texture) { }
+		public void ApplyUpperUnpegged(bool set) { }
+		public void ApplyLowerUnpegged(bool set) { }
+		public void SelectNeighbours(bool select, bool withSameTexture, bool withSameHeight) { } //mxd
 		
 		// Return texture name
-		public virtual string GetTextureName() { return ""; }
+		public string GetTextureName() { return ""; }
 
 		// Select or deselect
-		public virtual void OnSelectEnd()
+		public void OnSelectEnd()
 		{
 			if(this.selected)
 			{
@@ -436,22 +678,36 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				mode.AddSelectedObject(this);
 			}
 		}
+
+		//mxd. Delete thing
+		public void OnDelete() 
+		{
+			mode.CreateUndo("Delete thing");
+			mode.SetActionResult("Deleted a thing.");
+
+			this.Thing.Fields.BeforeFieldsChange();
+			this.Thing.Dispose();
+			this.Dispose();
+
+			General.Map.IsChanged = true;
+			General.Map.ThingsFilter.Update();
+		}
 		
 		// Copy properties
-		public virtual void OnCopyProperties()
+		public void OnCopyProperties()
 		{
 			BuilderPlug.Me.CopiedThingProps = new ThingProperties(Thing);
 			mode.SetActionResult("Copied thing properties.");
 		}
 		
 		// Paste properties
-		public virtual void OnPasteProperties()
+		public void OnPasteProperties(bool usecopysettings)
 		{
 			if(BuilderPlug.Me.CopiedThingProps != null)
 			{
 				mode.CreateUndo("Paste thing properties");
 				mode.SetActionResult("Pasted thing properties.");
-				BuilderPlug.Me.CopiedThingProps.Apply(Thing);
+				BuilderPlug.Me.CopiedThingProps.Apply(new List<Thing> { Thing }, usecopysettings); //mxd. Added "usecopysettings"
 				Thing.UpdateConfiguration();
 				this.Rebuild();
 				mode.ShowTargetInfo();
@@ -459,42 +715,175 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		}
 		
 		// Edit button released
-		public virtual void OnEditEnd()
+		public void OnEditEnd()
 		{
-			// Not using any modifier buttons
-			if(!General.Interface.ShiftState && !General.Interface.CtrlState && !General.Interface.AltState)
+			if(General.Interface.IsActiveWindow)
 			{
-				if(General.Interface.IsActiveWindow)
+				
+				List<Thing> things = mode.GetSelectedThings();
+				//mxd
+				updateList = new List<BaseVisualThing>();
+				foreach(Thing t in things)
 				{
-					List<Thing> things = mode.GetSelectedThings();
-					DialogResult result = General.Interface.ShowEditThings(things);
-					if(result == DialogResult.OK)
-					{
-						foreach(Thing t in things)
-						{
-							VisualThing vt = mode.GetVisualThing(t);
-							if(vt != null)
-								(vt as BaseVisualThing).Changed = true;
-						}
-					}
+					VisualThing vt = mode.GetVisualThing(t);
+					if(vt != null) updateList.Add((BaseVisualThing)vt);
 				}
+
+				General.Interface.OnEditFormValuesChanged += Interface_OnEditFormValuesChanged;
+				mode.StartRealtimeInterfaceUpdate(SelectionType.Things);
+				General.Interface.ShowEditThings(things);
+				mode.StopRealtimeInterfaceUpdate(SelectionType.Things);
+				General.Interface.OnEditFormValuesChanged -= Interface_OnEditFormValuesChanged;
+
+				updateList.Clear();
+				updateList = null;
 			}
+		}
+
+		//mxd
+		private void Interface_OnEditFormValuesChanged(object sender, EventArgs e) 
+		{
+			foreach(BaseVisualThing vt in updateList) vt.Changed = true;
+		}
+
+		//mxd
+		public void OnResetTextureOffset() 
+		{
+			mode.CreateUndo("Reset thing scale");
+			mode.SetActionResult("Thing scale reset.");
+
+			Thing.SetScale(1.0f, 1.0f);
+
+			// Update what must be updated
+			this.Changed = true;
+		}
+
+		//mxd
+		public void OnResetLocalTextureOffset() 
+		{
+			mode.CreateUndo("Reset thing scale, pitch and roll");
+			mode.SetActionResult("Thing scale, pitch and roll reset.");
+
+			Thing.SetScale(1.0f, 1.0f);
+			Thing.SetPitch(0);
+			Thing.SetRoll(0);
+
+			// Update what must be updated
+			this.Changed = true;
 		}
 		
 		// Raise/lower thing
-		public virtual void OnChangeTargetHeight(int amount)
+		public void OnChangeTargetHeight(int amount)
 		{
 			if(General.Map.FormatInterface.HasThingHeight)
 			{
 				if((General.Map.UndoRedo.NextUndo == null) || (General.Map.UndoRedo.NextUndo.TicketID != undoticket))
 					undoticket = mode.CreateUndo("Change thing height");
 
-				Thing.Move(Thing.Position + new Vector3D(0.0f, 0.0f, (float)amount));
+				Thing.Move(Thing.Position + new Vector3D(0.0f, 0.0f, (info.Hangs ? -amount : amount)));
 
 				mode.SetActionResult("Changed thing height to " + Thing.Position.z + ".");
-
+				
+				// Update what must be updated
+				ThingData td = mode.GetThingData(this.Thing);
+				foreach(KeyValuePair<Sector, bool> s in td.UpdateAlso)
+				{
+					if(mode.VisualSectorExists(s.Key))
+					{
+						BaseVisualSector vs = (BaseVisualSector)mode.GetVisualSector(s.Key);
+						vs.UpdateSectorGeometry(s.Value);
+					}
+				}
+				
 				this.Changed = true;
 			}
+		}
+
+		//mxd
+		public void OnChangeScale(int incrementX, int incrementY)
+		{
+			if(!General.Map.UDMF || sprites == null || !sprites[0].IsImageLoaded) return;
+			
+			if((General.Map.UndoRedo.NextUndo == null) || (General.Map.UndoRedo.NextUndo.TicketID != undoticket))
+				undoticket = mode.CreateUndo("Change thing scale");
+
+			float scaleX = Thing.ScaleX;
+			float scaleY = Thing.ScaleY;
+			ImageData sprite = sprites[0];
+
+			if(incrementX != 0) 
+			{
+				float pix = (int)Math.Round(sprite.Width * scaleX) + incrementX;
+				float newscaleX = (float)Math.Round(pix / sprite.Width, 3);
+				scaleX = (newscaleX == 0 ? scaleX * -1 : newscaleX);
+			}
+
+			if(incrementY != 0) 
+			{
+				float pix = (int)Math.Round(sprite.Height * scaleY) + incrementY;
+				float newscaleY = (float)Math.Round(pix / sprite.Height, 3);
+				scaleY = (newscaleY == 0 ? scaleY * -1 : newscaleY);
+			}
+
+			Thing.SetScale(scaleX, scaleY);
+			mode.SetActionResult("Changed thing scale to " + scaleX.ToString("F03", CultureInfo.InvariantCulture) + ", " + scaleY.ToString("F03", CultureInfo.InvariantCulture) + " (" + (int)Math.Round(sprite.Width * scaleX) + " x " + (int)Math.Round(sprite.Height * scaleY) + ").");
+
+			// Update what must be updated
+			this.Changed = true;
+		}
+
+		//mxd
+		public void OnMove(Vector3D newposition) 
+		{
+			if((General.Map.UndoRedo.NextUndo == null) || (General.Map.UndoRedo.NextUndo.TicketID != undoticket))
+				undoticket = mode.CreateUndo("Move thing");
+			Thing.Move(newposition);
+			mode.SetActionResult("Changed thing position to " + Thing.Position + ".");
+
+			// Update what must be updated
+			ThingData td = mode.GetThingData(this.Thing);
+			foreach(KeyValuePair<Sector, bool> s in td.UpdateAlso) 
+			{
+				if(mode.VisualSectorExists(s.Key)) 
+				{
+					BaseVisualSector vs = (BaseVisualSector)mode.GetVisualSector(s.Key);
+					vs.UpdateSectorGeometry(s.Value);
+				}
+			}
+
+			this.Changed = true;
+		}
+
+		//mxd
+		public void SetAngle(int newangle)
+		{
+			if((General.Map.UndoRedo.NextUndo == null) || (General.Map.UndoRedo.NextUndo.TicketID != undoticket))
+				undoticket = mode.CreateUndo("Change thing angle");
+			Thing.Rotate(newangle);
+			mode.SetActionResult("Changed thing angle to " + Thing.AngleDoom + ".");
+			this.Changed = true;
+		}
+
+		//mxd
+		public void SetPitch(int newpitch)
+		{
+			if(!General.Map.UDMF) return;
+			if((General.Map.UndoRedo.NextUndo == null) || (General.Map.UndoRedo.NextUndo.TicketID != undoticket))
+				undoticket = mode.CreateUndo("Change thing pitch");
+			Thing.SetPitch(newpitch);
+			mode.SetActionResult("Changed thing pitch to " + Thing.Pitch + ".");
+			this.Changed = true;
+		}
+
+		//mxd
+		public void SetRoll(int newroll)
+		{
+			if(!General.Map.UDMF) return;
+			if((General.Map.UndoRedo.NextUndo == null) || (General.Map.UndoRedo.NextUndo.TicketID != undoticket))
+				undoticket = mode.CreateUndo("Change thing roll");
+			Thing.SetRoll(newroll);
+			mode.SetActionResult("Changed thing roll to " + Thing.Roll + ".");
+			this.Changed = true;
 		}
 		
 		#endregion

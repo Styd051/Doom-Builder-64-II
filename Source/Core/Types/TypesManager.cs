@@ -17,15 +17,9 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Data;
-using System.IO;
-using System.Diagnostics;
 using CodeImp.DoomBuilder.Config;
+using CodeImp.DoomBuilder.Data.Scripting;
 
 #endregion
 
@@ -41,9 +35,12 @@ namespace CodeImp.DoomBuilder.Types
 
 		// List of handler types
 		private Dictionary<int, TypeHandlerAttribute> handlertypes;
-		
+
+		//mxd. List of script handler types
+		private Dictionary<ScriptType, ScriptHandlerAttribute> scripthandlertypes;
+
 		// Disposing
-		private bool isdisposed = false;
+		private bool isdisposed;
 
 		#endregion
 
@@ -60,6 +57,7 @@ namespace CodeImp.DoomBuilder.Types
 		{
 			// Initialize
 			handlertypes = new Dictionary<int, TypeHandlerAttribute>();
+			scripthandlertypes = new Dictionary<ScriptType, ScriptHandlerAttribute>(); //mxd
 
 			// Go for all types in this assembly
 			Type[] types = General.ThisAssembly.GetTypes();
@@ -76,6 +74,15 @@ namespace CodeImp.DoomBuilder.Types
 						TypeHandlerAttribute attr = (attribs[0] as TypeHandlerAttribute);
 						attr.Type = tp;
 						handlertypes.Add(attr.Index, attr);
+					}
+					//mxd. Check if class has an ScriptHandler attribute
+					else if(Attribute.IsDefined(tp, typeof(ScriptHandlerAttribute), false))
+					{
+						// Add the type to the list
+						object[] attribs = tp.GetCustomAttributes(typeof(ScriptHandlerAttribute), false);
+						ScriptHandlerAttribute attr = (attribs[0] as ScriptHandlerAttribute);
+						attr.Type = tp;
+						scripthandlertypes[attr.ScriptType] = attr;
 					}
 				}
 			}
@@ -186,8 +193,23 @@ namespace CodeImp.DoomBuilder.Types
 		public TypeHandlerAttribute GetAttribute(int type)
 		{
 			// Do we have a handler type for this?
-			if(handlertypes.ContainsKey(type)) return handlertypes[type];
-				else return null;
+			return (handlertypes.ContainsKey(type) ? handlertypes[type] : null);
+		}
+
+		//mxd
+		public ScriptHandler GetScriptHandler(ScriptType type)
+		{
+			Type t = typeof(ScriptHandler);
+
+			// Do we have a handler type for this?
+			if(scripthandlertypes.ContainsKey(type))
+			{
+				t = scripthandlertypes[type].Type;
+			}
+
+			// Create instance
+			ScriptHandler th = (ScriptHandler)General.ThisAssembly.CreateInstance(t.FullName);
+			return th;
 		}
 		
 		#endregion

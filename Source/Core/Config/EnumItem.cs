@@ -17,21 +17,13 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Data;
-using System.IO;
-using System.Diagnostics;
-using System.Windows.Forms;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.Config
 {
-	public class EnumItem
+	public class EnumItem : IComparable<EnumItem>
 	{
 		#region ================== Constants
 
@@ -39,8 +31,8 @@ namespace CodeImp.DoomBuilder.Config
 
 		#region ================== Variables
 
-		private string value;
-		private string title;
+		private readonly string value;
+		private readonly string title;
 
 		#endregion
 
@@ -71,14 +63,21 @@ namespace CodeImp.DoomBuilder.Config
 			return title;
 		}
 
+		//mxd. This compares against another activate info
+		public int CompareTo(EnumItem other)
+		{
+			int thisval = GetIntValue();
+			int otherval = other.GetIntValue();
+			if(thisval < otherval) return -1;
+			if(thisval > otherval) return 1;
+			return 0;
+		}
+
 		// This returns the value as int
 		public int GetIntValue()
 		{
 			int result;
-			if(int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out result))
-				return result;
-			else
-				return 0;
+			return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out result) ? result : 0;
 		}
 		
 		#endregion

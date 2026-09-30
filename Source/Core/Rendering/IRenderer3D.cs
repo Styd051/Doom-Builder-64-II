@@ -16,23 +16,9 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using System.Drawing;
-using System.ComponentModel;
 using CodeImp.DoomBuilder.Map;
-using SlimDX.Direct3D9;
-using SlimDX;
 using CodeImp.DoomBuilder.Geometry;
-using System.Drawing.Imaging;
-using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.Editing;
 using CodeImp.DoomBuilder.VisualModes;
 
 #endregion
@@ -44,10 +30,8 @@ namespace CodeImp.DoomBuilder.Rendering
 		// Properties
 		ProjectedFrustum2D Frustum2D { get; }
 		bool DrawThingCages { get; set; }
-		bool FullBrightness { get; set; }
 		bool ShowSelection { get; set; }
 		bool ShowHighlight { get; set; }
-        bool ShowLightOnly { get; set; }    // villsa
 		
 		// General methods
 		void PositionAndLookAt(Vector3D pos, Vector3D lookat);
@@ -60,9 +44,13 @@ namespace CodeImp.DoomBuilder.Rendering
 
 		// Rendering methods
 		int CalculateBrightness(int level);
+		int CalculateBrightness(int level, Sidedef sd); //mxd
+
 		void SetHighlightedObject(IVisualPickable obj);
 		void AddSectorGeometry(VisualGeometry g);
 		void AddThingGeometry(VisualThing t);
+		void SetVisualVertices(List<VisualVertex> verts);
+		void SetEventLines(List<Line3D> lines);
 		void RenderCrosshair();
 		void SetFogMode(bool usefog);
 		void SetCrosshairBusy(bool busy);

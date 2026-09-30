@@ -17,19 +17,7 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Text;
 using System.Windows.Forms;
-using Microsoft.Win32;
-using System.Diagnostics;
-using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.Config;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Controls;
 
 #endregion
 
@@ -38,7 +26,7 @@ namespace CodeImp.DoomBuilder.Windows
 	public partial class ThingBrowserForm : DelayedForm
 	{
 		// Variables
-		public int selectedtype;
+		private int selectedtype;
 		
 		// Properties
 		public int SelectedType { get { return selectedtype; } }
@@ -89,6 +77,12 @@ namespace CodeImp.DoomBuilder.Windows
 		{
 			// OK
 			apply_Click(this, EventArgs.Empty);
+		}
+
+		//mxd
+		private void ThingBrowserForm_Shown(object sender, EventArgs e)
+		{
+			thingslist.FocusTextbox();
 		}
 	}
 }

@@ -16,23 +16,11 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
 using System.Drawing;
-using System.ComponentModel;
 using CodeImp.DoomBuilder.Map;
-using SlimDX.Direct3D9;
-using SlimDX;
 using CodeImp.DoomBuilder.Geometry;
-using System.Drawing.Imaging;
 using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.Editing;
 
 #endregion
 
@@ -47,8 +35,9 @@ namespace CodeImp.DoomBuilder.Rendering
 		float TranslateY { get; }
 		float Scale { get; }
 		int VertexSize { get; }
+		bool DrawMapCenter { get; set; } //mxd
 		ViewMode ViewMode { get; }
-		
+
 		// View methods
 		Vector2D DisplayToMap(Vector2D mousepos);
 		Vector2D MapToDisplay(Vector2D mappos);
@@ -58,6 +47,7 @@ namespace CodeImp.DoomBuilder.Rendering
 		PixelColor DetermineThingColor(Thing t);
 		int DetermineVertexColor(Vertex v);
 		int CalculateBrightness(int level);
+		void UpdateExtraFloorFlag(); //mxd
 		
 		// Rendering management methods
 		bool StartPlotter(bool clear);
@@ -69,6 +59,7 @@ namespace CodeImp.DoomBuilder.Rendering
 
 		// Drawing methods
 		void PlotLine(Vector2D start, Vector2D end, PixelColor c);
+		void PlotLine(Vector2D start, Vector2D end, PixelColor c, float lengthscaler); //mxd
 		void PlotLinedef(Linedef l, PixelColor c);
 		void PlotLinedefSet(ICollection<Linedef> linedefs);
 		void PlotSector(Sector s);
@@ -82,8 +73,13 @@ namespace CodeImp.DoomBuilder.Rendering
 		void RenderRectangleFilled(RectangleF rect, PixelColor c, bool transformrect);
 		void RenderRectangleFilled(RectangleF rect, PixelColor c, bool transformrect, ImageData texture);
 		void RenderLine(Vector2D start, Vector2D end, float thickness, PixelColor c, bool transformcoords);
-		void RenderText(TextLabel text);
+		void RenderArrows(ICollection<Line3D> line); //mxd
+		void RenderArrows(ICollection<Line3D> line, bool transformcoords); //mxd
+		void RenderText(TextLabel text); //mxd, DB2 compatibility
+		void RenderText(ITextLabel text); //mxd
+		void RenderText(IList<ITextLabel> labels); //mxd
 		void RenderGeometry(FlatVertex[] vertices, ImageData texture, bool transformcoords);
+		void RenderHighlight(FlatVertex[] vertices, int color); //mxd
 		void RedrawSurface();
 	}
 }

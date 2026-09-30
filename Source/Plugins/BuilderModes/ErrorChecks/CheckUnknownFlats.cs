@@ -16,25 +16,8 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Editing;
-using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Types;
-using CodeImp.DoomBuilder.Config;
 using System.Threading;
-using CodeImp.DoomBuilder.Data;
 
 #endregion
 
@@ -45,7 +28,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 	{
 		#region ================== Constants
 		
-		private int PROGRESS_STEP = 1000;
+		private const int PROGRESS_STEP = 1000;
 		
 		#endregion
 		
@@ -72,11 +55,11 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			foreach(Sector s in General.Map.Map.Sectors)
 			{
 				// Check floor texture
-				if(!General.Map.Data.GetFlatExists(s.FloorTexture))
+				if(s.LongFloorTexture != MapSet.EmptyLongName && !General.Map.Data.GetFlatExists(s.FloorTexture))
 					SubmitResult(new ResultUnknownFlat(s, false));
 
 				// Check ceiling texture
-				if(!General.Map.Data.GetFlatExists(s.CeilTexture))
+				if(s.LongCeilTexture != MapSet.EmptyLongName && !General.Map.Data.GetFlatExists(s.CeilTexture))
 					SubmitResult(new ResultUnknownFlat(s, true));
 				
 				// Handle thread interruption

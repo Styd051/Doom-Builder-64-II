@@ -18,18 +18,13 @@
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
-using System.Text;
 using System.Windows.Forms;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.IO;
-using System.IO;
 using CodeImp.DoomBuilder.Config;
-using CodeImp.DoomBuilder.Editing;
-using CodeImp.DoomBuilder.Geometry;
 using CodeImp.DoomBuilder.Controls;
+using CodeImp.DoomBuilder.Geometry;
+using CodeImp.DoomBuilder.Map;
+using CodeImp.DoomBuilder.Types;
 
 #endregion
 
@@ -38,17 +33,42 @@ namespace CodeImp.DoomBuilder.Windows
 	/// <summary>
 	/// Dialog window that allows viewing and editing of Thing properties.
 	/// </summary>
-	public partial class ThingEditForm : DelayedForm
+	internal partial class ThingEditForm : DelayedForm
 	{
+		#region ================== Events
+
+		public event EventHandler OnValuesChanged; //mxd
+
+		#endregion
+		
 		#region ================== Variables
 
 		private ICollection<Thing> things;
-		private List<TreeNode> nodes;
 		private ThingTypeInfo thinginfo;
-		
-		#endregion
+		private bool preventchanges;
+		private bool preventmapchange; //mxd
+		private bool undocreated; //mxd
+		private static bool useabsoluteheight; //mxd
+		private List<ThingProperties> thingprops; //mxd
+		private Dictionary<string, string> flagsrename; //mxd
 
-		#region ================== Properties
+		private struct ThingProperties //mxd
+		{
+			//public readonly int Type;
+			public readonly int AngleDoom;
+			public readonly float X;
+			public readonly float Y;
+			public readonly float Z;
+
+			public ThingProperties(Thing t) 
+			{
+				X = t.Position.x;
+				Y = t.Position.y;
+				Z = t.Position.z;
+				//Type = t.Type;
+				AngleDoom = t.AngleDoom;
+			}
+		}
 
 		#endregion
 
@@ -68,50 +88,74 @@ namespace CodeImp.DoomBuilder.Windows
 			action.GeneralizedCategories = General.Map.Config.GenActionCategories;
 			action.AddInfo(General.Map.Config.SortedLinedefActions.ToArray());
 
-			// Fill universal fields list
-			fieldslist.ListFixedFields(General.Map.Config.ThingFields);
-			
-			// Initialize custom fields editor
-			fieldslist.Setup("thing");
-
-			// Custom fields?
-			if(!General.Map.FormatInterface.HasCustomFields)
-				tabs.TabPages.Remove(tabcustom);
-			
 			// Tag/Effects?
-			if(!General.Map.FormatInterface.HasThingAction && !General.Map.FormatInterface.HasThingTag)
-				tabs.TabPages.Remove(tabeffects);
-
-            // villsa - hide thing action if specified false
-            if (!General.Map.FormatInterface.HasThingAction)
-                actiongroup.Hide();
-
-            // villsa - hide thing tag if specified false
-            if (!General.Map.FormatInterface.HasThingTag)
-                groupBox3.Hide();
+			actiongroup.Visible = General.Map.FormatInterface.HasThingAction;
+			idgroup.Visible = General.Map.FormatInterface.HasThingTag;
 			
 			// Thing height?
-			height.Visible = General.Map.FormatInterface.HasThingHeight;
-			heightlabel.Visible = General.Map.FormatInterface.HasThingHeight;
+			posZ.Visible = General.Map.FormatInterface.HasThingHeight;
+			zlabel.Visible = General.Map.FormatInterface.HasThingHeight;
+			cbAbsoluteHeight.Visible = General.Map.FormatInterface.HasThingHeight; //mxd
+
+			//mxd. Decimals allowed?
+			if(General.Map.FormatInterface.VertexDecimals > 0) 
+			{
+				posX.AllowDecimal = true;
+				posY.AllowDecimal = true;
+				posZ.AllowDecimal = true;
+			}
+
+			//mxd. Use doom angle clamping?
+			anglecontrol.DoomAngleClamping = General.Map.Config.DoomThingRotationAngles;
+
+			//mxd. Arrange inteface
+			int targetheight;
+			if(General.Map.FormatInterface.HasThingAction)
+				targetheight = actiongroup.Bottom + actiongroup.Margin.Bottom;
+			else
+				targetheight = typegroup.Bottom + typegroup.Margin.Bottom * 2;
+
+			if(General.Map.FormatInterface.HasThingTag)
+			{
+				idgroup.Top = targetheight;
+				targetheight = idgroup.Bottom + idgroup.Margin.Bottom * 2;
+			}
+
+			panel.Height = targetheight;
+
+			//mxd. Arrange Apply/Cancel buttons
+			applypanel.Top = panel.Bottom + panel.Margin.Bottom * 2;
+
+			//mxd. Update window height
+			this.Height = applypanel.Bottom + applypanel.Margin.Bottom + (this.Height - this.ClientRectangle.Height) + 1;
 			
 			// Setup types list
 			thingtype.Setup();
 		}
 
+		#endregion
+
+		#region ================== Methods
+
 		// This sets up the form to edit the given things
 		public void Setup(ICollection<Thing> things)
 		{
-			Thing ft;
+			preventchanges = true;
+            undocreated = false;
+            argscontrol.Reset();
 
-			// Keep this list
-			this.things = things;
+            // Keep this list
+            this.things = things;
 			if(things.Count > 1) this.Text = "Edit Things (" + things.Count + ")";
+			hint.Visible = things.Count > 1; //mxd
+			hintlabel.Visible = things.Count > 1; //mxd
+			thingtype.UseMultiSelection = things.Count > 1; //mxd
 			
 			////////////////////////////////////////////////////////////////////////
 			// Set all options to the first thing properties
 			////////////////////////////////////////////////////////////////////////
 
-			ft = General.GetByIndex(things, 0);
+			Thing ft = General.GetByIndex(things, 0);
 			
 			// Set type
 			thingtype.SelectType(ft.Type);
@@ -121,145 +165,190 @@ namespace CodeImp.DoomBuilder.Windows
 				if(ft.Flags.ContainsKey(c.Tag.ToString())) c.Checked = ft.Flags[c.Tag.ToString()];
 			
 			// Coordination
-			angle.Text = Angle2D.RealToDoom(ft.Angle).ToString();
-			height.Text = ((int)ft.Position.z).ToString();
+			angle.Text = ft.AngleDoom.ToString();
+			zlabel.Text = useabsoluteheight ? "Z:" : "Height:"; //mxd
+			cbAbsoluteHeight.Checked = useabsoluteheight; //mxd
+
+			//mxd
+			ft.DetermineSector();
+			float floorheight = (ft.Sector != null ? Sector.GetFloorPlane(ft.Sector).GetZ(ft.Position) : 0);
+			posX.Text = ((int)ft.Position.x).ToString();
+			posY.Text = ((int)ft.Position.y).ToString();
+			posZ.Text = (useabsoluteheight ? ((int)Math.Round(ft.Position.z + floorheight)).ToString() : ((int)ft.Position.z).ToString());
+			posX.ButtonStep = General.Map.Grid.GridSize;
+			posY.ButtonStep = General.Map.Grid.GridSize;
+			posZ.ButtonStep = General.Map.Grid.GridSize;
+
+			//mxd
+			thinginfo = General.Map.Data.GetThingInfoEx(ft.Type);
 
 			// Action/tags
 			action.Value = ft.Action;
-			tag.Text = ft.Tag.ToString();
-			arg0.SetValue(ft.Args[0]);
-			arg1.SetValue(ft.Args[1]);
-			arg2.SetValue(ft.Args[2]);
-			arg3.SetValue(ft.Args[3]);
-			arg4.SetValue(ft.Args[4]);
+			if(General.Map.FormatInterface.HasThingTag) //mxd
+			{
+				tagSelector.Setup(UniversalType.ThingTag); 
+				tagSelector.SetTag(ft.Tag);
+			}
 
-			// Custom fields
-			fieldslist.SetValues(ft.Fields, true);
+			//mxd. Args
+			argscontrol.SetValue(ft, true);
 
 			////////////////////////////////////////////////////////////////////////
 			// Now go for all lines and change the options when a setting is different
 			////////////////////////////////////////////////////////////////////////
-			
+
+			thingprops = new List<ThingProperties>();
+
 			// Go for all things
 			foreach(Thing t in things)
 			{
+				//mxd. Update sector info
+				t.DetermineSector();
+				
 				// Type does not match?
-				if((thingtype.GetSelectedInfo() != null) &&
-				   (thingtype.GetSelectedInfo().Index != t.Type))
+				ThingTypeInfo info = thingtype.GetSelectedInfo(); //mxd
+
+				if(info != null && info.Index != t.Type)
+				{
 					thingtype.ClearSelectedType();
+					thinginfo = null; //mxd
+				}
 				
 				// Flags
 				foreach(CheckBox c in flags.Checkboxes)
 				{
-					if(t.Flags.ContainsKey(c.Tag.ToString()))
+					if(c.CheckState == CheckState.Indeterminate) continue; //mxd
+					if(t.IsFlagSet(c.Tag.ToString()) != c.Checked) 
 					{
-						if(t.Flags[c.Tag.ToString()] != c.Checked)
-						{
-							c.ThreeState = true;
-							c.CheckState = CheckState.Indeterminate;
-						}
+						c.ThreeState = true;
+						c.CheckState = CheckState.Indeterminate;
 					}
 				}
 				
 				// Coordination
-				int angledeg = Angle2D.RealToDoom(t.Angle);
-				if(angledeg.ToString() != angle.Text) angle.Text = "";
-				if(((int)t.Position.z).ToString() != height.Text) height.Text = "";
+				if(t.AngleDoom.ToString() != angle.Text) angle.Text = "";
+				
+				//mxd. Position
+				if(((int)t.Position.x).ToString() != posX.Text) posX.Text = "";
+				if(((int)t.Position.y).ToString() != posY.Text) posY.Text = "";
+				if(useabsoluteheight && t.Sector != null) 
+				{
+					if(((int)Math.Round(Sector.GetFloorPlane(t.Sector).GetZ(t.Position) + t.Position.z)).ToString() != posZ.Text)
+						posZ.Text = "";
+				} 
+				else if(((int)t.Position.z).ToString() != posZ.Text)
+				{
+					posZ.Text = "";
+				}
 
 				// Action/tags
 				if(t.Action != action.Value) action.Empty = true;
-				if(t.Tag.ToString() != tag.Text) tag.Text = "";
-				if(t.Args[0] != arg0.GetResult(-1)) arg0.ClearValue();
-				if(t.Args[1] != arg1.GetResult(-1)) arg1.ClearValue();
-				if(t.Args[2] != arg2.GetResult(-1)) arg2.ClearValue();
-				if(t.Args[3] != arg3.GetResult(-1)) arg3.ClearValue();
-				if(t.Args[4] != arg4.GetResult(-1)) arg4.ClearValue();
+				if(General.Map.FormatInterface.HasThingTag && t.Tag != ft.Tag) tagSelector.ClearTag(); //mxd
 
-				// Custom fields
-				fieldslist.SetValues(t.Fields, false);
+				//mxd. Arguments
+				argscontrol.SetValue(t, false);
+
+				//mxd. Store initial properties
+				thingprops.Add(new ThingProperties(t));
 			}
+
+			preventchanges = false;
+
+			//mxd. Trigger updates manually...
+			preventmapchange = true;
+			angle_WhenTextChanged(angle, EventArgs.Empty);
+			flags_OnValueChanged(flags, EventArgs.Empty);
+			preventmapchange = false;
+
+			argscontrol.UpdateScriptControls(); //mxd
+			actionhelp.UpdateAction(action.GetValue()); //mxd
+			UpdateFlagNames(); //mxd
+		}
+
+		//mxd
+		private void MakeUndo() 
+		{
+			if(undocreated) return;
+			undocreated = true;
+
+			//mxd. Make undo
+			General.Map.UndoRedo.CreateUndo("Edit " + (things.Count > 1 ? things.Count + " things" : "thing"));
+		}
+
+		//mxd
+		private void UpdateFlagNames()
+		{
+			Dictionary<string, string> newflagsrename = (thinginfo != null ? thinginfo.FlagsRename : null);
+
+			// Update flag names?
+			if(flagsrename != null || newflagsrename != null)
+			{
+				flags.SuspendLayout();
+
+				// Restore default flags?
+				if(flagsrename != null)
+				{
+					foreach(CheckBox cb in flags.Checkboxes)
+					{
+						string flag = cb.Tag.ToString();
+						if(flagsrename.ContainsKey(flag))
+						{
+							cb.Text = General.Map.Config.ThingFlags[flag];
+							cb.ForeColor = SystemColors.WindowText;
+						}
+					}
+				}
+
+				// Apply new renaming?
+				if(newflagsrename != null)
+				{
+					foreach(CheckBox cb in flags.Checkboxes)
+					{
+						string flag = cb.Tag.ToString();
+						if(newflagsrename.ContainsKey(flag))
+						{
+							cb.Text = newflagsrename[flag];
+							cb.ForeColor = SystemColors.HotTrack;
+						}
+					}
+				}
+
+				flags.ResumeLayout();
+			}
+
+			// Store current flag names
+			flagsrename = newflagsrename;
 		}
 		
 		#endregion
 
-		#region ================== Interface
+		#region ================== Events
 
-		// This finds a new (unused) tag
-		private void newtag_Click(object sender, EventArgs e)
+		//mxd
+		private void thingtype_OnTypeDoubleClicked() 
 		{
-			tag.Text = General.Map.Map.GetNewTag().ToString();
-		}
-
-		// Selected type changes
-		private void thingtype_OnTypeChanged(ThingTypeInfo value)
-		{
-			thinginfo = value;
-
-			// Update preview image
-			if(thinginfo != null)
-			{
-                if (thinginfo.Title == "Camera") // villsa 9/11/11
-                {
-                    General.DisplayZoomedImage(spritetex, General.Map.Data.ThingCamera.GetBitmap());
-                }
-                else if (thinginfo.Title == "Trigger") // villsa 9/11/11
-                {
-                    General.DisplayZoomedImage(spritetex, General.Map.Data.ThingTrigger.GetBitmap());
-                }
-                else if (thinginfo.Sprite.ToLowerInvariant().StartsWith(DataManager.INTERNAL_PREFIX) &&
-                   (thinginfo.Sprite.Length > DataManager.INTERNAL_PREFIX.Length))
-                {
-                    General.DisplayZoomedImage(spritetex, General.Map.Data.GetSpriteImage(thinginfo.Sprite).GetBitmap());
-                }
-                else if ((thinginfo.Sprite.Length <= 8) && (thinginfo.Sprite.Length > 0))
-                {
-                    General.DisplayZoomedImage(spritetex, General.Map.Data.GetSpriteImage(thinginfo.Sprite, thinginfo.PalIndex).GetPreview());
-                }
-                else
-                {
-                    spritetex.BackgroundImage = null;
-                }
-			}
-			else
-			{
-				spritetex.BackgroundImage = null;
-			}
-			
-			// Update arguments
-			action_ValueChanges(this, EventArgs.Empty);
+			apply_Click(this, EventArgs.Empty);
 		}
 		
 		// Action changes
 		private void action_ValueChanges(object sender, EventArgs e)
 		{
 			int showaction = 0;
-			ArgumentInfo[] arginfo;
 
 			// Only when line type is known, otherwise use the thing arguments
 			if(General.Map.Config.LinedefActions.ContainsKey(action.Value)) showaction = action.Value;
-			if((showaction == 0) && (thinginfo != null)) arginfo = thinginfo.Args; else arginfo = General.Map.Config.LinedefActions[showaction].Args;
 			
-			// Change the argument descriptions
-			arg0label.Text = arginfo[0].Title + ":";
-			arg1label.Text = arginfo[1].Title + ":";
-			arg2label.Text = arginfo[2].Title + ":";
-			arg3label.Text = arginfo[3].Title + ":";
-			arg4label.Text = arginfo[4].Title + ":";
-			arg0label.Enabled = arginfo[0].Used;
-			arg1label.Enabled = arginfo[1].Used;
-			arg2label.Enabled = arginfo[2].Used;
-			arg3label.Enabled = arginfo[3].Used;
-			arg4label.Enabled = arginfo[4].Used;
-			if(arg0label.Enabled) arg0.ForeColor = SystemColors.WindowText; else arg0.ForeColor = SystemColors.GrayText;
-			if(arg1label.Enabled) arg1.ForeColor = SystemColors.WindowText; else arg1.ForeColor = SystemColors.GrayText;
-			if(arg2label.Enabled) arg2.ForeColor = SystemColors.WindowText; else arg2.ForeColor = SystemColors.GrayText;
-			if(arg3label.Enabled) arg3.ForeColor = SystemColors.WindowText; else arg3.ForeColor = SystemColors.GrayText;
-			if(arg4label.Enabled) arg4.ForeColor = SystemColors.WindowText; else arg4.ForeColor = SystemColors.GrayText;
-			arg0.Setup(arginfo[0]);
-			arg1.Setup(arginfo[1]);
-			arg2.Setup(arginfo[2]);
-			arg3.Setup(arginfo[3]);
-			arg4.Setup(arginfo[4]);
+			//mxd. Change the argument descriptions
+			argscontrol.UpdateAction(showaction, preventchanges, (action.Empty ? null : thinginfo));
+
+			if(!preventchanges)
+			{
+				MakeUndo();
+
+				//mxd. Update what must be updated
+				argscontrol.UpdateScriptControls();
+				actionhelp.UpdateAction(showaction);
+			}
 		}
 
 		// Browse Action clicked
@@ -269,32 +358,43 @@ namespace CodeImp.DoomBuilder.Windows
 		}
 
 		// Angle text changes
-		private void angle_TextChanged(object sender, EventArgs e)
+		private void angle_WhenTextChanged(object sender, EventArgs e)
 		{
-			anglecontrol.Value = angle.GetResult(int.MinValue);
+			if(preventchanges) return;
+			preventchanges = true;
+			anglecontrol.Angle = angle.GetResult(AngleControlEx.NO_ANGLE);
+			preventchanges = false;
+			if(!preventmapchange) ApplyAngleChange(); //mxd
 		}
 
-		// Angle control clicked
-		private void anglecontrol_ButtonClicked(object sender, EventArgs e)
+		//mxd. Angle control clicked
+		private void anglecontrol_AngleChanged(object sender, EventArgs e) 
 		{
-			angle.Text = anglecontrol.Value.ToString();
+			if(preventchanges) return;
+			angle.Text = anglecontrol.Angle.ToString();
+			if(!preventmapchange) ApplyAngleChange();
 		}
 
 		// Apply clicked
 		private void apply_Click(object sender, EventArgs e)
 		{
+			MakeUndo();
+			
 			List<string> defaultflags = new List<string>();
-			string undodesc = "thing";
 
 			// Verify the tag
-			if(General.Map.FormatInterface.HasThingTag && ((tag.GetResult(0) < General.Map.FormatInterface.MinTag) || (tag.GetResult(0) > General.Map.FormatInterface.MaxTag)))
+			if(General.Map.FormatInterface.HasThingTag) //mxd
 			{
-				General.ShowWarningMessage("Thing tag must be between " + General.Map.FormatInterface.MinTag + " and " + General.Map.FormatInterface.MaxTag + ".", MessageBoxButtons.OK);
-				return;
+				tagSelector.ValidateTag();//mxd
+				if(((tagSelector.GetTag(0) < General.Map.FormatInterface.MinTag) || (tagSelector.GetTag(0) > General.Map.FormatInterface.MaxTag))) 
+				{
+					General.ShowWarningMessage("Thing tag must be between " + General.Map.FormatInterface.MinTag + " and " + General.Map.FormatInterface.MaxTag + ".", MessageBoxButtons.OK);
+					return;
+				}
 			}
 
 			// Verify the type
-			if(((thingtype.GetResult(0) < General.Map.FormatInterface.MinThingType) || (thingtype.GetResult(0) > General.Map.FormatInterface.MaxThingType)))
+			if(!string.IsNullOrEmpty(thingtype.TypeStringValue) && ((thingtype.GetResult(0) < General.Map.FormatInterface.MinThingType) || (thingtype.GetResult(0) > General.Map.FormatInterface.MaxThingType)))
 			{
 				General.ShowWarningMessage("Thing type must be between " + General.Map.FormatInterface.MinThingType + " and " + General.Map.FormatInterface.MaxThingType + ".", MessageBoxButtons.OK);
 				return;
@@ -307,41 +407,45 @@ namespace CodeImp.DoomBuilder.Windows
 				return;
 			}
 
-			// Make undo
-			if(things.Count > 1) undodesc = things.Count + " things";
-			General.Map.UndoRedo.CreateUndo("Edit " + undodesc);
-			
 			// Go for all the things
+			int offset = 0; //mxd
 			foreach(Thing t in things)
 			{
-				// Thing type index
-				t.Type = General.Clamp(thingtype.GetResult(t.Type), General.Map.FormatInterface.MinThingType, General.Map.FormatInterface.MaxThingType);
-				
 				// Coordination
-				t.Rotate(Angle2D.DoomToReal(angle.GetResult(Angle2D.RealToDoom(t.Angle))));
-				t.Move(t.Position.x, t.Position.y, (float)height.GetResult((int)t.Position.z));
+				if(cbRandomAngle.Checked) //mxd
+				{
+					int newangle = General.Random(0, 359);
+					if(General.Map.Config.DoomThingRotationAngles) newangle = newangle / 45 * 45;
+					t.Rotate(newangle);
+				}
+
+				//mxd. Check position
+				float px = General.Clamp(t.Position.x, General.Map.Config.LeftBoundary, General.Map.Config.RightBoundary);
+				float py = General.Clamp(t.Position.y, General.Map.Config.BottomBoundary, General.Map.Config.TopBoundary);
+				if(t.Position.x != px || t.Position.y != py) t.Move(new Vector2D(px, py));
 				
 				// Apply all flags
 				foreach(CheckBox c in flags.Checkboxes)
 				{
-					if(c.CheckState == CheckState.Checked) t.SetFlag(c.Tag.ToString(), true);
-					else if(c.CheckState == CheckState.Unchecked) t.SetFlag(c.Tag.ToString(), false);
+					switch(c.CheckState)
+					{
+						case CheckState.Checked: t.SetFlag(c.Tag.ToString(), true); break;
+						case CheckState.Unchecked: t.SetFlag(c.Tag.ToString(), false); break;
+					}
 				}
 
 				// Action/tags
-				t.Tag = tag.GetResult(t.Tag);
+				t.Tag = General.Clamp(tagSelector.GetSmartTag(t.Tag, offset), General.Map.FormatInterface.MinTag, General.Map.FormatInterface.MaxTag); //mxd
 				if(!action.Empty) t.Action = action.Value;
-				t.Args[0] = arg0.GetResult(t.Args[0]);
-				t.Args[1] = arg1.GetResult(t.Args[1]);
-				t.Args[2] = arg2.GetResult(t.Args[2]);
-				t.Args[3] = arg3.GetResult(t.Args[3]);
-				t.Args[4] = arg4.GetResult(t.Args[4]);
-				
-				// Custom fields
-				fieldslist.Apply(t.Fields);
+
+				//mxd. Apply args
+				argscontrol.Apply(t, offset);
 				
 				// Update settings
 				t.UpdateConfiguration();
+
+				//mxd. Increase offset...
+				offset++;
 			}
 
 			// Set as defaults
@@ -353,6 +457,7 @@ namespace CodeImp.DoomBuilder.Windows
 			
 			// Done
 			General.Map.IsChanged = true;
+			if(OnValuesChanged != null)	OnValuesChanged(this, EventArgs.Empty); //mxd
 			this.DialogResult = DialogResult.OK;
 			this.Close();
 		}
@@ -360,18 +465,212 @@ namespace CodeImp.DoomBuilder.Windows
 		// Cancel clicked
 		private void cancel_Click(object sender, EventArgs e)
 		{
+			//mxd. Perform undo?
+			if(undocreated) General.Map.UndoRedo.WithdrawUndo();
+			
 			// Be gone
 			this.DialogResult = DialogResult.Cancel;
 			this.Close();
 		}
 
+		//mxd
+		private void cbAbsoluteHeight_CheckedChanged(object sender, EventArgs e) 
+		{
+			if(preventchanges) return;
+			MakeUndo();
+
+			useabsoluteheight = cbAbsoluteHeight.Checked;
+			zlabel.Text = (useabsoluteheight ? "Z:" : "Height:");
+			
+			preventchanges = true;
+			
+			//update label text
+			Thing ft = General.GetByIndex(things, 0);
+			float z = ft.Position.z;
+			if(useabsoluteheight && ft.Sector != null) z += Sector.GetFloorPlane(ft.Sector).GetZ(ft.Position);
+			posZ.Text = ((float)Math.Round(z, General.Map.FormatInterface.VertexDecimals)).ToString();
+
+			foreach(Thing t in things) 
+			{
+				z = t.Position.z;
+				if(useabsoluteheight && t.Sector != null) z += Sector.GetFloorPlane(t.Sector).GetZ(t.Position);
+				string ztext = ((float)Math.Round(z, General.Map.FormatInterface.VertexDecimals)).ToString();
+				if(posZ.Text != ztext) 
+				{
+					posZ.Text = "";
+					break;
+				}
+			}
+
+			preventchanges = false;
+		}
+
+		//mxd
+		private void cbRandomAngle_CheckedChanged(object sender, EventArgs e) 
+		{
+			angle.Enabled = !cbRandomAngle.Checked;
+			anglecontrol.Enabled = !cbRandomAngle.Checked;
+		}
+
+		//mxd
+		private void ThingEditForm_Shown(object sender, EventArgs e)
+		{
+			thingtype.FocusTextbox();
+		}
+
 		// Help
 		private void ThingEditForm_HelpRequested(object sender, HelpEventArgs hlpevent)
 		{
-			General.ShowHelp("w_thingeditor.html");
+			General.ShowHelp("w_thingedit.html");
 			hlpevent.Handled = true;
 		}
-		
+
 		#endregion
+
+		#region ================== mxd. Realtime events
+
+		private void posX_WhenTextChanged(object sender, EventArgs e) 
+		{
+			if(preventchanges) return;
+			MakeUndo(); //mxd
+			int i = 0;
+
+			// Update values
+			foreach(Thing t in things)
+				t.Move(new Vector2D(posX.GetResultFloat(thingprops[i++].X), t.Position.y));
+
+			General.Map.IsChanged = true;
+			if(OnValuesChanged != null)	OnValuesChanged(this, EventArgs.Empty);
+		}
+
+		private void posY_WhenTextChanged(object sender, EventArgs e) 
+		{
+			if(preventchanges) return;
+			MakeUndo(); //mxd
+			int i = 0;
+
+			// Update values
+			foreach(Thing t in things)
+				t.Move(new Vector2D(t.Position.x, posY.GetResultFloat(thingprops[i++].Y)));
+
+			General.Map.IsChanged = true;
+			if(OnValuesChanged != null) OnValuesChanged(this, EventArgs.Empty);
+		}
+
+		private void posZ_WhenTextChanged(object sender, EventArgs e) 
+		{
+			if(preventchanges) return;
+			MakeUndo(); //mxd
+			int i = 0;
+
+			if(string.IsNullOrEmpty(posZ.Text)) 
+			{
+				// Restore values
+				foreach(Thing t in things)
+					t.Move(new Vector3D(t.Position.x, t.Position.y, thingprops[i++].Z));
+			} 
+			else 
+			{ 
+				// Update values
+				foreach(Thing t in things) 
+				{
+					float z = posZ.GetResultFloat(thingprops[i++].Z);
+					if(useabsoluteheight && !posZ.CheckIsRelative() && t.Sector != null)
+						z -= (float)Math.Round(Sector.GetFloorPlane(t.Sector).GetZ(t.Position.x, t.Position.y), General.Map.FormatInterface.VertexDecimals);
+					t.Move(new Vector3D(t.Position.x, t.Position.y, z));
+				}
+			}
+
+			General.Map.IsChanged = true;
+			if(OnValuesChanged != null) OnValuesChanged(this, EventArgs.Empty);
+		}
+
+		// Selected type changes
+		private void thingtype_OnTypeChanged(ThingTypeInfo value) 
+		{
+			thinginfo = value;
+
+			// Update arguments
+			action_ValueChanges(this, EventArgs.Empty);
+
+			//mxd. Update things
+			if(preventchanges ||
+					(!string.IsNullOrEmpty(thingtype.TypeStringValue) &&
+					thingtype.GetResult(0) < General.Map.FormatInterface.MinThingType
+					|| thingtype.GetResult(0) > General.Map.FormatInterface.MaxThingType))
+				return;
+
+			MakeUndo(); //mxd
+
+			foreach(Thing t in things) 
+			{
+				//Set type
+				t.Type = thingtype.GetResult(t.Type);
+
+				// Update settings
+				t.UpdateConfiguration();
+			}
+
+			UpdateFlagNames(); //mxd
+
+			General.Map.IsChanged = true;
+			if(OnValuesChanged != null) OnValuesChanged(this, EventArgs.Empty);
+		}
+
+		//mxd
+		private void ApplyAngleChange() 
+		{
+			if(preventchanges) return;
+			MakeUndo(); //mxd
+			int i = 0;
+
+			//restore values
+			if(string.IsNullOrEmpty(angle.Text)) 
+			{
+				// Apply rotation
+				foreach(Thing t in things)
+					t.Rotate(thingprops[i++].AngleDoom);
+			}
+			else //update values
+			{ 
+				// Apply rotation
+				foreach(Thing t in things)
+					t.Rotate(angle.GetResult(thingprops[i++].AngleDoom));
+			}
+
+			General.Map.IsChanged = true;
+			if(OnValuesChanged != null)	OnValuesChanged(this, EventArgs.Empty);
+		}
+
+		//mxd
+		private void flags_OnValueChanged(object sender, EventArgs e) 
+		{
+			if(preventchanges) return;
+
+			// Gather enabled flags
+			HashSet<string> activeflags = new HashSet<string>();
+			foreach(CheckBox cb in flags.Checkboxes)
+			{
+				if(cb.CheckState != CheckState.Unchecked) activeflags.Add(cb.Tag.ToString());
+			}
+
+			// Check em
+			List<string> warnings = ThingFlagsCompare.CheckFlags(activeflags);
+			if(warnings.Count > 0) 
+			{
+				//got missing flags
+				tooltip.SetToolTip(missingflags, string.Join(Environment.NewLine, warnings.ToArray()));
+				missingflags.Visible = true;
+				settingsgroup.ForeColor = Color.DarkRed;
+				return;
+			}
+
+			//everything is OK
+			missingflags.Visible = false;
+			settingsgroup.ForeColor = SystemColors.ControlText;
+		}
+
+		#endregion
+
 	}
 }

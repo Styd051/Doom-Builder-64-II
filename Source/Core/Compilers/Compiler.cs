@@ -17,16 +17,12 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Text;
-using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.Reflection;
 using System.IO;
 using CodeImp.DoomBuilder.Config;
-using CodeImp.DoomBuilder.IO;
 
 #endregion
 
@@ -37,7 +33,7 @@ namespace CodeImp.DoomBuilder.Compilers
 		#region ================== Variables
 		
 		// Parameters
-		protected CompilerInfo info;
+		protected readonly CompilerInfo info;
 		protected string parameters;
 		protected string workingdir;
 		protected string sourcefile;
@@ -45,10 +41,10 @@ namespace CodeImp.DoomBuilder.Compilers
 		protected string inputfile;
 		
 		// Files
-		protected DirectoryInfo tempdir;
+		protected readonly DirectoryInfo tempdir;
 
 		// Errors
-		private List<CompilerError> errors;
+		private readonly List<CompilerError> errors;
 		
 		// Disposing
 		protected bool isdisposed;
@@ -71,21 +67,26 @@ namespace CodeImp.DoomBuilder.Compilers
 		#region ================== Constructor / Disposer
 		
 		// Constructor
-		public Compiler(CompilerInfo info)
+		protected Compiler(CompilerInfo info, bool copyrequiredfiles)
 		{
 			// Initialize
 			this.info = info;
 			this.errors = new List<CompilerError>();
-			
-			General.WriteLogLine("Creating compiler '" + info.Name + "' on interface '" + this.GetType().Name + "'...");
+
+			General.WriteLogLine("Creating compiler \"" + info.Name + "\" on interface \"" + this.GetType().Name + "\"...");
 			
 			// Create temporary directory
 			tempdir = Directory.CreateDirectory(General.MakeTempDirname());
 			workingdir = tempdir.FullName;
-			
-			// Copy required files to the temp directory
-			General.WriteLogLine("Copying required files for compiler...");
-			CopyRequiredFiles();
+
+			//mxd. ACC compiler itself is not copied to tempdir anymore, so we don't need to move it's include files
+			//but we still need tempdir to compile SCRIPTS lump.
+			if(copyrequiredfiles)
+			{
+				// Copy required files to the temp directory
+				General.WriteLogLine("Copying required files for compiler...");
+				CopyRequiredFiles();
+			}
 		}
 		
 		// Disposer
@@ -93,8 +94,8 @@ namespace CodeImp.DoomBuilder.Compilers
 		{
 			if(!isdisposed)
 			{
-				Exception deleteerror = null;
-				double starttime = General.stopwatch.Elapsed.TotalMilliseconds;
+				Exception deleteerror;
+				long starttime = Clock.CurrentTime;
 				
 				do
 				{
@@ -111,7 +112,7 @@ namespace CodeImp.DoomBuilder.Compilers
 					}
 
 					// Bail out when it takes too long
-					if((General.stopwatch.Elapsed.TotalMilliseconds - starttime) > 2000) break;
+					if((Clock.CurrentTime - starttime) > 2000) break;
 				}
 				while(deleteerror != null);
 				
@@ -137,10 +138,16 @@ namespace CodeImp.DoomBuilder.Compilers
 			// Copy files
 			foreach(string f in info.Files)
 			{
-				string sourcefile = Path.Combine(info.Path, f);
-				string targetfile = Path.Combine(tempdir.FullName, f);
-				if(!File.Exists(sourcefile)) General.ErrorLogger.Add(ErrorType.Error, "The file '" + f + "' required by the '" + info.Name + "' compiler is missing. According to the compiler configuration in '" + info.FileName + "', the was expected to be found in the following path: " + info.Path);
-				File.Copy(sourcefile, targetfile, true);
+				string srcfile = Path.Combine(info.Path, f);
+				if(!File.Exists(srcfile)) 
+				{
+					General.ErrorLogger.Add(ErrorType.Error, "The file \"" + f + "\" required by the \"" + info.Name + "\" compiler is missing. According to the compiler configuration in \"" + info.FileName + "\", it was expected to be found here: \"" + info.Path + "\"");
+				} 
+				else 
+				{
+					string tgtfile = Path.Combine(tempdir.FullName, f);
+					File.Copy(srcfile, tgtfile, true);
+				}
 			}
 		}
 		
@@ -161,8 +168,6 @@ namespace CodeImp.DoomBuilder.Compilers
 		// This creates a compiler by interface name
 		internal static Compiler Create(CompilerInfo info)
 		{
-			Compiler result;
-			
 			// Make list of assemblies to search in
 			List<Assembly> asms = General.Plugins.GetPluginAssemblies();
 			asms.Add(General.ThisAssembly);
@@ -174,23 +179,18 @@ namespace CodeImp.DoomBuilder.Compilers
 			try
 			{
 				// Go for all assemblies
-				foreach(Assembly a in asms)
+				foreach(Assembly a in asms) 
 				{
-					Type[] types;
-					
 					// Find the class
-					if(a == General.ThisAssembly)
-						types = a.GetTypes();
-					else
-						types = a.GetExportedTypes();
-					
+					Type[] types = (Equals(a, General.ThisAssembly) ? a.GetTypes() : a.GetExportedTypes());
+
 					foreach(Type t in types)
 					{
 						if(t.IsSubclassOf(typeof(Compiler)) && (t.Name == info.ProgramInterface))
 						{
 							// Create instance
-							result = (Compiler)a.CreateInstance(t.FullName, false, BindingFlags.Default,
-												null, args, CultureInfo.CurrentCulture, new object[0]);
+							Compiler result = (Compiler)a.CreateInstance(t.FullName, false, BindingFlags.Default,
+							                                             null, args, CultureInfo.CurrentCulture, new object[0]);
 							return result;
 						}
 					}

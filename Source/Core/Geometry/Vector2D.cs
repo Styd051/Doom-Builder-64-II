@@ -17,10 +17,6 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 
 #endregion
 
@@ -218,7 +214,7 @@ namespace CodeImp.DoomBuilder.Geometry
 		public static float GetAngle(Vector2D a, Vector2D b)
 		{
 			// Calculate and return the angle
-			return -(float)Math.Atan2(-(a.y - b.y), (a.x - b.x)) + (float)Math.PI * 0.5f;
+			return -(float)Math.Atan2(-(a.y - b.y), (a.x - b.x)) + Angle2D.PIHALF;//mxd //(float)Math.PI * 0.5f;
 		}
 
 		// This returns the square distance between two points
@@ -261,8 +257,10 @@ namespace CodeImp.DoomBuilder.Geometry
 		// This calculates the angle
 		public float GetAngle()
 		{
-			// Calculate and return the angle
-			return -(float)Math.Atan2(-y, x) + (float)Math.PI * 0.5f;
+			//mxd. Let's make sure the angle is in [0 .. PI2] range...
+			float angle = -(float)Math.Atan2(-y, x) + Angle2D.PIHALF;
+			if(angle < 0f) angle += Angle2D.PI2;
+			return angle;
 		}
 
 		// This calculates the length
@@ -324,31 +322,49 @@ namespace CodeImp.DoomBuilder.Geometry
 		}
 
 		// Transform
-		public unsafe Vector2D GetTransformed(float offsetx, float offsety, float scalex, float scaley)
+		public Vector2D GetTransformed(float offsetx, float offsety, float scalex, float scaley)
 		{
 			return new Vector2D((x + offsetx) * scalex, (y + offsety) * scaley);
 		}
 
 		// Inverse Transform
-		public unsafe Vector2D GetInvTransformed(float invoffsetx, float invoffsety, float invscalex, float invscaley)
+		public Vector2D GetInvTransformed(float invoffsetx, float invoffsety, float invscalex, float invscaley)
 		{
 			return new Vector2D((x * invscalex) + invoffsetx, (y * invscaley) + invoffsety);
 		}
 		
-        // Rotate (Added by Anders Åstrand 2008-05-18)
-        public unsafe Vector2D GetRotated(float theta)
-        {
-			double cos = Math.Cos(theta);
-			double sin = Math.Sin(theta);
-            double rx = cos * x - sin * y;
-            double ry = sin * x + cos * y;
-            return new Vector2D((float)rx, (float)ry);
-        }
+		// Rotate (Added by Anders Åstrand 2008-05-18)
+		public Vector2D GetRotated(float theta)
+		{
+			float cos = (float)Math.Cos(theta);
+			float sin = (float)Math.Sin(theta);
+			float rx = cos * x - sin * y;
+			float ry = sin * x + cos * y;
+			return new Vector2D(rx, ry);
+		}
 
 		// Checks if the Vector has valid values for x and y
 		public bool IsFinite()
 		{
 			return !float.IsNaN(x) && !float.IsNaN(y) && !float.IsInfinity(x) && !float.IsInfinity(y);
+		}
+
+		//mxd. Addeed to make compiler a bit more happy...
+		public override int GetHashCode() 
+		{
+			return base.GetHashCode();
+		}
+
+		//mxd. Addeed to make compiler a bit more happy...
+		public override bool Equals(object obj) 
+		{
+			if(!(obj is Vector2D)) return false;
+
+			Vector2D other = (Vector2D)obj;
+
+			if(x != other.x) return false;
+			if(y != other.y) return false;
+			return true;
 		}
 
 		#endregion

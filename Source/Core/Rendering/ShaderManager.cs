@@ -17,26 +17,12 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using System.Drawing;
-using System.ComponentModel;
-using CodeImp.DoomBuilder.Map;
-using SlimDX.Direct3D9;
-using SlimDX;
-using CodeImp.DoomBuilder.Geometry;
-using System.Drawing.Imaging;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.Rendering
 {
-	internal class ShaderManager : ID3DResource
+	internal class ShaderManager : ID3DResource, IDisposable
 	{
 		#region ================== Constants
 
@@ -45,8 +31,7 @@ namespace CodeImp.DoomBuilder.Rendering
 		#region ================== Variables
 
 		// Settings
-		private string shadertechnique;
-		private bool useshaders;
+		private readonly string shadertechnique;
 		
 		// Shaders
 		private Display2DShader display2dshader;
@@ -57,13 +42,12 @@ namespace CodeImp.DoomBuilder.Rendering
 		private D3DDevice device;
 		
 		// Disposing
-		private bool isdisposed = false;
+		private bool isdisposed;
 
 		#endregion
 
 		#region ================== Properties
 
-		public bool Enabled { get { return useshaders; } }
 		public string ShaderTechnique { get { return shadertechnique; } }
 		public Display2DShader Display2D { get { return display2dshader; } }
 		public Things2DShader Things2D { get { return things2dshader; } }
@@ -80,6 +64,7 @@ namespace CodeImp.DoomBuilder.Rendering
 		{
 			// Initialize
 			this.device = device;
+			shadertechnique = "SM20"; //mxd
 			
 			// Load
 			ReloadResource();
@@ -124,13 +109,6 @@ namespace CodeImp.DoomBuilder.Rendering
 		// Load resources
 		public void ReloadResource()
 		{
-			Capabilities caps;
-
-			// Check if we can use shaders
-			caps = General.Map.Graphics.Device.Capabilities;
-			useshaders = (caps.PixelShaderVersion.Major >= 2);
-			shadertechnique = "SM20";
-
 			// Initialize effects
 			display2dshader = new Display2DShader(this);
 			things2dshader = new Things2DShader(this);

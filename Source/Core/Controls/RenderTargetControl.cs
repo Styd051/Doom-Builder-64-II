@@ -16,17 +16,9 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
-using System.Text;
-using System.Globalization;
 using System.Windows.Forms;
-using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Geometry;
 using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Editing;
 
 #endregion
 
@@ -40,12 +32,14 @@ namespace CodeImp.DoomBuilder.Controls
 
 		#region ================== Variables
 
-		// Reference to image to render from
-		private Image img = null;
+		private ToolTip tooltip; //mxd
 
 		#endregion
 
 		#region ================== Properties
+		
+		public event KeyEventHandler OnKeyReleased; //mxd. Sometimes it's handeled here, not by MainForm
+		public Point LocationAbs { get { return this.PointToScreen(new Point(-(General.MainWindow.Width - General.MainWindow.ClientSize.Width) / 2, 0)); } } //mxd
 
 		#endregion
 
@@ -57,14 +51,19 @@ namespace CodeImp.DoomBuilder.Controls
 			// Initialize
 			this.SetStyle(ControlStyles.FixedWidth, true);
 			this.SetStyle(ControlStyles.FixedHeight, true);
+
+			//mxd. Create tooltip
+			tooltip = new ToolTip { UseAnimation = false, UseFading = false, InitialDelay = 0, AutoPopDelay = 9000 };
 		}
-		
-		// Disposer
+
+		//mxd
 		protected override void Dispose(bool disposing)
 		{
-			// Clean up
-			
-			// Done
+			if(disposing)
+			{
+				tooltip.Dispose();
+				tooltip = null;
+			}
 			base.Dispose(disposing);
 		}
 
@@ -75,39 +74,24 @@ namespace CodeImp.DoomBuilder.Controls
 		// Paint method
 		protected override void OnPaint(PaintEventArgs pe)
 		{
-			/*
-			// Copy area that needs to be redrawn
-			if(img != null)
-			{
-				pe.Graphics.FillRectangle(Brushes.Black, pe.ClipRectangle);
-				pe.Graphics.DrawImage(img, pe.ClipRectangle, pe.ClipRectangle, GraphicsUnit.Pixel);
-				
-			}
-			*/
-			
 			// Pass on to base
 			// Do we really want this?
-			base.RaisePaintEvent(this, pe);
+			if(!D3DDevice.IsRendering) base.RaisePaintEvent(this, pe); //mxd. Dont raise event when in the middle of rendering
 		}
 
+		//mxd
+		protected override void OnKeyUp(KeyEventArgs e) 
+		{
+			if(OnKeyReleased != null) OnKeyReleased(this, e);
+		}
+		
 		#endregion
 
 		#region ================== Methods
 
-		// This sets the render source
-		public void SetImageSource(Image srcimg)
-		{
-			// Set new source image
-			img = srcimg;
-			//this.Image = img;
-		}
-
 		// This sets up the control to display the splash logo
 		public void SetSplashLogoDisplay()
 		{
-			// Remove render image
-			this.img = null;
-			
 			// Change display to show splash logo
 			this.SetStyle(ControlStyles.SupportsTransparentBackColor, false);
 			this.SetStyle(ControlStyles.ContainerControl, true);
@@ -116,24 +100,15 @@ namespace CodeImp.DoomBuilder.Controls
 			this.SetStyle(ControlStyles.AllPaintingInWmPaint, true);
 			this.SetStyle(ControlStyles.Opaque, false);
 			this.UpdateStyles();
-			this.BackColor = Color.Black;
-            this.BackgroundImage = global::CodeImp.DoomBuilder.Properties.Resources.Splash3_trans;
-			this.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Center;
-			//this.Image = null;
+			this.BackColor = SystemColors.ControlDarkDark;
+			this.BackgroundImage = Properties.Resources.Splash3_trans;
+			this.BackgroundImageLayout = ImageLayout.Center;
 		}
 		
 		// This sets up the control for manual rendering
 		public void SetManualRendering()
 		{
 			// Change display for rendering
-			/*
-			this.SetStyle(ControlStyles.SupportsTransparentBackColor, false);
-			this.SetStyle(ControlStyles.ContainerControl, true);
-			this.SetStyle(ControlStyles.OptimizedDoubleBuffer, false);
-			this.SetStyle(ControlStyles.UserPaint, true);
-			this.SetStyle(ControlStyles.AllPaintingInWmPaint, true);
-			this.SetStyle(ControlStyles.Opaque, true);
-			*/
 			this.SetStyle(ControlStyles.SupportsTransparentBackColor, false);
 			this.SetStyle(ControlStyles.ContainerControl, true);
 			this.SetStyle(ControlStyles.OptimizedDoubleBuffer, false);
@@ -143,10 +118,20 @@ namespace CodeImp.DoomBuilder.Controls
 			this.UpdateStyles();
 			this.BackColor = Color.Black;
 			this.BackgroundImage = null;
-			this.BackgroundImageLayout = System.Windows.Forms.ImageLayout.None;
-			//this.BackgroundImage = global::CodeImp.DoomBuilder.Properties.Resources.floor0_3;
-			//this.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Tile;
-			//this.Image = img;
+			this.BackgroundImageLayout = ImageLayout.None;
+		}
+
+		//mxd. This shows tooltip at given position
+		public void ShowToolTip(string title, string text, int x, int y)
+		{
+			tooltip.ToolTipTitle = title;
+			tooltip.Show(text, this, x, y);
+		}
+
+		//mxd. This hides it
+		public void HideToolTip()
+		{
+			tooltip.Hide(this);
 		}
 
 		#endregion

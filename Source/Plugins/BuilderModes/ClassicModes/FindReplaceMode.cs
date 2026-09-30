@@ -16,31 +16,21 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Geometry;
-using System.Drawing;
 using CodeImp.DoomBuilder.Editing;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.BuilderModes
 {
-	[EditMode(DisplayName = "Find & Replace Mode",
+	[EditMode(DisplayName = "Find and Replace Mode",
 			  SwitchAction = "findmode",
 			  ButtonImage = "FindMode.png",
 			  ButtonOrder = 100,
 			  ButtonGroup = "002_tools",
+			  AllowCopyPaste = false,
 			  Volatile = true,
 			  UseByDefault = true)]
 
@@ -55,6 +45,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		#endregion
 
 		#region ================== Properties
+
+		internal bool Volatile { get { return attributes.Volatile; } set { attributes.Volatile = value; } } //mxd
 
 		#endregion
 
@@ -89,17 +81,17 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			// Select linedefs by sectors
 			foreach(Linedef ld in General.Map.Map.Linedefs)
 			{
-				if (ld.Selected == false)
+				if(ld.Selected == false)
 				{
 					bool front, back;
-					if (ld.Front != null) front = ld.Front.Sector.Selected; else front = false;
-					if (ld.Back != null) back = ld.Back.Sector.Selected; else back = false;
+					if(ld.Front != null) front = ld.Front.Sector.Selected; else front = false;
+					if(ld.Back != null) back = ld.Back.Sector.Selected; else back = false;
 					ld.Selected = front | back;
 				}
 			}
 			
 			// Show toolbox window
-			BuilderPlug.Me.FindReplaceForm.Show((Form)General.Interface);
+			BuilderPlug.Me.FindReplaceForm.Show((Form)General.Interface, this);
 		}
 
 		// Disenagaging
@@ -149,7 +141,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			// Render things
 			if(renderer.StartThings(true))
 			{
-				renderer.RenderThingSet(General.Map.Map.Things, 1.0f);
+				renderer.RenderThingSet(General.Map.Map.Things, General.Settings.ActiveThingsAlpha);
 				if(BuilderPlug.Me.FindReplaceForm.Finder != null)
 					BuilderPlug.Me.FindReplaceForm.Finder.RenderThingsSelection(renderer, selection);
 				renderer.Finish();

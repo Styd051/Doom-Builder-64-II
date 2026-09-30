@@ -17,22 +17,8 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Editing;
-using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Types;
-using CodeImp.DoomBuilder.Config;
 
 #endregion
 
@@ -42,16 +28,18 @@ namespace CodeImp.DoomBuilder.BuilderModes
 	{
 		#region ================== Variables
 		
-		private Sidedef side;
-		private SidedefPart part;
+		private readonly Sidedef side;
+		private readonly SidedefPart part;
+		private static string imagename = "-"; //mxd
 		
 		#endregion
 		
 		#region ================== Properties
 
-		public override int Buttons { get { return 2; } }
+		public override int Buttons { get { return 3; } }
 		public override string Button1Text { get { return "Remove Texture"; } }
 		public override string Button2Text { get { return "Add Default Texture"; } }
+		public override string Button3Text { get { return "Browse Texture..."; } } //mxd
 		
 		#endregion
 		
@@ -64,12 +52,23 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			this.side = sd;
 			this.part = part;
 			this.viewobjects.Add(sd);
-			this.description = "This sidedef uses an unknown texture. This could be the result of missing resources, or a mistyped texture name. Click the Remove Texture button to remove the texture or click on Add Default Texture to use a known texture instead.";
+			this.hidden = sd.IgnoredErrorChecks.Contains(this.GetType()); //mxd
+			imagename = "-"; //mxd
+			this.description = "This sidedef uses an unknown texture. This could be the result of missing resources, or a mistyped texture name.";
 		}
 		
 		#endregion
 		
 		#region ================== Methods
+
+		// This sets if this result is displayed in ErrorCheckForm (mxd)
+		internal override void Hide(bool hide) 
+		{
+			hidden = hide;
+			Type t = this.GetType();
+			if(hide) side.IgnoredErrorChecks.Add(t);
+			else if(side.IgnoredErrorChecks.Contains(t)) side.IgnoredErrorChecks.Remove(t);
+		}
 		
 		// This must return the string that is displayed in the listbox
 		public override string ToString()
@@ -77,13 +76,13 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			switch(part)
 			{
 				case SidedefPart.Upper:
-					return "Sidedef has unknown upper texture \"" + side.HighTexture + "\"";
+					return "Linedef " + side.Line.Index + " has unknown upper texture \"" + side.HighTexture + "\" (" + (side.IsFront ? "front" : "back") + " side)";
 					
 				case SidedefPart.Middle:
-					return "Sidedef has unknown middle texture \"" + side.MiddleTexture + "\"";
+					return "Linedef " + side.Line.Index + " has unknown middle texture \"" + side.MiddleTexture + "\" (" + (side.IsFront ? "front" : "back") + " side)";
 					
 				case SidedefPart.Lower:
-					return "Sidedef has unknown lower texture \"" + side.LowTexture + "\"";
+					return "Linedef " + side.Line.Index + " has unknown lower texture \"" + side.LowTexture + "\" (" + (side.IsFront ? "front" : "back") + " side)";
 					
 				default:
 					return "ERROR";
@@ -99,9 +98,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		}
 		
 		// Fix by removing texture
-		public override bool Button1Click()
+		public override bool Button1Click(bool batchMode)
 		{
-			General.Map.UndoRedo.CreateUndo("Remove unknown texture");
+			if(!batchMode) General.Map.UndoRedo.CreateUndo("Remove unknown texture");
 			switch(part)
 			{
 				case SidedefPart.Upper: side.SetTextureHigh("-"); break;
@@ -114,17 +113,35 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		}
 		
 		// Fix by setting default texture
-		public override bool Button2Click()
+		public override bool Button2Click(bool batchMode)
 		{
-			General.Map.UndoRedo.CreateUndo("Unknown texture correction");
+			if(!batchMode) General.Map.UndoRedo.CreateUndo("Unknown texture correction");
 			General.Settings.FindDefaultDrawSettings();
 			switch(part)
 			{
-				case SidedefPart.Upper: side.SetTextureHigh(General.Settings.DefaultTexture); break;
-				case SidedefPart.Middle: side.SetTextureMid(General.Settings.DefaultTexture); break;
-				case SidedefPart.Lower: side.SetTextureLow(General.Settings.DefaultTexture); break;
+				case SidedefPart.Upper: side.SetTextureHigh(General.Map.Options.DefaultTopTexture); break;
+				case SidedefPart.Middle: side.SetTextureMid(General.Map.Options.DefaultWallTexture); break;
+				case SidedefPart.Lower: side.SetTextureLow(General.Map.Options.DefaultBottomTexture); break;
 			}
 			
+			General.Map.Map.Update();
+			return true;
+		}
+
+		//mxd. Fix by picking a texture
+		public override bool Button3Click(bool batchMode) 
+		{
+			if(!batchMode) General.Map.UndoRedo.CreateUndo("Unknown texture correction");
+			if(imagename == "-") imagename = General.Interface.BrowseTexture(General.Interface, imagename);
+			if(imagename == "-") return false;
+
+			switch(part) 
+			{
+				case SidedefPart.Upper: side.SetTextureHigh(imagename); break;
+				case SidedefPart.Middle: side.SetTextureMid(imagename); break;
+				case SidedefPart.Lower: side.SetTextureLow(imagename); break;
+			}
+
 			General.Map.Map.Update();
 			return true;
 		}

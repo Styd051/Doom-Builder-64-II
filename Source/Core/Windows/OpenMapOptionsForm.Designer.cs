@@ -28,17 +28,24 @@ namespace CodeImp.DoomBuilder.Windows
 		/// </summary>
 		private void InitializeComponent()
 		{
+			this.components = new System.ComponentModel.Container();
 			System.Windows.Forms.ColumnHeader columnHeader1;
 			System.Windows.Forms.Label label1;
 			System.Windows.Forms.Label label2;
 			System.Windows.Forms.Label label3;
+			System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(OpenMapOptionsForm));
 			this.panelres = new System.Windows.Forms.GroupBox();
+			this.longtexturenames = new System.Windows.Forms.CheckBox();
 			this.strictpatches = new System.Windows.Forms.CheckBox();
 			this.datalocations = new CodeImp.DoomBuilder.Controls.ResourceListEditor();
 			this.apply = new System.Windows.Forms.Button();
 			this.cancel = new System.Windows.Forms.Button();
 			this.config = new System.Windows.Forms.ComboBox();
 			this.mapslist = new System.Windows.Forms.ListView();
+			this.scriptcompiler = new System.Windows.Forms.ComboBox();
+			this.scriptcompilerlabel = new System.Windows.Forms.Label();
+			this.readonlyresources = new System.Windows.Forms.CheckBox();
+			this.tooltip = new System.Windows.Forms.ToolTip(this.components);
 			columnHeader1 = new System.Windows.Forms.ColumnHeader();
 			label1 = new System.Windows.Forms.Label();
 			label2 = new System.Windows.Forms.Label();
@@ -49,64 +56,77 @@ namespace CodeImp.DoomBuilder.Windows
 			// columnHeader1
 			// 
 			columnHeader1.Text = "Map name";
+			columnHeader1.Width = -1;
 			// 
 			// label1
 			// 
-			label1.AutoSize = true;
-			label1.Location = new System.Drawing.Point(30, 24);
+			label1.Location = new System.Drawing.Point(15, 24);
 			label1.Name = "label1";
-			label1.Size = new System.Drawing.Size(105, 14);
+			label1.Size = new System.Drawing.Size(120, 14);
 			label1.TabIndex = 14;
 			label1.Text = "Game Configuration:";
+			label1.TextAlign = System.Drawing.ContentAlignment.TopRight;
 			// 
 			// label2
 			// 
-			label2.Location = new System.Drawing.Point(12, 57);
+			label2.AutoSize = true;
+			label2.Location = new System.Drawing.Point(12, 89);
 			label2.Name = "label2";
-			label2.Size = new System.Drawing.Size(396, 30);
+			label2.Size = new System.Drawing.Size(360, 26);
 			label2.TabIndex = 16;
-			label2.Text = "With the above selected configuration, the maps shown below were found in the cho" +
-				"sen WAD file. Please select the map to load for editing.";
+			label2.Text = "With the above selected configuration, the maps shown below were found \r\nin the c" +
+				"hosen WAD file. Please select the map to load for editing.";
 			// 
 			// label3
 			// 
 			label3.AutoSize = true;
-			label3.Location = new System.Drawing.Point(14, 193);
+			label3.Location = new System.Drawing.Point(14, 227);
 			label3.Name = "label3";
-			label3.Size = new System.Drawing.Size(312, 28);
+			label3.Size = new System.Drawing.Size(299, 52);
 			label3.TabIndex = 17;
-			label3.Text = "Drag items to change order (lower items override higher items).\r\nGrayed items are" +
-				" loaded according to the game configuration.";
+			label3.Text = resources.GetString("label3.Text");
 			// 
 			// panelres
 			// 
-			this.panelres.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)
+			this.panelres.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
 						| System.Windows.Forms.AnchorStyles.Right)));
+			this.panelres.Controls.Add(this.readonlyresources);
+			this.panelres.Controls.Add(this.longtexturenames);
 			this.panelres.Controls.Add(this.strictpatches);
 			this.panelres.Controls.Add(this.datalocations);
 			this.panelres.Controls.Add(label3);
-			this.panelres.Location = new System.Drawing.Point(12, 215);
+			this.panelres.Location = new System.Drawing.Point(12, 246);
 			this.panelres.Name = "panelres";
-			this.panelres.Size = new System.Drawing.Size(396, 231);
+			this.panelres.Size = new System.Drawing.Size(396, 292);
 			this.panelres.TabIndex = 2;
 			this.panelres.TabStop = false;
 			this.panelres.Text = " Resources ";
 			// 
+			// longtexturenames
+			// 
+			this.longtexturenames.AutoSize = true;
+			this.longtexturenames.Location = new System.Drawing.Point(14, 45);
+			this.longtexturenames.Name = "longtexturenames";
+			this.longtexturenames.Size = new System.Drawing.Size(137, 17);
+			this.longtexturenames.TabIndex = 20;
+			this.longtexturenames.Text = "Use long texture names";
+			this.longtexturenames.UseVisualStyleBackColor = true;
+			// 
 			// strictpatches
 			// 
 			this.strictpatches.AutoSize = true;
-			this.strictpatches.Location = new System.Drawing.Point(14, 27);
+			this.strictpatches.Location = new System.Drawing.Point(14, 21);
 			this.strictpatches.Name = "strictpatches";
-			this.strictpatches.Size = new System.Drawing.Size(352, 18);
+			this.strictpatches.Size = new System.Drawing.Size(349, 17);
 			this.strictpatches.TabIndex = 19;
 			this.strictpatches.Text = "Strictly load patches between P_START and P_END only for this file";
 			this.strictpatches.UseVisualStyleBackColor = true;
 			// 
 			// datalocations
 			// 
+			this.datalocations.AllowDrop = true;
 			this.datalocations.DialogOffset = new System.Drawing.Point(40, 20);
-			this.datalocations.Font = new System.Drawing.Font("Arial", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-			this.datalocations.Location = new System.Drawing.Point(14, 58);
+			this.datalocations.Location = new System.Drawing.Point(14, 91);
 			this.datalocations.Name = "datalocations";
 			this.datalocations.Size = new System.Drawing.Size(368, 127);
 			this.datalocations.TabIndex = 0;
@@ -114,7 +134,7 @@ namespace CodeImp.DoomBuilder.Windows
 			// apply
 			// 
 			this.apply.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-			this.apply.Location = new System.Drawing.Point(178, 462);
+			this.apply.Location = new System.Drawing.Point(178, 544);
 			this.apply.Name = "apply";
 			this.apply.Size = new System.Drawing.Size(112, 25);
 			this.apply.TabIndex = 3;
@@ -126,7 +146,7 @@ namespace CodeImp.DoomBuilder.Windows
 			// 
 			this.cancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
 			this.cancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-			this.cancel.Location = new System.Drawing.Point(296, 462);
+			this.cancel.Location = new System.Drawing.Point(296, 544);
 			this.cancel.Name = "cancel";
 			this.cancel.Size = new System.Drawing.Size(112, 25);
 			this.cancel.TabIndex = 4;
@@ -142,7 +162,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.config.IntegralHeight = false;
 			this.config.Location = new System.Drawing.Point(141, 21);
 			this.config.Name = "config";
-			this.config.Size = new System.Drawing.Size(242, 22);
+			this.config.Size = new System.Drawing.Size(267, 21);
 			this.config.TabIndex = 0;
 			this.config.SelectedIndexChanged += new System.EventHandler(this.config_SelectedIndexChanged);
 			// 
@@ -156,11 +176,11 @@ namespace CodeImp.DoomBuilder.Windows
 			this.mapslist.HeaderStyle = System.Windows.Forms.ColumnHeaderStyle.None;
 			this.mapslist.HideSelection = false;
 			this.mapslist.LabelWrap = false;
-			this.mapslist.Location = new System.Drawing.Point(12, 90);
+			this.mapslist.Location = new System.Drawing.Point(12, 122);
 			this.mapslist.MultiSelect = false;
 			this.mapslist.Name = "mapslist";
 			this.mapslist.ShowGroups = false;
-			this.mapslist.Size = new System.Drawing.Size(396, 110);
+			this.mapslist.Size = new System.Drawing.Size(396, 118);
 			this.mapslist.Sorting = System.Windows.Forms.SortOrder.Ascending;
 			this.mapslist.TabIndex = 1;
 			this.mapslist.UseCompatibleStateImageBehavior = false;
@@ -168,13 +188,48 @@ namespace CodeImp.DoomBuilder.Windows
 			this.mapslist.DoubleClick += new System.EventHandler(this.mapslist_DoubleClick);
 			this.mapslist.ItemSelectionChanged += new System.Windows.Forms.ListViewItemSelectionChangedEventHandler(this.mapslist_ItemSelectionChanged);
 			// 
+			// scriptcompiler
+			// 
+			this.scriptcompiler.DropDownHeight = 206;
+			this.scriptcompiler.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+			this.scriptcompiler.Enabled = false;
+			this.scriptcompiler.FormattingEnabled = true;
+			this.scriptcompiler.IntegralHeight = false;
+			this.scriptcompiler.Location = new System.Drawing.Point(141, 49);
+			this.scriptcompiler.Name = "scriptcompiler";
+			this.scriptcompiler.Size = new System.Drawing.Size(267, 21);
+			this.scriptcompiler.TabIndex = 17;
+			// 
+			// scriptcompilerlabel
+			// 
+			this.scriptcompilerlabel.Enabled = false;
+			this.scriptcompilerlabel.Location = new System.Drawing.Point(15, 52);
+			this.scriptcompilerlabel.Name = "scriptcompilerlabel";
+			this.scriptcompilerlabel.Size = new System.Drawing.Size(120, 14);
+			this.scriptcompilerlabel.TabIndex = 18;
+			this.scriptcompilerlabel.Text = "Script Type:";
+			this.scriptcompilerlabel.TextAlign = System.Drawing.ContentAlignment.TopRight;
+			// 
+			// readonlyresources
+			// 
+			this.readonlyresources.AutoSize = true;
+			this.readonlyresources.Location = new System.Drawing.Point(14, 68);
+			this.readonlyresources.Name = "readonlyresources";
+			this.readonlyresources.Size = new System.Drawing.Size(210, 17);
+			this.readonlyresources.TabIndex = 21;
+			this.readonlyresources.Text = "Open map resources in read-only mode";
+			this.tooltip.SetToolTip(this.readonlyresources, resources.GetString("readonlyresources.ToolTip"));
+			this.readonlyresources.UseVisualStyleBackColor = true;
+			// 
 			// OpenMapOptionsForm
 			// 
 			this.AcceptButton = this.apply;
 			this.AutoScaleDimensions = new System.Drawing.SizeF(96F, 96F);
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
 			this.CancelButton = this.cancel;
-			this.ClientSize = new System.Drawing.Size(420, 499);
+			this.ClientSize = new System.Drawing.Size(420, 579);
+			this.Controls.Add(this.scriptcompiler);
+			this.Controls.Add(this.scriptcompilerlabel);
 			this.Controls.Add(this.mapslist);
 			this.Controls.Add(label2);
 			this.Controls.Add(this.config);
@@ -182,7 +237,6 @@ namespace CodeImp.DoomBuilder.Windows
 			this.Controls.Add(this.cancel);
 			this.Controls.Add(this.apply);
 			this.Controls.Add(this.panelres);
-			this.Font = new System.Drawing.Font("Arial", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
 			this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
 			this.MaximizeBox = false;
 			this.MinimizeBox = false;
@@ -210,6 +264,11 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.ListView mapslist;
 		private CodeImp.DoomBuilder.Controls.ResourceListEditor datalocations;
 		private System.Windows.Forms.CheckBox strictpatches;
+		private System.Windows.Forms.ComboBox scriptcompiler;
+		private System.Windows.Forms.Label scriptcompilerlabel;
+		private System.Windows.Forms.CheckBox longtexturenames;
+		private System.Windows.Forms.CheckBox readonlyresources;
+		private System.Windows.Forms.ToolTip tooltip;
 
 
 	}

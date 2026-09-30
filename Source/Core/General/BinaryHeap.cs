@@ -14,15 +14,12 @@
 
 #endregion
 
-#region ================== Namespaces
+/*#region ================== Namespaces
 
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Text;
-using System.Runtime.InteropServices;
-using System.Diagnostics;
 
 #endregion
 
@@ -74,9 +71,9 @@ namespace CodeImp.DoomBuilder
 		#region ================== Methods
 		
 		// Methods to find our way through the heap
-		private int ParentOf(int index) { return (index - 1) >> 1; }
-		private int LeftOf(int index) { return (index << 1) + 1; }
-		private int RightOf(int index) { return (index << 1) + 2; }
+		private static int ParentOf(int index) { return (index - 1) >> 1; }
+		private static int LeftOf(int index) { return (index << 1) + 1; }
+		private static int RightOf(int index) { return (index << 1) + 2; }
 		
 		// This swaps two items in place
 		protected virtual void SwapItems(int index1, int index2)
@@ -257,4 +254,4 @@ namespace CodeImp.DoomBuilder
 		
 		#endregion
 	}
-}
+}*/

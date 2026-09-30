@@ -16,21 +16,13 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
 using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Rendering;
 using CodeImp.DoomBuilder.Geometry;
 using System.Drawing;
-using CodeImp.DoomBuilder.Editing;
 using CodeImp.DoomBuilder.Config;
 
 #endregion
@@ -38,7 +30,7 @@ using CodeImp.DoomBuilder.Config;
 namespace CodeImp.DoomBuilder.BuilderModes
 {
 	[FindReplace("Thing Angle", BrowseButton = true)]
-	internal class FindThingAngle : FindReplaceType
+	internal class FindThingAngle : BaseFindThing
 	{
 		#region ================== Constants
 
@@ -57,18 +49,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 		#region ================== Constructor / Destructor
 
-		// Constructor
-		public FindThingAngle()
-		{
-			// Initialize
-
-		}
-
-		// Destructor
-		~FindThingAngle()
-		{
-		}
-
 		#endregion
 
 		#region ================== Methods
@@ -85,13 +65,13 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// This is called to perform a search (and replace)
 		// Returns a list of items to show in the results list
 		// replacewith is null when not replacing
-		public override FindReplaceObject[] Find(string value, bool withinselection, string replacewith, bool keepselection)
+		public override FindReplaceObject[] Find(string value, bool withinselection, bool replace, string replacewith, bool keepselection)
 		{
 			List<FindReplaceObject> objs = new List<FindReplaceObject>();
 
 			// Interpret the replacement
 			int replaceangle = 0;
-			if(replacewith != null)
+			if(replace)
 			{
 				// If it cannot be interpreted, set replacewith to null (not replacing at all)
 				if(!int.TryParse(replacewith, out replaceangle)) replacewith = null;
@@ -103,7 +83,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			}
 
 			// Interpret the number given
-			int angle = 0;
+			int angle;
 			if(int.TryParse(value, out angle))
 			{
 				// Where to search?
@@ -116,7 +96,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					if(Angle2D.RealToDoom(t.Angle) == angle)
 					{
 						// Replace
-						if(replacewith != null) t.Rotate(Angle2D.DoomToReal(replaceangle));
+						if(replace) t.Rotate(Angle2D.DoomToReal(replaceangle));
 
 						// Add to list
 						ThingTypeInfo ti = General.Map.Data.GetThingInfo(t.Type);
@@ -126,38 +106,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			}
 
 			return objs.ToArray();
-		}
-
-		// This is called when a specific object is selected from the list
-		public override void ObjectSelected(FindReplaceObject[] selection)
-		{
-			if(selection.Length == 1)
-			{
-				ZoomToSelection(selection);
-				General.Interface.ShowThingInfo(selection[0].Thing);
-			}
-			else
-				General.Interface.HideInfo();
-
-			General.Map.Map.ClearAllSelected();
-			foreach(FindReplaceObject obj in selection) obj.Thing.Selected = true;
-		}
-
-		// Render selection
-		public override void RenderThingsSelection(IRenderer2D renderer, FindReplaceObject[] selection)
-		{
-			foreach(FindReplaceObject o in selection)
-			{
-				renderer.RenderThing(o.Thing, General.Colors.Selection, 1.0f);
-			}
-		}
-
-		// Edit objects
-		public override void EditObjects(FindReplaceObject[] selection)
-		{
-			List<Thing> things = new List<Thing>(selection.Length);
-			foreach(FindReplaceObject o in selection) things.Add(o.Thing);
-			General.Interface.ShowEditThings(things);
 		}
 
 		#endregion

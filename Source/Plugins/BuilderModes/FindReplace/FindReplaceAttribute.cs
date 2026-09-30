@@ -17,20 +17,6 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Geometry;
-using System.Drawing;
-using CodeImp.DoomBuilder.Editing;
 
 #endregion
 
@@ -43,7 +29,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 		private string displayname;
 		private bool browsebutton;
-		private bool replacable;
 
 		#endregion
 
@@ -51,7 +36,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 		public string DisplayName { get { return displayname; } set { displayname = value; } }
 		public bool BrowseButton { get { return browsebutton; } set { browsebutton = value; } }
-		public bool Replacable { get { return replacable; } set { replacable = value; } }
 
 		#endregion
 
@@ -62,7 +46,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		{
 			// Initialize
 			this.displayname = displayname;
-			this.replacable = true;
 		}
 
 		#endregion

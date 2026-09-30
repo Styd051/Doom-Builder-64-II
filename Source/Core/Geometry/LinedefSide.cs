@@ -16,15 +16,6 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Rendering;
-using SlimDX.Direct3D9;
-using System.Drawing;
 using CodeImp.DoomBuilder.Map;
 
 #endregion
@@ -44,6 +35,7 @@ namespace CodeImp.DoomBuilder.Geometry
 
 		private Linedef line;
 		private bool front;
+		private bool ignore; //mxd
 		
 		#endregion
 
@@ -51,19 +43,11 @@ namespace CodeImp.DoomBuilder.Geometry
 
 		public Linedef Line { get { return line; } set { line = value; } }
 		public bool Front { get { return front; } set { front = value; } }
+		public bool Ignore { get { return ignore; } set { ignore = value; } } //mxd
 
 		#endregion
 
 		#region ================== Constructor / Disposer
-
-		/// <summary>
-		/// This is used to indicate a side of a line without the need for a sidedef.
-		/// </summary>
-		public LinedefSide()
-		{
-			// Initialize
-
-		}
 
 		/// <summary>
 		/// This is used to indicate a side of a line without the need for a sidedef.
@@ -85,11 +69,6 @@ namespace CodeImp.DoomBuilder.Geometry
 			this.front = original.front;
 		}
 
-		// Destructor
-		~LinedefSide()
-		{
-		}
-
 		#endregion
 
 		#region ================== Methods
@@ -99,7 +78,7 @@ namespace CodeImp.DoomBuilder.Geometry
 		{
 			if((object.Equals(a, null)) && (object.Equals(b, null))) return true;
 			if((!object.Equals(a, null)) && (object.Equals(b, null))) return false;
-			if((object.Equals(a, null)) && (!object.Equals(b, null))) return false;
+			if(object.Equals(a, null)) return false;
 			return (a.line == b.line) && (a.front == b.front);
 		}
 
@@ -108,9 +87,33 @@ namespace CodeImp.DoomBuilder.Geometry
 		{
 			if((object.Equals(a, null)) && (object.Equals(b, null))) return false;
 			if((!object.Equals(a, null)) && (object.Equals(b, null))) return true;
-			if((object.Equals(a, null)) && (!object.Equals(b, null))) return true;
+			if(object.Equals(a, null)) return true;
 			return (a.line != b.line) || (a.front != b.front);
 		}
+
+		//mxd. Addeed to make compiler a bit more happy...
+		public override int GetHashCode() 
+		{
+			return base.GetHashCode();
+		}
+
+		//mxd. Addeed to make compiler a bit more happy...
+		public override bool Equals(object obj) 
+		{
+			if(object.Equals(obj, null)) return false;
+			LinedefSide other = (LinedefSide)obj;
+			return (this.line == other.line) && (this.front == other.front);
+		}
+
+#if DEBUG
+		//mxd. Useful when debugging...
+		public override string ToString()
+		{
+			Sidedef side = (front ? line.Front : line.Back);
+			Sector sector = (side != null ? side.Sector : null);
+			return line + " (" + (front ? "front" : "back") + ")" + (sector != null ? ", Sector " + sector.Index : ", no sector");
+		}
+#endif
 
 		#endregion
 	}

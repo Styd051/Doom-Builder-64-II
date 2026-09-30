@@ -17,21 +17,13 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
+using System.Collections.ObjectModel;
 using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
+using CodeImp.DoomBuilder.Config;
 using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Geometry;
 using System.Drawing;
-using CodeImp.DoomBuilder.Editing;
-using CodeImp.DoomBuilder.Config;
 
 #endregion
 
@@ -50,33 +42,24 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 		#region ================== Properties
 		
-		public override Image BrowseImage { get { return Properties.Resources.List_Images; } }		
+		public override Image BrowseImage { get { return Properties.Resources.List_Images; } }
+		public override string UsageHint { get { return "Supported wildcards:" + Environment.NewLine
+					+ "* - zero or more characters" + Environment.NewLine
+					+ "? - one character"; } }
+		
 		#endregion
 
 		#region ================== Constructor / Destructor
-
-		// Constructor
-		public FindAnyTextureFlat()
-		{
-			// Initialize
-
-		}
-
-		// Destructor
-		~FindAnyTextureFlat()
-		{
-		}
 
 		#endregion
 
 		#region ================== Methods
 
-		// This is called to test if the item should be displayed
-		public override bool DetermineVisiblity()
+		//mxd. 
+		public override bool CanReplace()
 		{
 			return General.Map.Config.MixTexturesFlats;
 		}
-
 
 		// This is called when the browse button is pressed
 		public override string Browse(string initialvalue)
@@ -88,25 +71,20 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// This is called to perform a search (and replace)
 		// Returns a list of items to show in the results list
 		// replacewith is null when not replacing
-		public override FindReplaceObject[] Find(string value, bool withinselection, string replacewith, bool keepselection)
+		public override FindReplaceObject[] Find(string value, bool withinselection, bool replace, string replacewith, bool keepselection)
 		{
 			List<FindReplaceObject> objs = new List<FindReplaceObject>();
 
 			// Interpret the replacement
-			if(replacewith != null)
+			if(replace && (string.IsNullOrEmpty(replacewith) || replacewith.Length > General.Map.Config.MaxTextureNameLength))
 			{
-				// If it cannot be interpreted, set replacewith to null (not replacing at all)
-				if(replacewith.Length < 0) replacewith = null;
-				if(replacewith.Length > 8) replacewith = null;
-				if(replacewith == null)
-				{
-					MessageBox.Show("Invalid replace value for this search type!", "Find and Replace", MessageBoxButtons.OK, MessageBoxIcon.Error);
-					return objs.ToArray();
-				}
+				MessageBox.Show("Invalid replace value for this search type!", "Find and Replace", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				return objs.ToArray();
 			}
 
 			// Interpret the find
-			long longfind = Lump.MakeLongName(value.Trim());
+			bool isregex = (value.IndexOf('*') != -1 || value.IndexOf('?') != -1); //mxd
+			MatchingTextureSet set = new MatchingTextureSet(new Collection<string> { value.Trim() }); //mxd
 			
 			// Where to search?
 			ICollection<Sector> seclist = withinselection ? General.Map.Map.GetSelectedSectors(true) : General.Map.Map.Sectors;
@@ -116,18 +94,18 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			foreach(Sector s in seclist)
 			{
 				// Flat matches?
-				if(s.LongCeilTexture == longfind)
+				if(set.IsMatch(s.CeilTexture))
 				{
 					// Replace and add to list
-					if(replacewith != null) s.SetCeilTexture(replacewith);
-					objs.Add(new FindReplaceObject(s, "Sector " + s.Index + " (ceiling)"));
+					if(replace) s.SetCeilTexture(replacewith);
+					objs.Add(new FindReplaceObject(s, "Sector " + s.Index + " (ceiling)" + (isregex ? " - " + s.CeilTexture : null)));
 				}
 
-				if(s.LongFloorTexture == longfind)
+				if(set.IsMatch(s.FloorTexture))
 				{
 					// Replace and add to list
-					if(replacewith != null) s.SetFloorTexture(replacewith);
-					objs.Add(new FindReplaceObject(s, "Sector " + s.Index + " (floor)"));
+					if(replace) s.SetFloorTexture(replacewith);
+					objs.Add(new FindReplaceObject(s, "Sector " + s.Index + " (floor)" + (isregex ? " - " + s.FloorTexture : null)));
 				}
 			}
 			
@@ -136,30 +114,35 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			{
 				string side = sd.IsFront ? "front" : "back";
 				
-				if(sd.LongHighTexture == longfind)
+				if(set.IsMatch(sd.HighTexture) && (value != "-" || sd.HighRequired()))
 				{
 					// Replace and add to list
-					if(replacewith != null) sd.SetTextureHigh(replacewith);
-					objs.Add(new FindReplaceObject(sd, "Sidedef " + sd.Index + " (" + side + ", high)"));
+					if(replace) sd.SetTextureHigh(replacewith);
+					objs.Add(new FindReplaceObject(sd, "Sidedef " + sd.Index + " (" + side + ", high)" + (isregex ? " - " + sd.HighTexture : null)));
 				}
 				
-				if(sd.LongMiddleTexture == longfind)
+				if(set.IsMatch(sd.MiddleTexture) && (value != "-" || sd.MiddleRequired()))
 				{
 					// Replace and add to list
-					if(replacewith != null) sd.SetTextureMid(replacewith);
-					objs.Add(new FindReplaceObject(sd, "Sidedef " + sd.Index + " (" + side + ", middle)"));
+					if(replace) sd.SetTextureMid(replacewith);
+					objs.Add(new FindReplaceObject(sd, "Sidedef " + sd.Index + " (" + side + ", middle)" + (isregex ? " - " + sd.MiddleTexture : null)));
 				}
 				
-				if(sd.LongLowTexture == longfind)
+				if(set.IsMatch(sd.LowTexture) && (value != "-" || sd.LowRequired()))
 				{
 					// Replace and add to list
-					if(replacewith != null) sd.SetTextureLow(replacewith);
-					objs.Add(new FindReplaceObject(sd, "Sidedef " + sd.Index + " (" + side + ", low)"));
+					if(replace) sd.SetTextureLow(replacewith);
+					objs.Add(new FindReplaceObject(sd, "Sidedef " + sd.Index + " (" + side + ", low)" + (isregex ? " - " + sd.LowTexture : null)));
 				}
 			}
 			
 			// When replacing, make sure we keep track of used textures
-			if(replacewith != null) General.Map.Data.UpdateUsedTextures();
+			if(replace)
+			{
+				General.Map.Data.UpdateUsedTextures();
+				General.Map.Map.Update(); //mxd. And don't forget to update the view itself
+				General.Map.IsChanged = true;
+			}
 
 			return objs.ToArray();
 		}
@@ -204,6 +187,18 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				{
 					renderer.PlotLinedef(o.Sidedef.Line, General.Colors.Selection);
 				}
+			}
+		}
+
+		//mxd
+		public override void RenderOverlaySelection(IRenderer2D renderer, FindReplaceObject[] selection) 
+		{
+			if(!General.Settings.UseHighlight) return;
+
+			int color = General.Colors.Selection.WithAlpha(64).ToInt();
+			foreach(FindReplaceObject o in selection) 
+			{
+				if(o.Object is Sector) renderer.RenderHighlight(o.Sector.FlatVertices, color);
 			}
 		}
 

@@ -13,18 +13,12 @@
  */
 
 #endregion
-
+/*
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using System.Drawing;
 using System.Drawing.Imaging;
-using System.IO;
-using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Rendering;
 
 #endregion
@@ -103,3 +97,4 @@ namespace CodeImp.DoomBuilder.Data
 		#endregion
 	}
 }
+*/

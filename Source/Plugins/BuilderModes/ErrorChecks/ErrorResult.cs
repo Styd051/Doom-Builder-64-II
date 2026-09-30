@@ -16,35 +16,24 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Rendering;
 using CodeImp.DoomBuilder.Geometry;
 using CodeImp.DoomBuilder.Editing;
-using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Types;
-using CodeImp.DoomBuilder.Config;
 using System.Drawing;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.BuilderModes
 {
-	public class ErrorResult
+	public abstract class ErrorResult
 	{
 		#region ================== Variables
 		
 		protected string description;
-		protected List<MapElement> viewobjects;
+		protected readonly List<MapElement> viewobjects;
+		protected bool hidden;
 		
 		#endregion
 		
@@ -57,13 +46,14 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		public virtual string Button1Text { get { return ""; } }
 		public virtual string Button2Text { get { return ""; } }
 		public virtual string Button3Text { get { return ""; } }
-		
+		public bool IsHidden { get { return hidden; } }
+
 		#endregion
 		
 		#region ================== Constructor / Destructor
 		
 		// Constructor
-		public ErrorResult()
+		protected ErrorResult()
 		{
 			// Initialize
 			viewobjects = new List<MapElement>(1);
@@ -75,21 +65,21 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		
 		// When the first button is clicked
 		// Return true when map geometry or things have been added/removed so that the checker can restart
-		public virtual bool Button1Click()
+		public virtual bool Button1Click(bool batchMode)
 		{
 			return false;
 		}
 		
 		// When the second button is clicked
 		// Return true when map geometry or things have been added/removed so that the checker can restart
-		public virtual bool Button2Click()
+		public virtual bool Button2Click(bool batchMode)
 		{
 			return false;
 		}
 		
 		// When the third button is clicked
 		// Return true when map geometry or things have been added/removed so that the checker can restart
-		public virtual bool Button3Click()
+		public virtual bool Button3Click(bool batchMode)
 		{
 			return false;
 		}
@@ -101,22 +91,18 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		}
 
 		// This is called for rendering
-		public virtual void PlotSelection(IRenderer2D renderer)
+		public virtual void PlotSelection(IRenderer2D renderer) { }
+
+		// This is called for rendering (mxd. And never used!)
+		/*public virtual void RenderThingsSelection(IRenderer2D renderer)
 		{
-		}
+		}*/
 
 		// This is called for rendering
-		public virtual void RenderThingsSelection(IRenderer2D renderer)
-		{
-		}
-
-		// This is called for rendering
-		public virtual void RenderOverlaySelection(IRenderer2D renderer)
-		{
-		}
+		public virtual void RenderOverlaySelection(IRenderer2D renderer) { }
 		
 		// Call this to zoom in on the given selection
-		public void ZoomToObject()
+		public virtual RectangleF GetZoomArea()
 		{
 			List<Vector2D> points = new List<Vector2D>();
 			RectangleF area = MapSet.CreateEmptyArea();
@@ -150,7 +136,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				else if(obj is Thing)
 				{
 					Thing t = (obj as Thing);
-					Vector2D p = (Vector2D)t.Position;
+					Vector2D p = t.Position;
 					points.Add(p);
 					points.Add(p + new Vector2D(t.Size * 2.0f, t.Size * 2.0f));
 					points.Add(p + new Vector2D(t.Size * 2.0f, -t.Size * 2.0f));
@@ -183,11 +169,12 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			// Add padding
 			area.Inflate(100f, 100f);
 			
-			// Zoom to area
-			ClassicMode editmode = (General.Editing.Mode as ClassicMode);
-			editmode.CenterOnArea(area, 0.6f);
+			// Return area
+			return area;
 		}
-		
+
+		internal abstract void Hide(bool hide); //mxd. Marks map elements of this result as hidden in ErrorCheckForm
+
 		#endregion
 	}
 }

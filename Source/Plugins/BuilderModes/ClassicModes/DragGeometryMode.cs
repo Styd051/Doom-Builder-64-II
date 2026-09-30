@@ -17,20 +17,13 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Rendering;
 using CodeImp.DoomBuilder.Geometry;
-using System.Drawing;
-using CodeImp.DoomBuilder.Editing;
+using CodeImp.DoomBuilder.Data;
+using CodeImp.DoomBuilder.Types;
 
 #endregion
 
@@ -47,18 +40,30 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// Mouse position on map where dragging started
 		private Vector2D dragstartmappos;
 
+		//mxd. Offset from nearest grid intersection to dragstartmappos
+		private Vector2D dragstartoffset;
+
 		// Item used as reference for snapping to the grid
 		protected Vertex dragitem;
 		private Vector2D dragitemposition;
 
 		// List of old vertex positions
 		private List<Vector2D> oldpositions;
+		private List<Vector2D> oldthingpositions; //mxd
 
 		// List of selected items
 		protected ICollection<Vertex> selectedverts;
+		protected ICollection<Thing> selectedthings; //mxd
 
 		// List of non-selected items
 		protected ICollection<Vertex> unselectedverts;
+		protected ICollection<Thing> unselectedthings; //mxd
+
+		// List of things, which should be moved
+		private ICollection<Thing> thingstodrag; //mxd
+
+		//mxd. List of sectors
+		private List<Sector> selectedsectors;
 
 		// List of unstable lines
 		protected ICollection<Linedef> unstablelines;
@@ -68,6 +73,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		
 		// Text labels for all unstable lines
 		protected LineLengthLabel[] labels;
+
+		//mxd. Undo description
+		protected string undodescription = "Drag geometry";
 		
 		// Keep track of view changes
 		private float lastoffsetx;
@@ -77,6 +85,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// Options
 		private bool snaptogrid;		// SHIFT to toggle
 		private bool snaptonearest;		// CTRL to enable
+		private bool snaptogridincrement; //mxd. ALT to toggle 
+		private bool snaptocardinaldirection; //mxd. ALT-SHIFT to enable
 
 		#endregion
 
@@ -120,15 +130,22 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			// This will be set back to normal when we're done.
 			General.Map.UndoRedo.IgnorePropChanges = true;
 
-			// Make list of selected vertices
+			// Make list of selected vertices and things
 			selectedverts = General.Map.Map.GetMarkedVertices(true);
+			selectedthings = General.Map.Map.GetSelectedThings(true); //mxd
+			thingstodrag = (BuilderPlug.Me.SyncronizeThingEdit ? selectedthings : new List<Thing>()); //mxd
 
-			// Make list of non-selected vertices
-			// This will be used for snapping to nearest items
+			// Make list of non-selected vertices and things
+			// Non-selected vertices will be used for snapping to nearest items
 			unselectedverts = General.Map.Map.GetMarkedVertices(false);
+			unselectedthings = new List<Thing>(); //mxd
+			foreach(Thing t in General.Map.ThingsFilter.VisibleThings) if(!t.Selected) unselectedthings.Add(t);
 
 			// Get the nearest vertex for snapping
 			dragitem = MapSet.NearestVertex(selectedverts, dragstartmappos);
+
+			//mxd. Get drag offset
+			dragstartoffset = General.Map.Grid.SnappedToGrid(dragitem.Position) - dragitem.Position;
 			
 			// Lines to snap to
 			snaptolines = General.Map.Map.LinedefsFromMarkedVertices(true, false, false);
@@ -137,6 +154,10 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			// We will use this as reference to move the vertices, or to move them back on cancel
 			oldpositions = new List<Vector2D>(selectedverts.Count);
 			foreach(Vertex v in selectedverts) oldpositions.Add(v.Position);
+
+			//mxd
+			oldthingpositions = new List<Vector2D>(thingstodrag.Count);
+			foreach(Thing t in thingstodrag) oldthingpositions.Add(t.Position);
 
 			// Also keep old position of the dragged item
 			dragitemposition = dragitem.Position;
@@ -150,6 +171,36 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			// These will have their length displayed during the drag
 			unstablelines = MapSet.UnstableLinedefsFromVertices(selectedverts);
 
+			//mxd. Collect selected sectors
+			if(General.Map.UDMF) 
+			{
+				ICollection<Linedef> selectedLines = General.Map.Map.LinedefsFromMarkedVertices(false, true, false);
+				List<Sector> affectedSectors = new List<Sector>();
+				foreach(Linedef l in selectedLines) 
+				{
+					if(l.Front != null && l.Front.Sector != null && !affectedSectors.Contains(l.Front.Sector))
+						affectedSectors.Add(l.Front.Sector);
+					if(l.Back != null && l.Back.Sector != null && !affectedSectors.Contains(l.Back.Sector))
+						affectedSectors.Add(l.Back.Sector);
+				}
+
+				selectedsectors = new List<Sector>();
+				foreach(Sector s in affectedSectors) 
+				{
+					bool selected = true;
+					foreach(Sidedef side in s.Sidedefs) 
+					{
+						if(!selectedLines.Contains(side.Line)) 
+						{
+							selected = false;
+							break;
+						}
+					}
+
+					if(selected) selectedsectors.Add(s);
+				}
+			}
+
 			// Make text labels
 			labels = new LineLengthLabel[unstablelines.Count];
 			int index = 0;
@@ -161,23 +212,31 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 		// This moves the selected geometry relatively
 		// Returns true when geometry has actually moved
-		private bool MoveGeometryRelative(Vector2D offset, bool snapgrid, bool snapnearest)
+		private bool MoveGeometryRelative(Vector2D offset, bool snapgrid, bool snapgridincrement, bool snapnearest, bool snapcardinal)
 		{
+			//mxd. If snap to cardinal directions is enabled, modify the offset
+			if(snapcardinal)
+			{
+				float angle = Angle2D.DegToRad((General.ClampAngle((int)Angle2D.RadToDeg(offset.GetAngle()) + 44)) / 90 * 90);
+				offset = new Vector2D(0, -offset.GetLength()).GetRotated(angle);
+				snapgridincrement = true; // We don't want to move the geometry away from the cardinal directions
+			}
+			
 			Vector2D oldpos = dragitem.Position;
 			Vector2D anchorpos = dragitemposition + offset;
 			Vector2D tl, br;
 
 			// don't move if the offset contains invalid data
-			if (!offset.IsFinite()) return false;
+			if(!offset.IsFinite()) return false;
 
 			// Find the outmost vertices
 			tl = br = oldpositions[0];
-			for (int i = 0; i < oldpositions.Count; i++)
+			for(int i = 0; i < oldpositions.Count; i++)
 			{
-				if (oldpositions[i].x < tl.x) tl.x = (int)oldpositions[i].x;
-				if (oldpositions[i].x > br.x) br.x = (int)oldpositions[i].x;
-				if (oldpositions[i].y > tl.y) tl.y = (int)oldpositions[i].y;
-				if (oldpositions[i].y < br.y) br.y = (int)oldpositions[i].y;
+				if(oldpositions[i].x < tl.x) tl.x = (int)oldpositions[i].x;
+				if(oldpositions[i].x > br.x) br.x = (int)oldpositions[i].x;
+				if(oldpositions[i].y > tl.y) tl.y = (int)oldpositions[i].y;
+				if(oldpositions[i].y < br.y) br.y = (int)oldpositions[i].y;
 			}
 			
 			// Snap to nearest?
@@ -195,6 +254,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 					// Do not snap to grid!
 					snapgrid = false;
+					snaptogridincrement = false; //mxd
 				}
 				else
 				{
@@ -203,32 +263,38 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					if(nl != null)
 					{
 						// Snap to grid?
-						if(snaptogrid)
+						if(snapgrid || snapgridincrement)
 						{
 							// Get grid intersection coordinates
-							List<Vector2D> coords = nl.GetGridIntersections();
+							List<Vector2D> coords = nl.GetGridIntersections(snapgridincrement ? dragstartoffset : new Vector2D());
 
-							// Find nearest grid intersection
-							float found_distance = float.MaxValue;
-							Vector2D found_coord = new Vector2D();
-							foreach(Vector2D v in coords)
+							// mxd. Do the rest only if we actually have some coordinates
+							if(coords.Count > 0) 
 							{
-								Vector2D delta = anchorpos - v;
-								if(delta.GetLengthSq() < found_distance)
+								// Find nearest grid intersection
+								float found_distance = float.MaxValue;
+								Vector2D found_coord = new Vector2D();
+
+								foreach(Vector2D v in coords) 
 								{
-									found_distance = delta.GetLengthSq();
-									found_coord = v;
+									Vector2D delta = anchorpos - v;
+									if(delta.GetLengthSq() < found_distance) 
+									{
+										found_distance = delta.GetLengthSq();
+										found_coord = v;
+									}
 								}
+
+								// Move the dragged item
+								dragitem.Move(found_coord);
+
+								// Align to line here
+								offset = found_coord - dragitemposition;
+
+								// Do not snap to grid anymore
+								snapgrid = false;
+								snapgridincrement = false; //mxd
 							}
-							
-							// Move the dragged item
-							dragitem.Move(found_coord);
-
-							// Align to line here
-							offset = found_coord - dragitemposition;
-
-							// Do not snap to grid anymore
-							snapgrid = false;
 						}
 						else
 						{
@@ -242,39 +308,49 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				}
 			}
 
-			// Snap to grid?
-			if(snapgrid)
+			// Snap to grid or grid increment?
+			if(snapgrid || snapgridincrement)
 			{
 				// Move the dragged item
 				dragitem.Move(anchorpos);
 
-				// Snap item to grid
-				dragitem.SnapToGrid();
+				// Snap item to grid increment
+				if(snapgridincrement) //mxd
+				{
+					dragitem.Move(General.Map.Grid.SnappedToGrid(dragitem.Position) - dragstartoffset);
+				}
+				else // Or to the grid itself
+				{
+					dragitem.SnapToGrid();
+				}
 
 				// Adjust the offset
 				offset += dragitem.Position - anchorpos;
 			}
 
 			// Make sure the offset is inside the map boundaries
-			if (offset.x + tl.x < General.Map.Config.LeftBoundary) offset.x = General.Map.Config.LeftBoundary - tl.x;
-			if (offset.x + br.x > General.Map.Config.RightBoundary) offset.x = General.Map.Config.RightBoundary - br.x;
-			if (offset.y + tl.y > General.Map.Config.TopBoundary) offset.y = General.Map.Config.TopBoundary - tl.y;
-			if (offset.y + br.y < General.Map.Config.BottomBoundary) offset.y = General.Map.Config.BottomBoundary - br.y;
+			if(offset.x + tl.x < General.Map.Config.LeftBoundary) offset.x = General.Map.Config.LeftBoundary - tl.x;
+			if(offset.x + br.x > General.Map.Config.RightBoundary) offset.x = General.Map.Config.RightBoundary - br.x;
+			if(offset.y + tl.y > General.Map.Config.TopBoundary) offset.y = General.Map.Config.TopBoundary - tl.y;
+			if(offset.y + br.y < General.Map.Config.BottomBoundary) offset.y = General.Map.Config.BottomBoundary - br.y;
 
 			// Drag item moved?
-			if(!snapgrid || (dragitem.Position != oldpos))
+			if((!snapgrid && !snapgridincrement) || (dragitem.Position != oldpos))
 			{
 				int i = 0;
 
 				// Move selected geometry
 				foreach(Vertex v in selectedverts)
 				{
-					// Move vertex from old position relative to the
-					// mouse position change since drag start
-					v.Move(oldpositions[i] + offset);
+					// Move vertex from old position relative to the mouse position change since drag start
+					v.Move(oldpositions[i++] + offset);
+				}
 
-					// Next
-					i++;
+				//mxd. Move selected things
+				i = 0;
+				foreach(Thing t in thingstodrag) 
+				{
+					t.Move(oldthingpositions[i++] + offset);
 				}
 
 				// Update labels
@@ -285,18 +361,16 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				// Moved
 				return true;
 			}
-			else
-			{
-				// No changes
-				return false;
-			}
+
+			// No changes
+			return false;
 		}
-		
+
 		// Cancelled
 		public override void OnCancel()
 		{
 			// Move geometry back to original position
-			MoveGeometryRelative(new Vector2D(0f, 0f), false, false);
+			MoveGeometryRelative(new Vector2D(0f, 0f), false, false, false, false);
 			
 			// Resume normal undo/redo recording
 			General.Map.UndoRedo.IgnorePropChanges = false;
@@ -334,28 +408,123 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				Cursor.Current = Cursors.AppStarting;
 				
 				// Move geometry back to original position
-				MoveGeometryRelative(new Vector2D(0f, 0f), false, false);
+				MoveGeometryRelative(new Vector2D(0f, 0f), false, false, false, false);
 
 				// Resume normal undo/redo recording
 				General.Map.UndoRedo.IgnorePropChanges = false;
 
 				// Make undo for the dragging
-				General.Map.UndoRedo.CreateUndo("Drag geometry");
+				General.Map.UndoRedo.CreateUndo(undodescription);
 
 				// Move selected geometry to final position
-				MoveGeometryRelative(mousemappos - dragstartmappos, snaptogrid, snaptonearest);
+				MoveGeometryRelative(mousemappos - dragstartmappos, snaptogrid, snaptogridincrement, snaptonearest, snaptocardinaldirection);
 
 				// Stitch geometry
-				if(snaptonearest) General.Map.Map.StitchGeometry();
-
-				// Make corrections for backward linedefs
-				MapSet.FlipBackwardLinedefs(General.Map.Map.Linedefs);
+				if(snaptonearest) General.Map.Map.StitchGeometry(General.Settings.MergeGeometryMode);
 				
 				// Snap to map format accuracy
 				General.Map.Map.SnapAllToAccuracy();
-				
+
+				//mxd. Update floor/ceiling texture offsets and slopes?
+				if(General.Map.UDMF) 
+				{
+					Vector2D offset = dragitem.Position - dragitemposition;
+
+					// Sectors may've been created/removed when applying dragging...
+					HashSet<Sector> draggedsectors = new HashSet<Sector>(General.Map.Map.GetMarkedSectors(true));
+					foreach(Sector ss in selectedsectors) if(!ss.IsDisposed) draggedsectors.Add(ss);
+					
+					// Update floor/ceiling texture offsets?
+					if(BuilderPlug.Me.LockSectorTextureOffsetsWhileDragging)
+					{
+
+						foreach(Sector s in draggedsectors) 
+						{
+							s.Fields.BeforeFieldsChange();
+
+							// Update ceiling offset
+							if(s.LongCeilTexture != MapSet.EmptyLongName) 
+							{
+								ImageData texture = General.Map.Data.GetFlatImage(s.CeilTexture);
+
+								if(texture != null) 
+								{
+									float scalex = s.Fields.GetValue("xscaleceiling", 1.0f);
+									float scaley = s.Fields.GetValue("yscaleceiling", 1.0f);
+
+									if(scalex != 0 && scaley != 0) 
+									{
+										Vector2D ceiloffset = new Vector2D(-offset.x, offset.y).GetRotated(-Angle2D.DegToRad((int)s.Fields.GetValue("rotationceiling", 0f)));
+										ceiloffset.x += s.Fields.GetValue("xpanningceiling", 0f);
+										ceiloffset.y += s.Fields.GetValue("ypanningceiling", 0f);
+
+										int texturewidth = (int)Math.Round(texture.Width / scalex);
+										int textureheight = (int)Math.Round(texture.Height / scaley);
+
+										if(!s.Fields.ContainsKey("xpanningceiling")) s.Fields.Add("xpanningceiling", new UniValue(UniversalType.Float, (float)Math.Round(ceiloffset.x % texturewidth)));
+										else s.Fields["xpanningceiling"].Value = (float)Math.Round(ceiloffset.x % texturewidth);
+
+										if(!s.Fields.ContainsKey("ypanningceiling")) s.Fields.Add("ypanningceiling", new UniValue(UniversalType.Float, (float)Math.Round(ceiloffset.y % textureheight)));
+										else s.Fields["ypanningceiling"].Value = (float)Math.Round(ceiloffset.y % textureheight);
+									}
+								}
+							}
+
+							// Update floor offset
+							if(s.LongFloorTexture != MapSet.EmptyLongName) 
+							{
+								ImageData texture = General.Map.Data.GetFlatImage(s.FloorTexture);
+								if(texture != null) 
+								{
+									float scalex = s.Fields.GetValue("xscalefloor", 1.0f);
+									float scaley = s.Fields.GetValue("yscalefloor", 1.0f);
+
+									if(scalex != 0 && scaley != 0) 
+									{
+										Vector2D flooroffset = new Vector2D(-offset.x, offset.y).GetRotated(-Angle2D.DegToRad((int)s.Fields.GetValue("rotationfloor", 0f)));
+										flooroffset.x += s.Fields.GetValue("xpanningfloor", 0f);
+										flooroffset.y += s.Fields.GetValue("ypanningfloor", 0f);
+
+										int texturewidth = (int)Math.Round(texture.Width / scalex);
+										int textureheight = (int)Math.Round(texture.Height / scaley);
+
+										if(!s.Fields.ContainsKey("xpanningfloor")) s.Fields.Add("xpanningfloor", new UniValue(UniversalType.Float, (float)Math.Round(flooroffset.x % texturewidth)));
+										else s.Fields["xpanningfloor"].Value = (float)Math.Round(flooroffset.x % texturewidth);
+
+										if(!s.Fields.ContainsKey("ypanningfloor")) s.Fields.Add("ypanningfloor", new UniValue(UniversalType.Float, (float)Math.Round(flooroffset.y % textureheight)));
+										else s.Fields["ypanningfloor"].Value = (float)Math.Round(flooroffset.y % textureheight);
+									}
+								}
+							}
+						}
+					}
+
+					// Update slopes
+					foreach(Sector s in draggedsectors) 
+					{
+						// Update floor slope?
+						if(s.FloorSlope.GetLengthSq() > 0 && !float.IsNaN(s.FloorSlopeOffset / s.FloorSlope.z)) 
+						{
+							Plane floor = new Plane(s.FloorSlope, s.FloorSlopeOffset);
+							Vector2D center = new Vector2D(s.BBox.X + s.BBox.Width / 2, s.BBox.Y + s.BBox.Height / 2);
+							s.FloorSlopeOffset = -Vector3D.DotProduct(s.FloorSlope, new Vector3D(center + offset, floor.GetZ(center)));
+						}
+
+						// Update ceiling slope?
+						if(s.CeilSlope.GetLengthSq() > 0 && !float.IsNaN(s.CeilSlopeOffset / s.CeilSlope.z)) 
+						{
+							Plane ceiling = new Plane(s.CeilSlope, s.CeilSlopeOffset);
+							Vector2D center = new Vector2D(s.BBox.X + s.BBox.Width / 2, s.BBox.Y + s.BBox.Height / 2);
+							s.CeilSlopeOffset = -Vector3D.DotProduct(s.CeilSlope, new Vector3D(center + offset, ceiling.GetZ(center)));
+						}
+					}
+				}
+
 				// Update cached values
 				General.Map.Map.Update();
+
+				//mxd. Let the plugins know
+				General.Editing.AcceptMode();
 
 				// Done
 				Cursor.Current = Cursors.Default;
@@ -366,12 +535,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// This checks if the view offset/zoom changed and updates the check
 		protected bool CheckViewChanged()
 		{
-			bool viewchanged = false;
-			
 			// View changed?
-			if(renderer.OffsetX != lastoffsetx) viewchanged = true;
-			if(renderer.OffsetY != lastoffsety) viewchanged = true;
-			if(renderer.Scale != lastscale) viewchanged = true;
+			bool viewchanged = (renderer.OffsetX != lastoffsetx || renderer.OffsetY != lastoffsety || renderer.Scale != lastscale);
 
 			// Keep view information
 			lastoffsetx = renderer.OffsetX;
@@ -385,11 +550,13 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// This updates the dragging
 		private void Update()
 		{
-			snaptogrid = General.Interface.ShiftState ^ General.Interface.SnapToGrid;
+			snaptocardinaldirection = (General.Interface.ShiftState && General.Interface.AltState); //mxd
+			snaptogrid = (snaptocardinaldirection || General.Interface.ShiftState ^ General.Interface.SnapToGrid);
 			snaptonearest = General.Interface.CtrlState ^ General.Interface.AutoMerge;
+			snaptogridincrement = (!snaptocardinaldirection && General.Interface.AltState); //mxd
 			
 			// Move selected geometry
-			if(MoveGeometryRelative(mousemappos - dragstartmappos, snaptogrid, snaptonearest))
+			if(MoveGeometryRelative(mousemappos - dragstartmappos, snaptogrid, snaptogridincrement, snaptonearest, snaptocardinaldirection))
 			{
 				// Update cached values
 				General.Map.Map.Update(true, false);
@@ -397,14 +564,11 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				// Redraw
 				UpdateRedraw();
 				renderer.Present();
-				//General.Interface.RedrawDisplay();
 			}
 		}
 
 		// This redraws only the required things
-		protected virtual void UpdateRedraw()
-		{
-		}
+		protected virtual void UpdateRedraw() { }
 
 		// When edit button is released
 		protected override void OnEditEnd()
@@ -419,14 +583,28 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		public override void OnMouseMove(MouseEventArgs e)
 		{
 			base.OnMouseMove(e);
-			Update();
+
+			//mxd. Skip most of update jazz while panning
+			if(panning)
+			{
+				// Update labels
+				int index = 0;
+				foreach(Linedef l in unstablelines)
+					labels[index++].Move(l.Start.Position, l.End.Position);
+			}
+			else
+			{
+				Update();
+			}
 		}
 		// When a key is released
 		public override void OnKeyUp(KeyEventArgs e)
 		{
 			base.OnKeyUp(e);
 			if((snaptogrid != (General.Interface.ShiftState ^ General.Interface.SnapToGrid)) ||
-			   (snaptonearest != (General.Interface.CtrlState ^ General.Interface.AutoMerge))) Update();
+			   (snaptonearest != (General.Interface.CtrlState ^ General.Interface.AutoMerge)) ||
+			   (snaptogridincrement != General.Interface.AltState) ||
+			   (snaptocardinaldirection != (General.Interface.AltState && General.Interface.ShiftState))) Update();
 		}
 
 		// When a key is pressed
@@ -434,7 +612,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		{
 			base.OnKeyDown(e);
 			if((snaptogrid != (General.Interface.ShiftState ^ General.Interface.SnapToGrid)) ||
-			   (snaptonearest != (General.Interface.CtrlState ^ General.Interface.AutoMerge))) Update();
+			   (snaptonearest != (General.Interface.CtrlState ^ General.Interface.AutoMerge)) ||
+			   (snaptogridincrement != General.Interface.AltState) ||
+			   (snaptocardinaldirection != (General.Interface.AltState && General.Interface.ShiftState))) Update();
 		}
 		
 		#endregion

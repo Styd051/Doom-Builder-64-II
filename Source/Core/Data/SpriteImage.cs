@@ -17,26 +17,27 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Drawing;
-using System.Drawing.Imaging;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.IO;
 using System.IO;
+using System.Runtime.InteropServices;
+using CodeImp.DoomBuilder.IO;
+using CodeImp.DoomBuilder.Windows;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.Data
 {
-	public sealed class SpriteImage : ImageData
+	public interface ISpriteImage //mxd
+	{
+		int OffsetX { get; }
+		int OffsetY { get; }
+	}
+
+	public sealed class SpriteImage : ImageData, ISpriteImage
 	{
 		#region ================== Variables
 
-		protected int offsetx;
-		protected int offsety;
+		private int offsetx;
+		private int offsety;
 		
 		#endregion
 
@@ -63,36 +64,48 @@ namespace CodeImp.DoomBuilder.Data
 
 		#region ================== Methods
 
+		//mxd
+		override public void LoadImage()
+		{
+			// Do the loading
+			LocalLoadImage();
+
+			// Notify the main thread about the change to redraw display
+			IntPtr strptr = Marshal.StringToCoTaskMemAuto(this.Name);
+			General.SendMessage(General.MainWindow.Handle, (int)MainForm.ThreadMessages.SpriteDataLoaded, strptr.ToInt32(), 0);
+		}
+
 		// This loads the image
 		protected override void LocalLoadImage()
 		{
-			Stream lumpdata;
-			MemoryStream mem;
-			IImageReader reader;
-			byte[] membytes;
-
 			// Leave when already loaded
 			if(this.IsImageLoaded) return;
 
 			lock(this)
 			{
 				// Get the lump data stream
-				lumpdata = General.Map.Data.GetSpriteData(Name);
+				string spritelocation = string.Empty; //mxd
+				Stream lumpdata = General.Map.Data.GetSpriteData(Name, ref spritelocation);
 				if(lumpdata != null)
 				{
 					// Copy lump data to memory
-					lumpdata.Seek(0, SeekOrigin.Begin);
-					membytes = new byte[(int)lumpdata.Length];
-					lumpdata.Read(membytes, 0, (int)lumpdata.Length);
-					mem = new MemoryStream(membytes);
+					byte[] membytes = new byte[(int)lumpdata.Length];
+
+					lock(lumpdata) //mxd
+					{
+						lumpdata.Seek(0, SeekOrigin.Begin);
+						lumpdata.Read(membytes, 0, (int)lumpdata.Length);
+					}
+					
+					MemoryStream mem = new MemoryStream(membytes);
 					mem.Seek(0, SeekOrigin.Begin);
 					
 					// Get a reader for the data
-					reader = ImageDataFormat.GetImageReader(mem, ImageDataFormat.DOOMPICTURE, General.Map.Data.Palette);
+					IImageReader reader = ImageDataFormat.GetImageReader(mem, ImageDataFormat.DOOMPICTURE, General.Map.Data.Palette);
 					if(reader is UnknownImageReader)
 					{
 						// Data is in an unknown format!
-						General.ErrorLogger.Add(ErrorType.Error, "Sprite lump '" + Name + "' data format could not be read. Does this lump contain valid picture data at all?");
+						General.ErrorLogger.Add(ErrorType.Error, "Sprite lump \"" + Path.Combine(spritelocation, Name) + "\" data format could not be read. Does this lump contain valid picture data at all?");
 						bitmap = null;
 					}
 					else
@@ -129,7 +142,7 @@ namespace CodeImp.DoomBuilder.Data
 				else
 				{
 					// Missing a patch lump!
-					General.ErrorLogger.Add(ErrorType.Error, "Missing sprite lump '" + Name + "'. Forgot to include required resources?");
+					General.ErrorLogger.Add(ErrorType.Error, "Missing sprite lump \"" + Name + "\". Forgot to include required resources?");
 				}
 
 				// Pass on to base

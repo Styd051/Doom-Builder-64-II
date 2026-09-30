@@ -17,15 +17,14 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.IO;
-using CodeImp.DoomBuilder.Data;
 using System.Diagnostics;
-using CodeImp.DoomBuilder.Actions;
+using System.IO;
 using System.Windows.Forms;
+using CodeImp.DoomBuilder.Actions;
+using CodeImp.DoomBuilder.Data;
+using CodeImp.DoomBuilder.Editing;
+using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Windows;
 
 #endregion
@@ -36,22 +35,22 @@ namespace CodeImp.DoomBuilder
 	{
 		#region ================== Constants
 
-		private const string NUMBERS = "0123456789";
-
 		#endregion
 
 		#region ================== Variables
 
 		private string tempwad;
-
+		private Dictionary<Process, string> processes; //mxd
 		private bool isdisposed;
+
+		delegate void EngineExitedCallback(Process p); //mxd
 		
 		#endregion
 
 		#region ================== Properties
 
 		public string TempWAD { get { return tempwad; } }
-		
+
 		#endregion
 
 		#region ================== Constructor / Destructor
@@ -61,6 +60,7 @@ namespace CodeImp.DoomBuilder
 		{
 			// Initialize
 			CleanTempFile(manager);
+			processes = new Dictionary<Process, string>(); //mxd
 
 			// Bind actions
 			General.Actions.BindMethods(this);
@@ -74,10 +74,31 @@ namespace CodeImp.DoomBuilder
 			{
 				// Unbind actions
 				General.Actions.UnbindMethods(this);
+
+				//mxd. Terminate running processes?
+				if(processes != null) 
+				{
+					foreach(KeyValuePair<Process, string> group in processes)
+					{
+						// Close engine
+						group.Key.CloseMainWindow();
+						group.Key.Close();
+
+						// Remove temporary file
+						if(File.Exists(group.Value))
+						{
+							try { File.Delete(group.Value); }
+							catch { }
+						}
+					}
+				}
 				
 				// Remove temporary file
-				try { File.Delete(tempwad); }
-				catch(Exception) { }
+				if(File.Exists(tempwad))
+				{
+					try { File.Delete(tempwad); }
+					catch { }
+				}
 				
 				// Done
 				isdisposed = true;
@@ -118,12 +139,16 @@ namespace CodeImp.DoomBuilder
 			}
 			
 			// Make a list of all data locations, including map location
-			DataLocation maplocation = new DataLocation(DataLocation.RESOURCE_WAD, General.Map.FilePathName, false, false, false);
-			DataLocationList locations = new DataLocationList();
-			locations.AddRange(General.Map.ConfigSettings.Resources);
-			locations.AddRange(General.Map.Options.Resources);
-			locations.Add(maplocation);
-			
+			DataLocationList locations = DataLocationList.Combined(General.Map.ConfigSettings.Resources, General.Map.Options.Resources);
+
+			//mxd. General.Map.FilePathName will be empty when a newly created map was not saved yet.
+			if(!string.IsNullOrEmpty(General.Map.FilePathName))
+			{
+				DataLocation maplocation = new DataLocation(DataLocation.RESOURCE_WAD, General.Map.FilePathName, false, false, false);
+				locations.Remove(maplocation); //If maplocation was already added as a resource, make sure it's singular and is last in the list
+				locations.Add(maplocation); 
+			}
+
 			// Go for all data locations
 			foreach(DataLocation dl in locations)
 			{
@@ -158,7 +183,7 @@ namespace CodeImp.DoomBuilder
 			foreach(char c in General.Map.Options.CurrentName)
 			{
 				// Character is a number?
-				if(NUMBERS.IndexOf(c) > -1)
+				if(Configuration.NUMBERS.IndexOf(c) > -1)
 				{
 					// Include it
 					numstr += c;
@@ -168,7 +193,7 @@ namespace CodeImp.DoomBuilder
 					// Store the number if we found one
 					if(numstr.Length > 0)
 					{
-						int num = 0;
+						int num;
 						int.TryParse(numstr, out num);
 						if(first) p_l1 = num.ToString(); else p_l2 = num.ToString();
 						numstr = "";
@@ -180,7 +205,7 @@ namespace CodeImp.DoomBuilder
 			// Store the number if we found one
 			if(numstr.Length > 0)
 			{
-				int num = 0;
+				int num;
 				int.TryParse(numstr, out num);
 				if(first) p_l1 = num.ToString(); else p_l2 = num.ToString();
 			}
@@ -231,25 +256,37 @@ namespace CodeImp.DoomBuilder
 		[BeginAction("testmap")]
 		public void Test()
 		{
-			TestAtSkill(General.Map.ConfigSettings.TestSkill);
+			TestAtSkill(General.Map.ConfigSettings.TestSkill, false);
+		}
+
+		//mxd
+		[BeginAction("testmapfromview")]
+		public void TestFromView() 
+		{
+			TestAtSkill(General.Map.ConfigSettings.TestSkill, true);
 		}
 		
-		// This saves the map to a temporary file and launches a test wit hthe given skill
-		public void TestAtSkill(int skill)
+		// This saves the map to a temporary file and launches a test with the given skill
+		public void TestAtSkill(int skill) { TestAtSkill(skill, false); }
+		public void TestAtSkill(int skill, bool testfromcurrentposition)
 		{
+			if(!General.Editing.Mode.OnMapTestBegin(testfromcurrentposition)) return; //mxd
+			
 			Cursor oldcursor = Cursor.Current;
-			ProcessStartInfo processinfo;
-			Process process;
-			TimeSpan deltatime;
-			string args;
 
 			// Check if configuration is OK
-			if((General.Map.ConfigSettings.TestProgram == "") ||
-			   !File.Exists(General.Map.ConfigSettings.TestProgram))
+			if(string.IsNullOrEmpty(General.Map.ConfigSettings.TestProgram) || !File.Exists(General.Map.ConfigSettings.TestProgram))
 			{
+				//mxd. Let's be more precise
+				string message;
+				if(General.Map.ConfigSettings.TestProgram == "")
+					message = "Your test program is not set for the current game configuration";
+				else
+					message = "Current test program has invalid path";
+				
 				// Show message
 				Cursor.Current = Cursors.Default;
-				DialogResult result = General.ShowWarningMessage("Your test program is not set for the current game configuration. Would you like to set up your test program now?", MessageBoxButtons.YesNo);
+				DialogResult result = General.ShowWarningMessage(message + ". Would you like to set up your test program now?", MessageBoxButtons.YesNo);
 				if(result == DialogResult.Yes)
 				{
 					// Show game configuration on the right page
@@ -267,8 +304,11 @@ namespace CodeImp.DoomBuilder
 			}
 			
 			// Remove temporary file
-			try { File.Delete(tempwad); }
-			catch(Exception) { }
+			if(File.Exists(tempwad) && !processes.ContainsValue(tempwad))
+			{
+				try { File.Delete(tempwad); }
+				catch { }
+			}
 			
 			// Save map to temporary file
 			Cursor.Current = Cursors.WaitCursor;
@@ -280,10 +320,10 @@ namespace CodeImp.DoomBuilder
 				if(General.Map.Errors.Count == 0)
 				{
 					// Make arguments
-					args = ConvertParameters(General.Map.ConfigSettings.TestParameters, skill, General.Map.ConfigSettings.TestShortPaths);
+					string args = ConvertParameters(General.Map.ConfigSettings.TestParameters, skill, General.Map.ConfigSettings.TestShortPaths);
 
 					// Setup process info
-					processinfo = new ProcessStartInfo();
+					ProcessStartInfo processinfo = new ProcessStartInfo();
 					processinfo.Arguments = args;
 					processinfo.FileName = General.Map.ConfigSettings.TestProgram;
 					processinfo.CreateNoWindow = false;
@@ -295,57 +335,86 @@ namespace CodeImp.DoomBuilder
 					// Output info
 					General.WriteLogLine("Running test program: " + processinfo.FileName);
 					General.WriteLogLine("Program parameters:  " + processinfo.Arguments);
-
-					// Disable interface
-					General.MainWindow.DisplayStatus(StatusType.Busy, "Waiting for game application to finish...");
+					General.MainWindow.DisplayStatus(StatusType.Info, "Launching " + processinfo.FileName + "...");
 
 					try
 					{
 						// Start the program
-						process = Process.Start(processinfo);
-
-						// Wait for program to complete
-						while(!process.WaitForExit(10))
-						{
-							General.MainWindow.Update();
-						}
-
-						// Done
-						deltatime = TimeSpan.FromTicks(process.ExitTime.Ticks - process.StartTime.Ticks);
-						General.WriteLogLine("Test program has finished.");
-						General.WriteLogLine("Run time: " + deltatime.TotalSeconds.ToString("###########0.00") + " seconds");
+						Process process = Process.Start(processinfo);
+						process.EnableRaisingEvents = true; //mxd
+						process.Exited += ProcessOnExited; //mxd
+						processes.Add(process, tempwad); //mxd
+						Cursor.Current = oldcursor; //mxd
 					}
 					catch(Exception e)
 					{
 						// Unable to start the program
-						General.ShowErrorMessage("Unable to start the test program, " + e.GetType().Name + ": " + e.Message, MessageBoxButtons.OK); ;
+						General.ShowErrorMessage("Unable to start the test program, " + e.GetType().Name + ": " + e.Message, MessageBoxButtons.OK);
 					}
-					
-					General.MainWindow.DisplayReady();
 				}
 				else
 				{
 					General.MainWindow.DisplayStatus(StatusType.Warning, "Unable to test the map due to script errors.");
 				}
 			}
+			General.Plugins.OnMapSaveEnd(SavePurpose.Testing);
+			General.Editing.Mode.OnMapTestEnd(testfromcurrentposition); //mxd
+		}
+
+		//mxd
+		private void TestingFinished(Process process) 
+		{
+			// Done
+			TimeSpan deltatime = TimeSpan.FromTicks(process.ExitTime.Ticks - process.StartTime.Ticks);
+			General.WriteLogLine("Testing with \"" + process.StartInfo.FileName + "\" has finished.");
+			General.WriteLogLine("Run time: " + deltatime.TotalSeconds.ToString("###########0.00") + " seconds");
+
+			//mxd. Remove from active processes list
+			string closedtempfile = processes[process];
+			processes.Remove(process);
+
+			//mxd. Still have running engines?..
+			if(processes.Count > 0)
+			{
+				// Remove temp file
+				if(File.Exists(closedtempfile))
+				{
+					try { File.Delete(closedtempfile); }
+					catch { }
+				}
+				return; 
+			}
 			
+			General.MainWindow.DisplayReady();
+
 			// Clean up temp file
 			CleanTempFile(General.Map);
-			
-			// Done
-			General.Map.Graphics.Reset();
-			General.Plugins.OnMapSaveEnd(SavePurpose.Testing);
-			General.MainWindow.RedrawDisplay();
+
+			if(General.Map != null)
+			{
+				// Device reset may be needed...
+				if(General.Editing.Mode is ClassicMode)
+				{
+					General.Map.Graphics.Reset();
+					General.MainWindow.RedrawDisplay();
+				}
+			}
+
 			General.MainWindow.FocusDisplay();
-			Cursor.Current = oldcursor;
 		}
-		
+
+		//mxd
+		private void ProcessOnExited(object sender, EventArgs e)
+		{
+			General.MainWindow.Invoke(new EngineExitedCallback(TestingFinished), new[] { sender });
+		}
+
 		// This deletes the previous temp file and creates a new, empty temp file
 		private void CleanTempFile(MapManager manager)
 		{
 			// Remove temporary file
 			try { File.Delete(tempwad); }
-			catch(Exception) { }
+			catch { }
 			
 			// Make new empty temp file
 			tempwad = General.MakeTempFilename(manager.TempPath, "wad");

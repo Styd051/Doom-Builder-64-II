@@ -20,13 +20,6 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Data;
-using System.IO;
-using System.Diagnostics;
-using System.Windows.Forms;
-using CodeImp.DoomBuilder.Map;
 
 #endregion
 
@@ -46,6 +39,8 @@ namespace CodeImp.DoomBuilder.Config
 		// Properties
 		private string name;
 		private List<GeneralizedBit> bits;
+		private int bitstep; //mxd
+		public int BitsStep { get { return bitstep; } } // mxd. Each subsequent value is incremented  by this number
 		
 		#endregion
 
@@ -61,7 +56,6 @@ namespace CodeImp.DoomBuilder.Config
 		// Constructor
 		internal GeneralizedOption(string structure, string cat, string name, IDictionary bitslist)
 		{
-			int index;
 			string fullpath;
 			
 			// Determine path
@@ -76,6 +70,7 @@ namespace CodeImp.DoomBuilder.Config
 			foreach(DictionaryEntry de in bitslist)
 			{
 				// Check if the item key is numeric
+				int index;
 				if(int.TryParse(de.Key.ToString(), NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite, CultureInfo.InvariantCulture, out index))
 				{
 					// Add to list
@@ -83,12 +78,26 @@ namespace CodeImp.DoomBuilder.Config
 				}
 				else
 				{
-					General.ErrorLogger.Add(ErrorType.Warning, "Structure '" + fullpath + "." + name + "' contains invalid entries. The keys must be numeric.");
+					General.ErrorLogger.Add(ErrorType.Warning, "Structure \"" + fullpath + "." + name + "\" contains invalid entries. The keys must be numeric.");
 				}
 			}
 			
 			// Sort the list
 			bits.Sort();
+
+			//mxd. Determine and check increment steps
+			if(bits.Count > 1)
+			{
+				// Use the second bit as the structure's step
+				bitstep = bits[1].Index; 
+				
+				// Check the rest of the values
+				for(int i = 1; i < bits.Count; i++)
+				{
+					if(bits[i].Index - bits[i - 1].Index != bitstep)
+						General.ErrorLogger.Add(ErrorType.Warning, "Structure \"" + fullpath + "." + name + "\" contains options with mixed increments (option \"" + bits[i].Title + "\" increment (" + (bits[i - 1].Index - bits[i].Index) + ") doesn't match the structure increment (" + bitstep + ")).");
+				}
+			}
 			
 			// We have no destructor
 			GC.SuppressFinalize(this);

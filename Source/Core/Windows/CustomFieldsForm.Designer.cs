@@ -35,22 +35,29 @@ namespace CodeImp.DoomBuilder.Windows
 			// 
 			// fieldslist
 			// 
+			this.fieldslist.AllowInsert = true;
 			this.fieldslist.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
 						| System.Windows.Forms.AnchorStyles.Left)
 						| System.Windows.Forms.AnchorStyles.Right)));
+			this.fieldslist.AutoInsertUserPrefix = true;
 			this.fieldslist.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
-			this.fieldslist.Font = new System.Drawing.Font("Arial", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
 			this.fieldslist.Location = new System.Drawing.Point(10, 10);
 			this.fieldslist.Margin = new System.Windows.Forms.Padding(1);
 			this.fieldslist.Name = "fieldslist";
+			this.fieldslist.PropertyColumnVisible = true;
+			this.fieldslist.PropertyColumnWidth = 150;
+			this.fieldslist.ShowFixedFields = true;
 			this.fieldslist.Size = new System.Drawing.Size(506, 310);
 			this.fieldslist.TabIndex = 0;
+			this.fieldslist.TypeColumnVisible = true;
+			this.fieldslist.TypeColumnWidth = 100;
+			this.fieldslist.ValueColumnVisible = true;
 			// 
 			// cancel
 			// 
 			this.cancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
 			this.cancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-			this.cancel.Location = new System.Drawing.Point(404, 336);
+			this.cancel.Location = new System.Drawing.Point(404, 332);
 			this.cancel.Margin = new System.Windows.Forms.Padding(1);
 			this.cancel.Name = "cancel";
 			this.cancel.Size = new System.Drawing.Size(112, 25);
@@ -62,7 +69,7 @@ namespace CodeImp.DoomBuilder.Windows
 			// apply
 			// 
 			this.apply.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-			this.apply.Location = new System.Drawing.Point(285, 336);
+			this.apply.Location = new System.Drawing.Point(287, 332);
 			this.apply.Margin = new System.Windows.Forms.Padding(1);
 			this.apply.Name = "apply";
 			this.apply.Size = new System.Drawing.Size(112, 25);
@@ -77,11 +84,10 @@ namespace CodeImp.DoomBuilder.Windows
 			this.AutoScaleDimensions = new System.Drawing.SizeF(96F, 96F);
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
 			this.CancelButton = this.cancel;
-			this.ClientSize = new System.Drawing.Size(526, 371);
+			this.ClientSize = new System.Drawing.Size(526, 367);
 			this.Controls.Add(this.cancel);
 			this.Controls.Add(this.apply);
 			this.Controls.Add(this.fieldslist);
-			this.Font = new System.Drawing.Font("Arial", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
 			this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
 			this.MaximizeBox = false;
 			this.MinimizeBox = false;
@@ -90,7 +96,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.ShowIcon = false;
 			this.ShowInTaskbar = false;
 			this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
-			this.Text = "CustomFieldsForm";
+			this.Text = "Custom Fields";
 			this.HelpRequested += new System.Windows.Forms.HelpEventHandler(this.CustomFieldsForm_HelpRequested);
 			this.ResumeLayout(false);
 

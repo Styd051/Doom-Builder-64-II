@@ -16,17 +16,9 @@
 
 #region ================== Namespaces
 
-using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Data;
-using System.IO;
-using System.Diagnostics;
-using System.Windows.Forms;
-using System.Text.RegularExpressions;
 using System.Collections.Specialized;
 
 #endregion
@@ -71,10 +63,8 @@ namespace CodeImp.DoomBuilder.Config
 		// This writes the texture set to configuration
 		internal void WriteToConfig(Configuration cfg, string path)
 		{
-			IDictionary dic;
-			
 			// Fill structure
-			dic = new ListDictionary();
+			IDictionary dic = new ListDictionary();
 			
 			// Add name
 			dic.Add("name", name);
@@ -82,7 +72,7 @@ namespace CodeImp.DoomBuilder.Config
 			for(int i = 0; i < filters.Count; i++)
 			{
 				// Add filters
-				dic.Add("filter" + i.ToString(), filters[i].ToUpperInvariant());
+				dic.Add("filter" + i, filters[i].ToUpperInvariant());
 			}
 			
 			// Write to config

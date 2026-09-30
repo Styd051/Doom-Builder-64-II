@@ -17,16 +17,9 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.Drawing;
-using System.Text;
 using System.Globalization;
 using System.Windows.Forms;
-using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Editing;
 
 #endregion
 
@@ -45,22 +38,33 @@ namespace CodeImp.DoomBuilder.Controls
 
 		#region ================== Variables
 		
-		private bool ignorebuttonchange = false;
-		private StepsList steps = null;
+		private bool ignorebuttonchange;
+		private StepsList steps;
 		private int stepsize = 1;
+		private float stepsizeFloat = 1.0f; //mxd
+		private float stepsizeBig = 10.0f; //mxd
+		private float stepsizeSmall = 0.1f; //mxd
+		private bool wrapsteps; //mxd
+		private bool usemodifierkeys; //mxd
 		
 		#endregion
 
 		#region ================== Properties
 
-		public bool AllowDecimal { get { return textbox.AllowDecimal; } set { textbox.AllowDecimal = value; } }
+		public bool AllowDecimal { get { return textbox.AllowDecimal; } set { textbox.AllowDecimal = value; UpdateButtonsTooltip(); } }
 		public bool AllowNegative { get { return textbox.AllowNegative; } set { textbox.AllowNegative = value; } }
 		public bool AllowRelative { get { return textbox.AllowRelative; } set { textbox.AllowRelative = value; } }
+		public bool AllowExpressions { get { return textbox.AllowExpressions; } set { textbox.AllowExpressions = value; } } //mxd/mgr_inz_rafal
 		public int ButtonStep { get { return stepsize; } set { stepsize = value; } }
-		public string Text { get { return textbox.Text; } set { textbox.Text = value; } }
+		public float ButtonStepFloat { get { return stepsizeFloat; } set { stepsizeFloat = value; } } //mxd. This is used when AllowDecimal is true
+		public float ButtonStepBig { get { return stepsizeBig; } set { stepsizeBig = value; } } //mxd
+		public float ButtonStepSmall { get { return stepsizeSmall; } set { stepsizeSmall = value; } } //mxd
+		override public string Text { get { return textbox.Text; } set { textbox.Text = value; } }
 		internal NumericTextbox Textbox { get { return textbox; } }
-		public StepsList StepValues { get { return steps; } set { steps = value; } }
-		
+		public StepsList StepValues { get { return steps; } set { steps = value; UpdateButtonsTooltip(); } }
+		public bool ButtonStepsWrapAround { get { return wrapsteps; } set { wrapsteps = value; } }
+		public bool ButtonStepsUseModifierKeys { get { return usemodifierkeys; } set { usemodifierkeys = value; UpdateButtonsTooltip(); } }
+
 		#endregion
 		
 		#region ================== Constructor / Disposer
@@ -71,6 +75,7 @@ namespace CodeImp.DoomBuilder.Controls
 			InitializeComponent();
 			buttons.Value = 0;
 			textbox.MouseWheel += textbox_MouseWheel;
+			UpdateButtonsTooltip(); //mxd
 		}
 
 		#endregion
@@ -114,22 +119,37 @@ namespace CodeImp.DoomBuilder.Controls
 				ignorebuttonchange = true;
 				if(!textbox.CheckIsRelative())
 				{
-					if(steps != null)
+					bool ctrl = ((ModifierKeys & Keys.Control) == Keys.Control); //mxd
+					bool shift = ((ModifierKeys & Keys.Shift) == Keys.Shift); //mxd
+
+					if(steps != null && (!usemodifierkeys || (!ctrl && !shift)))
 					{
 						if(buttons.Value < 0)
-							textbox.Text = steps.GetNextHigher(textbox.GetResult(0)).ToString();
+							textbox.Text = steps.GetNextHigherWrap(textbox.GetResult(0), wrapsteps).ToString(); //mxd
 						else if(buttons.Value > 0)
-							textbox.Text = steps.GetNextLower(textbox.GetResult(0)).ToString();
+							textbox.Text = steps.GetNextLowerWrap(textbox.GetResult(0), wrapsteps).ToString(); //mxd
 					}
 					else if(textbox.AllowDecimal)
 					{
-						float newvalue = textbox.GetResultFloat(0.0f) - (float)(buttons.Value * stepsize);
+						float stepsizemod; //mxd
+						if(usemodifierkeys)
+							stepsizemod = (ctrl ? stepsizeSmall : (shift ? stepsizeBig : stepsizeFloat));
+						else
+							stepsizemod = stepsizeFloat;
+						
+						float newvalue = (float)Math.Round(textbox.GetResultFloat(0.0f) - (buttons.Value * stepsizemod), General.Map.FormatInterface.VertexDecimals);
 						if((newvalue < 0.0f) && !textbox.AllowNegative) newvalue = 0.0f;
 						textbox.Text = newvalue.ToString();
 					}
 					else
 					{
-						int newvalue = textbox.GetResult(0) - (buttons.Value * stepsize);
+						int stepsizemod; //mxd
+						if(usemodifierkeys) 
+							stepsizemod = (ctrl ? (int)stepsizeSmall : (shift ? (int)stepsizeBig : stepsize));
+						else
+							stepsizemod = stepsize;
+						
+						int newvalue = textbox.GetResult(0) - (buttons.Value * stepsizemod);
 						if((newvalue < 0) && !textbox.AllowNegative) newvalue = 0;
 						textbox.Text = newvalue.ToString();
 					}
@@ -147,7 +167,7 @@ namespace CodeImp.DoomBuilder.Controls
 		// Mouse wheel used
 		private void textbox_MouseWheel(object sender, MouseEventArgs e)
 		{
-			if(steps != null)
+			if(steps != null && (!usemodifierkeys || ((ModifierKeys & Keys.Control) != Keys.Control && (ModifierKeys & Keys.Shift) != Keys.Shift)))
 			{
 				if(e.Delta > 0)
 					textbox.Text = steps.GetNextHigher(textbox.GetResult(0)).ToString();
@@ -156,10 +176,7 @@ namespace CodeImp.DoomBuilder.Controls
 			}
 			else
 			{
-				if(e.Delta < 0)
-					buttons.Value += 1;
-				else if(e.Delta > 0)
-					buttons.Value -= 1;
+				buttons.Value -= Math.Sign(e.Delta);
 			}
 		}
 
@@ -186,13 +203,42 @@ namespace CodeImp.DoomBuilder.Controls
 		{
 			return textbox.GetResult(original);
 		}
+
+		//mxd. This determines the result value at given inremental step
+		public int GetResult(int original, int step)
+		{
+			return textbox.GetResult(original, step);
+		}
 		
 		// This determines the result value
 		public float GetResultFloat(float original)
 		{
 			return textbox.GetResultFloat(original);
 		}
-		
+
+		//mxd. This determines the result value at given inremental step
+		public float GetResultFloat(float original, int step)
+		{
+			return textbox.GetResultFloat(original, step);
+		}
+
+		//mxd
+		public void UpdateButtonsTooltip()
+		{
+			if(usemodifierkeys)
+			{
+				string tip = "Hold Ctrl to change value by " + stepsizeSmall.ToString(CultureInfo.CurrentCulture) + "." + Environment.NewLine +
+							 "Hold Shift to change value by " + stepsizeBig.ToString(CultureInfo.CurrentCulture) + ".";
+				tooltip.SetToolTip(buttons, tip);
+				textbox.UpdateTextboxStyle(tip);
+			}
+			else
+			{
+				tooltip.RemoveAll();
+				textbox.UpdateTextboxStyle();
+			}
+		}
+
 		#endregion
 	}
 }

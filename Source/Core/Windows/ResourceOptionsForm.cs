@@ -17,16 +17,9 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Text;
 using System.Windows.Forms;
-using CodeImp.DoomBuilder.Map;
 using System.IO;
 using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.Controls;
-using CodeImp.DoomBuilder.IO;
 
 #endregion
 
@@ -41,7 +34,7 @@ namespace CodeImp.DoomBuilder.Windows
 		public DataLocation ResourceLocation { get { return res; } }
 		
 		// Constructor
-		public ResourceOptionsForm(DataLocation settings, string caption)
+		public ResourceOptionsForm(DataLocation settings, string caption, string startPath) //mxd. added startPath
 		{
 			// Initialize
 			InitializeComponent();
@@ -77,6 +70,13 @@ namespace CodeImp.DoomBuilder.Windows
 			
 			// Checkbox
 			notfortesting.Checked = res.notfortesting;
+
+			//mxd
+			if(!string.IsNullOrEmpty(startPath)) 
+			{
+				string startDir = Path.GetDirectoryName(startPath);
+				if(Directory.Exists(startDir)) dirdialog.SelectedPath = startDir;
+			}
 		}
 		
 		// OK clicked
@@ -143,7 +143,7 @@ namespace CodeImp.DoomBuilder.Windows
 					   (!File.Exists(pk3location.Text)))
 					{
 						// No valid pk3 file specified
-						MessageBox.Show(this, "Please select a valid PK3 File resource.", Application.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+						MessageBox.Show(this, "Please select a valid PK3 or PK7 File resource.", Application.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
 					}
 					else
 					{
@@ -206,7 +206,7 @@ namespace CodeImp.DoomBuilder.Windows
 		// Link clicked
 		private void link_Click(object sender, LinkLabelLinkClickedEventArgs e)
 		{
-			General.OpenWebsite((sender as LinkLabel).Text);
+			General.OpenWebsite("http://www.zdoom.org/wiki/Using_ZIPs_as_WAD_replacement");
 		}
 
 		// Help

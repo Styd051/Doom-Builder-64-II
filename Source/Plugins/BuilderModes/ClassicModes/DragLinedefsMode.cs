@@ -17,19 +17,10 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Rendering;
 using CodeImp.DoomBuilder.Geometry;
-using System.Drawing;
 using CodeImp.DoomBuilder.Editing;
 
 #endregion
@@ -43,6 +34,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 	// [EditMode]
 
 	[EditMode(DisplayName = "Linedefs",
+			  AllowCopyPaste = false,
 			  Volatile = true)]
 	
 	public sealed class DragLinedefsMode : DragGeometryMode
@@ -79,6 +71,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 			// Initialize
 			base.StartDrag(dragstartmappos);
+			undodescription = (selectedlines.Count == 1 ? "Drag linedef" : "Drag " + selectedlines.Count + " linedefs"); //mxd
 			
 			// We have no destructor
 			GC.SuppressFinalize(this);
@@ -100,12 +93,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		#endregion
 
 		#region ================== Methods
-
-		// Mode engages
-		public override void OnEngage()
-		{
-			base.OnEngage();
-		}
 		
 		// Disenagaging
 		public override void OnDisengage()
@@ -132,18 +119,16 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// This redraws the display
 		public override void OnRedrawDisplay()
 		{
-			bool viewchanged = CheckViewChanged();
-
 			renderer.RedrawSurface();
 
 			UpdateRedraw();
 
-			if(viewchanged)
+			if(CheckViewChanged())
 			{
 				// Start rendering things
 				if(renderer.StartThings(true))
 				{
-					renderer.RenderThingSet(General.Map.Map.Things, 1.0f);
+					renderer.RenderThingSet(General.Map.Map.Things, General.Settings.ActiveThingsAlpha);
 					renderer.Finish();
 				}
 			}
@@ -171,13 +156,19 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				renderer.Finish();
 			}
 
+			//mxd. Render things
+			if(renderer.StartThings(true)) 
+			{
+				renderer.RenderThingSet(General.Map.ThingsFilter.HiddenThings, General.Settings.HiddenThingsAlpha);
+				renderer.RenderThingSet(unselectedthings, General.Settings.ActiveThingsAlpha);
+				renderer.RenderThingSet(selectedthings, General.Settings.ActiveThingsAlpha);
+				renderer.Finish();
+			}
+
 			// Redraw overlay
 			if(renderer.StartOverlay(true))
 			{
-				foreach(LineLengthLabel l in labels)
-				{
-					renderer.RenderText(l.TextLabel);
-				}
+				renderer.RenderText(labels);
 				renderer.Finish();
 			}
 		}

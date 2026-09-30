@@ -16,16 +16,6 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Data;
-using System.IO;
-using System.Diagnostics;
-
 #endregion
 
 namespace CodeImp.DoomBuilder.Types
@@ -38,7 +28,7 @@ namespace CodeImp.DoomBuilder.Types
 
 		#region ================== Variables
 
-		private object value = (int)0;
+		private object value = 0;
 
 		#endregion
 
@@ -53,7 +43,7 @@ namespace CodeImp.DoomBuilder.Types
 			if(value != null)
 				this.value = value;
 			else
-				this.value = (int)0;
+				this.value = 0;
 		}
 
 		public override object GetValue()
@@ -65,12 +55,17 @@ namespace CodeImp.DoomBuilder.Types
 		{
 			int result;
 			if(int.TryParse(this.value.ToString(), out result)) return result;
-				else return 0;
+			return 0;
 		}
 		
 		public override string GetStringValue()
 		{
 			return this.value.ToString();
+		}
+
+		public override object GetDefaultValue()
+		{
+			return 0;
 		}
 		
 		#endregion

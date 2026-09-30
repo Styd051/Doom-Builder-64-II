@@ -16,15 +16,9 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.IO;
 using CodeImp.DoomBuilder.Map;
-using System.Reflection;
-using System.Diagnostics;
+using CodeImp.DoomBuilder.Types;
 
 #endregion
 
@@ -65,8 +59,12 @@ namespace CodeImp.DoomBuilder.IO
 		int MinBrightness { get; }
 		int MaxThingType { get; }
 		int MinThingType { get; }
-		double MaxCoordinate { get; }
-		double MinCoordinate { get; }
-        bool InDoom64Mode { get; }  // villsa
+		float MaxCoordinate { get; }
+		float MinCoordinate { get; }
+		int MaxThingAngle { get; }
+		int MinThingAngle { get; }
+		Dictionary<MapElementType, Dictionary<string, UniversalType>> UIFields { get; } //mxd. Element type (like "sector"), list of uifields.
+		string GetElementName(MapElementType elementtype); //mxd
+		MapElementType GetElementType(string elementname); //mxd
 	}
 }

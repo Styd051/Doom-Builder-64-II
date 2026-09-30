@@ -16,17 +16,7 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Rendering;
-using SlimDX.Direct3D9;
-using System.Drawing;
-using System.IO;
-using CodeImp.DoomBuilder.Map; //villsa
 
 #endregion
 
@@ -54,7 +44,6 @@ namespace CodeImp.DoomBuilder.IO
 		void rwVector2D(ref Vector2D v);
 		void rwVector3D(ref Vector3D v);
 		void rwBool(ref bool v);
-        void rwLight(ref Lights v); // villsa
 
 		// Write-only members
 		void wInt(int v);
@@ -69,7 +58,6 @@ namespace CodeImp.DoomBuilder.IO
 		void wVector2D(Vector2D v);
 		void wVector3D(Vector3D v);
 		void wBool(bool v);
-        void wLight(Lights v); //villsa
 
 		// Read-only members
 		void rInt(out int v);
@@ -84,6 +72,5 @@ namespace CodeImp.DoomBuilder.IO
 		void rVector2D(out Vector2D v);
 		void rVector3D(out Vector3D v);
 		void rBool(out bool v);
-        void rLight(out Lights v); //villsa
 	}
 }

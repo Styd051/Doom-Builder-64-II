@@ -17,18 +17,8 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Text;
 using System.Windows.Forms;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.IO;
-using System.IO;
 using CodeImp.DoomBuilder.Config;
-using CodeImp.DoomBuilder.Editing;
-using CodeImp.DoomBuilder.Controls;
 
 #endregion
 
@@ -80,10 +70,10 @@ namespace CodeImp.DoomBuilder.Windows
 					foreach(CheckBox b in options.Checkboxes)
 					{
 						// Not the same box?
-						if(b != sender)
+						if(b != thisbox)
 						{
-							// Overlapping bit flags?
-							if(((int)b.Tag & (int)thisbox.Tag) != 0)
+							// Overlapping bit flags? mxd: box with flag 0 requires special handling...
+							if( (int)b.Tag == 0 || (int)thisbox.Tag == 0 || (((int)b.Tag & (int)thisbox.Tag) != 0) ) 
 							{
 								// Uncheck the other
 								b.Checked = false;
@@ -128,15 +118,17 @@ namespace CodeImp.DoomBuilder.Windows
 		{
 			setup = true;
 			this.value = value;
+			int optionsheight = options.Height;
 			
 			// Make a checkbox for each item
 			foreach(EnumItem item in flags)
 			{
 				// Make the checkbox
-				CheckBox box = options.Add(item.Title, item.GetIntValue());
+				int flag = item.GetIntValue(); //mxd
+				CheckBox box = options.Add(flag + ": " + item.Title, item.GetIntValue());
 				
 				// Bind checking event
-				box.CheckedChanged += new EventHandler(box_CheckedChanged);
+				box.CheckedChanged += box_CheckedChanged;
 
 				// Checking the box?
 				if((value & (int)box.Tag) == (int)box.Tag)
@@ -149,8 +141,8 @@ namespace CodeImp.DoomBuilder.Windows
 						// Not the same box?
 						if(b != box)
 						{
-							// Overlapping bit flags?
-							if(((int)b.Tag & (int)box.Tag) != 0)
+							// Overlapping bit flags? mxd: box with flag 0 requires special handling...
+							if( ((int)b.Tag == 0 && value != 0) || ((int)b.Tag & (int)box.Tag) != 0 )
 							{
 								// Uncheck the other
 								b.Checked = false;
@@ -159,6 +151,11 @@ namespace CodeImp.DoomBuilder.Windows
 					}
 				}
 			}
+
+			//mxd. Update window size
+			this.Height -= (optionsheight - options.GetHeight());
+			int targetwidth = options.GetWidth();
+			if(targetwidth > options.Width) this.Width += (targetwidth - options.Width);
 
 			setup = false;
 		}

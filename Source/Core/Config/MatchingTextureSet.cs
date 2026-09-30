@@ -17,23 +17,16 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Text;
-using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Data;
-using System.IO;
-using System.Diagnostics;
-using System.Windows.Forms;
 using System.Text.RegularExpressions;
-using System.Collections.Specialized;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.Config
 {
-	internal sealed class MatchingTextureSet : TextureSet, IFilledTextureSet, IComparable<MatchingTextureSet>
+	public sealed class MatchingTextureSet : TextureSet, IFilledTextureSet, IComparable<MatchingTextureSet>
 	{
 		#region ================== Variables
 		
@@ -49,7 +42,7 @@ namespace CodeImp.DoomBuilder.Config
 		#region ================== Properties
 
 		public ICollection<ImageData> Textures { get { return textures; } }
-		public ICollection<ImageData> Flats { get { return flats; } }
+		public ICollection<ImageData> Flats { get { return flats; } } //mxd
 
 		#endregion
 		
@@ -65,7 +58,7 @@ namespace CodeImp.DoomBuilder.Config
 		}
 		
 		// Texture set from defined set
-		public MatchingTextureSet(DefinedTextureSet definedset)
+		internal MatchingTextureSet(DefinedTextureSet definedset)
 		{
 			// Copy the name
 			this.name = definedset.Name;
@@ -182,6 +175,12 @@ namespace CodeImp.DoomBuilder.Config
 		internal bool IsMatch(ImageData image)
 		{
 			return regex.IsMatch(image.Name.ToUpperInvariant());
+		}
+
+		// This only checks if the given texture name is a match (mxd)
+		public bool IsMatch(string texturename) 
+		{
+			return regex.IsMatch(texturename.ToUpperInvariant());
 		}
 
 		// This compares it for sorting

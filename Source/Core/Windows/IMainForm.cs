@@ -17,23 +17,11 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
 using System.Drawing;
-using System.ComponentModel;
-using CodeImp.DoomBuilder.Actions;
+using System.Windows.Forms;
 using CodeImp.DoomBuilder.Map;
-using SlimDX.Direct3D9;
-using SlimDX;
 using CodeImp.DoomBuilder.Geometry;
-using System.Drawing.Imaging;
-using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.Editing;
 using CodeImp.DoomBuilder.Controls;
 
 #endregion
@@ -52,7 +40,11 @@ namespace CodeImp.DoomBuilder.Windows
 		bool MouseExclusive { get; }
 		MouseButtons MouseButtons { get; }
 		bool IsActiveWindow { get; }
+		string ActiveDockerTabName { get; } //mxd
 		RenderTargetControl Display { get; }
+
+		//mxd. Events
+		event EventHandler OnEditFormValuesChanged;
 		
 		// Methods
 		void DisplayReady();
@@ -60,14 +52,20 @@ namespace CodeImp.DoomBuilder.Windows
 		void DisplayStatus(StatusInfo newstatus);
 		void RedrawDisplay();
 		DialogResult ShowEditVertices(ICollection<Vertex> vertices);
+		DialogResult ShowEditVertices(ICollection<Vertex> vertices, bool allowPositionChange); //mxd
 		DialogResult ShowEditLinedefs(ICollection<Linedef> lines);
+		DialogResult ShowEditLinedefs(ICollection<Linedef> lines, bool selectfront, bool selectback); //mxd
 		DialogResult ShowEditSectors(ICollection<Sector> sectors);
 		DialogResult ShowEditThings(ICollection<Thing> things);
 		void ShowLinedefInfo(Linedef l);
+		void ShowLinedefInfo(Linedef l, Sidedef highlightside); //mxd
 		void ShowSectorInfo(Sector s);
+		void ShowSectorInfo(Sector s, bool highlightceiling, bool highlightfloor); //mxd
 		void ShowThingInfo(Thing t);
 		void ShowVertexInfo(Vertex v);
 		void HideInfo();
+		void ShowHints(string hints); //mxd
+		void ClearHints(); //mxd
 		void RefreshInfo();
 		void UpdateCoordinates(Vector2D coords);
 		bool Focus();
@@ -79,6 +77,8 @@ namespace CodeImp.DoomBuilder.Windows
 		void ResumeExclusiveMouseInput();
 		void SetCursor(Cursor cursor);
 		void MessageBeep(MessageBeepType type);
+		SizeF MeasureString(string text, Font font); //mxd
+		SizeF MeasureString(string text, Font font, int width, StringFormat format); //mxd
 
 		/// <summary>
 		/// This moves the focus to the editing display.
@@ -90,12 +90,24 @@ namespace CodeImp.DoomBuilder.Windows
 		/// </summary>
 		/// <returns>Returns the new action or the same action when cancelled</returns>
 		int BrowseLinedefActions(IWin32Window owner, int initialvalue);
-		
+
+		/// <summary>
+		/// This browses the lindef types
+		/// </summary>
+		/// <returns>Returns the new action or the same action when cancelled</returns>
+		int BrowseLinedefActions(IWin32Window owner, int initialvalue, bool addanyaction);
+
 		/// <summary>
 		/// This browses sector effects
 		/// </summary>
 		/// <returns>Returns the new effect or the same effect when cancelled</returns>
 		int BrowseSectorEffect(IWin32Window owner, int initialvalue);
+		
+		/// <summary>
+		/// This browses sector effects
+		/// </summary>
+		/// <returns>Returns the new effect or the same effect when cancelled</returns>
+		int BrowseSectorEffect(IWin32Window owner, int initialvalue, bool addanyeffect);
 
 		/// <summary>
 		/// This browses for a texture
@@ -123,7 +135,7 @@ namespace CodeImp.DoomBuilder.Windows
 		/// </para>
 		/// </summary>
 		/// <param name="menu">The menu to add to Doom Builder.</param>
-		void AddMenu(ToolStripMenuItem menu);
+		void AddMenu(ToolStripItem menu);
 		
 		/// <summary>
 		/// This adds a menu or menu item to the Doom Builder menu strip in a specific location.
@@ -134,13 +146,24 @@ namespace CodeImp.DoomBuilder.Windows
 		/// </summary>
 		/// <param name="menu">The menu to add to Doom Builder.</param>
 		/// <param name="section">The location where to insert the menu or item.</param>
-		void AddMenu(ToolStripMenuItem menu, MenuSection section);
+		void AddMenu(ToolStripItem menu, MenuSection section);
+
+		/// <summary>
+		/// This adds a menu or menu item to the speicfied group inside of "Modes" menu strip.
+		/// <para>
+		/// NOTE: When the Tag property of menu items is set with a string, this changes the
+		/// tag to a fully qualified action name by prefixing it with the assembly name.
+		/// </para>
+		/// </summary>
+		/// <param name="menu">The menu to add to Doom Builder.</param>
+		/// <param name="group">The group in the "Modes" menu in which to insert the menu.</param>
+		void AddModesMenu(ToolStripItem menu, string group);
 		
 		/// <summary>
 		/// This removes a menu from the Doom Builder menu strip.
 		/// </summary>
 		/// <param name="menu">The menu to remove.</param>
-		void RemoveMenu(ToolStripMenuItem menu);
+		void RemoveMenu(ToolStripItem menu);
 		
 		/// <summary>
 		/// This method invokes the action specified on the Tag property of the given menu item.
@@ -161,14 +184,34 @@ namespace CodeImp.DoomBuilder.Windows
 		void AddButton(ToolStripItem button, ToolbarSection section);
 
 		/// <summary>
+		/// This adds a custom button to the Modes section in the toolbar. Note that the visibility of the button will be controlled by the user's preferences of that section!
+		/// </summary>
+		void AddModesButton(ToolStripItem toolbarButton, string group);
+
+		/// <summary>
 		/// This removes a custom button from the toolbar.
 		/// </summary>
 		void RemoveButton(ToolStripItem button);
+
+		/// <summary>
+		/// This suspends layouts of all toolbars, which can have buttons added/removed using AddButton() / RemoveButton().
+		/// </summary>
+		void BeginToolbarUpdate(); //mxd
+
+		/// <summary>
+		/// This resumes layouts of all toolbars, which can have buttons added/removed using AddButton() / RemoveButton().
+		/// </summary>
+		void EndToolbarUpdate(); //mxd
 		
 		/// <summary>
 		/// This adds a docker to the side panel.
 		/// </summary>
 		void AddDocker(Docker d);
+
+		/// <summary>
+		/// This adds a docker to the side panel and plays notify animation when the control is collapsed
+		/// </summary>
+		void AddDocker(Docker d, bool notify); //mxd
 		
 		/// <summary>
 		/// This removes a docker from the side panel.

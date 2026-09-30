@@ -16,11 +16,6 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using System.IO;
 
 #endregion
@@ -35,7 +30,7 @@ namespace CodeImp.DoomBuilder.IO
 		public string filename;			// bar.wad
 		public string filetitle;		// bar
 		public string extension;		// wad
-		public string path;				// foo
+		public string path;				// foo\
 		public string filepathname;		// Foo\Bar.WAD
 		public string filepathtitle;	// Foo\Bar
 
@@ -52,7 +47,7 @@ namespace CodeImp.DoomBuilder.IO
 				extension = "";
 			path = Path.GetDirectoryName(fullname);
 			if(path.Length > (frompath.Length + 1))
-				path = path.Substring(frompath.Length + 1);
+				path = path.Substring(frompath.Length + 1) + Path.DirectorySeparatorChar;
 			else
 				path = "";
 			filepathname = Path.Combine(path, filename);
@@ -77,6 +72,7 @@ namespace CodeImp.DoomBuilder.IO
 			else
 				extension = "";
 			path = Path.GetDirectoryName(fullname);
+			if(!string.IsNullOrEmpty(path)) path += Path.DirectorySeparatorChar; //mxd
 			filepathname = Path.Combine(path, filename);
 			filepathtitle = Path.Combine(path, filetitle);
 

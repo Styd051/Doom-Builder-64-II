@@ -17,28 +17,23 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Drawing.Drawing2D;
-using System.Globalization;
-using System.Text;
 using System.Drawing;
-using CodeImp.DoomBuilder.Geometry;
-using SlimDX.Direct3D9;
+using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.IO;
 using System.IO;
-using System.Windows.Forms;
 using System.Runtime.InteropServices;
+using CodeImp.DoomBuilder.Geometry;
+using CodeImp.DoomBuilder.IO;
+using CodeImp.DoomBuilder.Rendering;
 using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.Config;   // villsa
+using SlimDX;
+using SlimDX.Direct3D9;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.Data
 {
-	public abstract unsafe class ImageData
+	public abstract unsafe class ImageData : IDisposable
 	{
 		#region ================== Constants
 		
@@ -47,14 +42,26 @@ namespace CodeImp.DoomBuilder.Data
 		#region ================== Variables
 		
 		// Properties
-		private string name;
-		private long longname;
+		protected string name;
+		protected long longname;
 		protected int width;
 		protected int height;
 		protected Vector2D scale;
 		protected bool worldpanning;
-		protected bool usecolorcorrection;
-        private int palindex;   // villsa
+		private bool usecolorcorrection;
+		protected string filepathname; //mxd. Absolute path to the image;
+		protected string shortname; //mxd. Name in uppercase and clamped to DataManager.CLASIC_IMAGE_NAME_LENGTH
+		protected string virtualname; //mxd. Path of this name is used in TextureBrowserForm
+		protected string displayname; //mxd. Name to display in TextureBrowserForm
+		protected bool isFlat; //mxd. If false, it's a texture
+		protected bool istranslucent; //mxd. If true, has pixels with alpha > 0 && < 255 
+		protected bool ismasked; //mxd. If true, has pixels with zero alpha
+		protected bool hasLongName; //mxd. Texture name is longer than DataManager.CLASIC_IMAGE_NAME_LENGTH
+		protected bool hasPatchWithSameName; //mxd
+
+		//mxd. Hashing
+		private static int hashcounter;
+		private readonly int hashcode;
 		
 		// Loading
 		private volatile ImageLoadState previewstate;
@@ -71,11 +78,12 @@ namespace CodeImp.DoomBuilder.Data
 		protected Bitmap bitmap;
 		
 		// Direct3D texture
-		private int mipmaplevels = 0;	// 0 = all mipmaps
+		private int mipmaplevels;	// 0 = all mipmaps
+		protected bool dynamictexture;
 		private Texture texture;
 		
 		// Disposing
-		protected bool isdisposed = false;
+		protected bool isdisposed;
 		
 		#endregion
 		
@@ -83,6 +91,15 @@ namespace CodeImp.DoomBuilder.Data
 		
 		public string Name { get { return name; } }
 		public long LongName { get { return longname; } }
+		public string ShortName { get { return shortname; } } //mxd
+		public string FilePathName { get { return filepathname; } } //mxd
+		public string VirtualName { get { return virtualname; } } //mxd
+		public string DisplayName { get { return displayname; } } //mxd
+		public bool IsFlat { get { return isFlat; } } //mxd
+		public bool IsTranslucent { get { return istranslucent; } } //mxd
+		public bool IsMasked { get { return ismasked; } } //mxd
+		public bool HasPatchWithSameName { get { return hasPatchWithSameName; } } //mxd
+		internal bool HasLongName { get { return hasLongName; } } //mxd
 		public bool UseColorCorrection { get { return usecolorcorrection; } set { usecolorcorrection = value; } }
 		public Texture Texture { get { lock(this) { return texture; } } }
 		public bool IsPreviewLoaded { get { return (previewstate == ImageLoadState.Ready); } }
@@ -95,26 +112,28 @@ namespace CodeImp.DoomBuilder.Data
 		public bool IsReferenced { get { return (references > 0) || usedinmap; } }
 		public bool UsedInMap { get { return usedinmap; } }
 		public int MipMapLevels { get { return mipmaplevels; } set { mipmaplevels = value; } }
-		public int Width { get { return width; } }
-		public int Height { get { return height; } }
+		public virtual int Width { get { return width; } }
+		public virtual int Height { get { return height; } }
 		internal int PreviewIndex { get { return previewindex; } set { previewindex = value; } }
-		public float ScaledWidth { get { return width * scale.x; } }
-		public float ScaledHeight { get { return height * scale.y; } }
-		public Vector2D Scale { get { return scale; } }
+		//mxd. Scaled texture size is integer in ZDoom.
+		public virtual float ScaledWidth { get { return (float)Math.Round(width * scale.x); } }
+		public virtual float ScaledHeight { get { return (float)Math.Round(height * scale.y); } }
+		public virtual Vector2D Scale { get { return scale; } }
 		public bool WorldPanning { get { return worldpanning; } }
-        public int PalIndex { get { return palindex; } set { palindex = value; } } // villsa
-		
+
 		#endregion
 
 		#region ================== Constructor / Disposer
 
 		// Constructor
-		public ImageData()
+		protected ImageData()
 		{
 			// Defaults
 			usecolorcorrection = true;
 			allowunload = true;
-            palindex = 0;   // villsa
+
+			//mxd. Hashing
+			hashcode = hashcounter++;
 		}
 
 		// Destructor
@@ -176,10 +195,14 @@ namespace CodeImp.DoomBuilder.Data
 		}
 		
 		// This sets the name
-		protected void SetName(string name)
+		protected virtual void SetName(string name)
 		{
 			this.name = name;
-			this.longname = Lump.MakeLongName(name);
+			this.filepathname = name; //mxd
+			this.shortname = name; //mxd
+			this.virtualname = name; //mxd
+			this.displayname = name; //mxd
+			this.longname = Lump.MakeLongName(name); //mxd
 		}
 		
 		// This unloads the image
@@ -200,23 +223,15 @@ namespace CodeImp.DoomBuilder.Data
 			{
 				// Image loaded successfully?
 				if(!loadfailed && (imagestate == ImageLoadState.Ready) && (bitmap != null))
-				{
 					return bitmap;
-				}
+				
 				// Image loading failed?
-				else if(loadfailed)
-				{
-					return Properties.Resources.Failed;
-				}
-				else
-				{
-					return Properties.Resources.Hourglass;
-				}
+				return (loadfailed ? Properties.Resources.Failed : Properties.Resources.Hourglass);
 			}
 		}
 		
 		// This loads the image
-		public void LoadImage()
+		public virtual void LoadImage()
 		{
 			// Do the loading
 			LocalLoadImage();
@@ -229,131 +244,66 @@ namespace CodeImp.DoomBuilder.Data
 		// This requests loading the image
 		protected virtual void LocalLoadImage()
 		{
-			BitmapData bmpdata = null;
-			
 			lock(this)
 			{
 				// Bitmap loaded successfully?
 				if(bitmap != null)
 				{
-                    // Bitmap has incorrect format?
-                    if(bitmap.PixelFormat != PixelFormat.Format32bppArgb)
-                    {
-                        //General.ErrorLogger.Add(ErrorType.Warning, "Image '" + name + "' does not have A8R8G8B8 pixel format. Conversion was needed.");
-                        Bitmap oldbitmap = bitmap;
-                        try
-                        {
-                            // Convert to desired pixel format
-                            bitmap = new Bitmap(oldbitmap.Size.Width, oldbitmap.Size.Height, PixelFormat.Format32bppArgb);
-                            Graphics g = Graphics.FromImage(bitmap);
-                            g.PageUnit = GraphicsUnit.Pixel;
-                            g.CompositingQuality = CompositingQuality.HighQuality;
-                            g.InterpolationMode = InterpolationMode.NearestNeighbor;
-                            g.SmoothingMode = SmoothingMode.None;
-                            g.PixelOffsetMode = PixelOffsetMode.None;
-                            g.Clear(Color.Transparent);
-                            g.DrawImage(oldbitmap, 0, 0, oldbitmap.Size.Width, oldbitmap.Size.Height);
-                            g.Dispose();
-                            oldbitmap.Dispose();
-                        }
-                        catch(Exception e)
-                        {
-                            bitmap = oldbitmap;
-                            General.ErrorLogger.Add(ErrorType.Warning, "Cannot lock image '" + name + "' for pixel format conversion. The image may not be displayed correctly.\n" + e.GetType().Name + ": " + e.Message);
-                        }
-                    }
+					// Bitmap has incorrect format?
+					if(bitmap.PixelFormat != PixelFormat.Format32bppArgb)
+					{
+						if(dynamictexture)
+							throw new Exception("Dynamic images must be in 32 bits ARGB format.");
+						
+						//General.ErrorLogger.Add(ErrorType.Warning, "Image '" + name + "' does not have A8R8G8B8 pixel format. Conversion was needed.");
+						Bitmap oldbitmap = bitmap;
+						try
+						{
+							// Convert to desired pixel format
+							bitmap = new Bitmap(oldbitmap.Size.Width, oldbitmap.Size.Height, PixelFormat.Format32bppArgb);
+							Graphics g = Graphics.FromImage(bitmap);
+							g.PageUnit = GraphicsUnit.Pixel;
+							g.CompositingQuality = CompositingQuality.HighQuality;
+							g.InterpolationMode = InterpolationMode.NearestNeighbor;
+							g.SmoothingMode = SmoothingMode.None;
+							g.PixelOffsetMode = PixelOffsetMode.None;
+							g.Clear(Color.Transparent);
+							g.DrawImage(oldbitmap, 0, 0, oldbitmap.Size.Width, oldbitmap.Size.Height);
+							g.Dispose();
+							oldbitmap.Dispose();
+						}
+						catch(Exception e)
+						{
+							bitmap = oldbitmap;
+							General.ErrorLogger.Add(ErrorType.Warning, "Cannot lock image \"" + name + "\" for pixel format conversion. The image may not be displayed correctly.\n" + e.GetType().Name + ": " + e.Message);
+						}
+					}
+					
+					// This applies brightness correction on the image
+					if(usecolorcorrection)
+					{
+						BitmapData bmpdata = null;
+						
+						try
+						{
+							// Try locking the bitmap
+							bmpdata = bitmap.LockBits(new Rectangle(0, 0, bitmap.Size.Width, bitmap.Size.Height), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+						}
+						catch(Exception e)
+						{
+							General.ErrorLogger.Add(ErrorType.Warning, "Cannot lock image \"" + name + "\" for color correction. The image may not be displayed correctly.\n" + e.GetType().Name + ": " + e.Message);
+						}
 
-                    // styd: Doom64 sprite palette variant support (e.g. Nightmare Imp).
-                    // PNG-based Doom64 sprites are decoded straight to 32bppArgb by .NET's built-in
-                    // codec — their indexed colors are already resolved to final RGB using the PNG's
-                    // own embedded/native palette before we ever see the bitmap, so there is no
-                    // indexed ColorPalette left to swap by this point (the classic villsa approach
-                    // above never actually triggers for these). Instead, remap already-decoded pixel
-                    // colors: look up each pixel's RGB in the sprite's OWN base palette (e.g. PALTROO0
-                    // for any TROO* sprite, derived from the sprite name's 4-letter prefix, matching
-                    // Doom's sprite-name convention) to recover its original palette index, then
-                    // replace it with the alternate palette's (e.g. PALTROO1) color at that same index.
-                    if (palindex > 0 && General.Map != null && General.Map.FormatInterface != null &&
-                        General.Map.FormatInterface.InDoom64Mode &&
-                        bitmap.PixelFormat == PixelFormat.Format32bppArgb && name.Length >= 4)
-                    {
-                        TextureIndexInfo target = null;
-                        foreach (TextureIndexInfo tp in General.Map.Config.ThingPalettes)
-                        {
-                            if (tp.Index == palindex && General.Map.Data.ThingPalette.ContainsKey(tp.Title))
-                            {
-                                target = tp;
-                                break;
-                            }
-                        }
-
-                        if (target != null)
-                        {
-                            string basename = "PAL" + name.Substring(0, 4) + "0";
-                            Playpal basepal = General.Map.Data.GetOrLoadThingPalette(basename);
-                            if (basepal != null)
-                            {
-                                Playpal altpal = General.Map.Data.ThingPalette[target.Title];
-
-                                // Build reverse lookup: RGB -> palette index (first match wins on duplicates)
-                                Dictionary<int, int> reverse = new Dictionary<int, int>();
-                                for (int i = 0; i < 256; i++)
-                                {
-                                    int key = (basepal[i].r << 16) | (basepal[i].g << 8) | basepal[i].b;
-                                    if (!reverse.ContainsKey(key))
-                                        reverse.Add(key, i);
-                                }
-
-                                try
-                                {
-                                    BitmapData remapdata = bitmap.LockBits(new Rectangle(0, 0, bitmap.Size.Width, bitmap.Size.Height), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
-                                    PixelColor* rp = (PixelColor*)(remapdata.Scan0.ToPointer());
-                                    int pixelcount = remapdata.Width * remapdata.Height;
-                                    for (int i = 0; i < pixelcount; i++)
-                                    {
-                                        int key = (rp[i].r << 16) | (rp[i].g << 8) | rp[i].b;
-                                        int idx;
-                                        if (reverse.TryGetValue(key, out idx))
-                                        {
-                                            rp[i].r = altpal[idx].r;
-                                            rp[i].g = altpal[idx].g;
-                                            rp[i].b = altpal[idx].b;
-                                            // alpha (rp[i].a) is left untouched, preserving transparency
-                                        }
-                                    }
-                                    bitmap.UnlockBits(remapdata);
-                                }
-                                catch (Exception e)
-                                {
-                                    General.ErrorLogger.Add(ErrorType.Warning, "Cannot remap palette for image '" + name + "'.\n" + e.GetType().Name + ": " + e.Message);
-                                }
-                            }
-                        }
-                    }
-
-                    // This applies brightness correction on the image
-                    if(usecolorcorrection)
-                    {
-                        try
-                        {
-                            // Try locking the bitmap
-                            bmpdata = bitmap.LockBits(new Rectangle(0, 0, bitmap.Size.Width, bitmap.Size.Height), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
-                        }
-                        catch(Exception e)
-                        {
-                            General.ErrorLogger.Add(ErrorType.Warning, "Cannot lock image '" + name + "' for color correction. The image may not be displayed correctly.\n" + e.GetType().Name + ": " + e.Message);
-                        }
-
-                        // Bitmap locked?
-                        if(bmpdata != null)
-                        {
-                            // Apply color correction
-                            PixelColor* pixels = (PixelColor*)(bmpdata.Scan0.ToPointer());
-                            General.Colors.ApplColorCorrection(pixels, bmpdata.Width * bmpdata.Height);
-                            bitmap.UnlockBits(bmpdata);
-                        }
-                    }
-                }
+						// Bitmap locked?
+						if(bmpdata != null)
+						{
+							// Apply color correction
+							PixelColor* pixels = (PixelColor*)(bmpdata.Scan0.ToPointer());
+							General.Colors.ApplyColorCorrection(pixels, bmpdata.Width * bmpdata.Height);
+							bitmap.UnlockBits(bmpdata);
+						}
+					}
+				}
 				else
 				{
 					// Loading failed
@@ -367,6 +317,12 @@ namespace CodeImp.DoomBuilder.Data
 				{
 					width = bitmap.Size.Width;
 					height = bitmap.Size.Height;
+
+					if(dynamictexture)
+					{
+						if((width != General.NextPowerOf2(width)) || (height != General.NextPowerOf2(height)))
+							throw new Exception("Dynamic images must have a size in powers of 2.");
+					}
 
 					// Do we still have to set a scale?
 					if((scale.x == 0.0f) && (scale.y == 0.0f))
@@ -382,6 +338,101 @@ namespace CodeImp.DoomBuilder.Data
 							scale.y = 1.0f;
 						}
 					}
+
+					if(!loadfailed)
+					{
+						//mxd. Check translucency and calculate average color?
+						if(General.Map != null && General.Map.Data != null && General.Map.Data.GlowingFlats != null &&
+						   General.Map.Data.GlowingFlats.ContainsKey(longname) &&
+						   General.Map.Data.GlowingFlats[longname].CalculateTextureColor)
+						{
+							BitmapData bmpdata = null;
+							try
+							{
+								bmpdata = bitmap.LockBits(new Rectangle(0, 0, bitmap.Size.Width, bitmap.Size.Height), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+							}
+							catch(Exception e)
+							{
+								General.ErrorLogger.Add(ErrorType.Error, "Cannot lock image \"" + this.filepathname + "\" for glow color calculation. " + e.GetType().Name + ": " + e.Message);
+							}
+
+							if(bmpdata != null)
+							{
+								PixelColor* pixels = (PixelColor*)(bmpdata.Scan0.ToPointer());
+								int numpixels = bmpdata.Width * bmpdata.Height;
+								uint r = 0;
+								uint g = 0;
+								uint b = 0;
+
+								for(PixelColor* cp = pixels + numpixels - 1; cp >= pixels; cp--)
+								{
+									r += cp->r;
+									g += cp->g;
+									b += cp->b;
+
+									// Also check alpha
+									if(cp->a > 0 && cp->a < 255) istranslucent = true;
+									else if(cp->a == 0) ismasked = true;
+								}
+
+								// Update glow data
+								int br = (int)(r / numpixels);
+								int bg = (int)(g / numpixels);
+								int bb = (int)(b / numpixels);
+
+								int max = Math.Max(br, Math.Max(bg, bb));
+
+								// Black can't glow...
+								if(max == 0)
+								{
+									General.Map.Data.GlowingFlats.Remove(longname);
+								}
+								else
+								{
+									// That's how it's done in GZDoom (and I may be totally wrong about this)
+									br = Math.Min(255, br * 153 / max);
+									bg = Math.Min(255, bg * 153 / max);
+									bb = Math.Min(255, bb * 153 / max);
+
+									General.Map.Data.GlowingFlats[longname].Color = new PixelColor(255, (byte)br, (byte)bg, (byte)bb);
+									General.Map.Data.GlowingFlats[longname].CalculateTextureColor = false;
+									if(!General.Map.Data.GlowingFlats[longname].Fullbright) General.Map.Data.GlowingFlats[longname].Brightness = (br + bg + bb) / 3;
+								}
+
+								// Release the data
+								bitmap.UnlockBits(bmpdata);
+							}
+						}
+						//mxd. Check if the texture is translucent
+						else
+						{
+							BitmapData bmpdata = null;
+							try
+							{
+								bmpdata = bitmap.LockBits(new Rectangle(0, 0, bitmap.Size.Width, bitmap.Size.Height), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+							}
+							catch(Exception e)
+							{
+								General.ErrorLogger.Add(ErrorType.Error, "Cannot lock image \"" + this.filepathname + "\" for translucency check. " + e.GetType().Name + ": " + e.Message);
+							}
+
+							if(bmpdata != null)
+							{
+								PixelColor* pixels = (PixelColor*)(bmpdata.Scan0.ToPointer());
+								int numpixels = bmpdata.Width * bmpdata.Height;
+
+								for(PixelColor* cp = pixels + numpixels - 1; cp >= pixels; cp--)
+								{
+									// Check alpha
+									if(cp->a > 0 && cp->a < 255) istranslucent = true;
+									else if(cp->a == 0) ismasked = true;
+								}
+
+								// Release the data
+								bitmap.UnlockBits(bmpdata);
+							}
+						}
+					}
 				}
 				
 				// Image is ready
@@ -392,8 +443,6 @@ namespace CodeImp.DoomBuilder.Data
 		// This creates the Direct3D texture
 		public virtual void CreateTexture()
 		{
-			MemoryStream memstream;
-			
 			lock(this)
 			{
 				// Only do this when texture is not created yet
@@ -403,13 +452,70 @@ namespace CodeImp.DoomBuilder.Data
 					if(loadfailed) img = Properties.Resources.Failed;
 					
 					// Write to memory stream and read from memory
-					memstream = new MemoryStream((img.Size.Width * img.Size.Height * 4) + 4096);
+					MemoryStream memstream = new MemoryStream((img.Size.Width * img.Size.Height * 4) + 4096);
 					img.Save(memstream, ImageFormat.Bmp);
 					memstream.Seek(0, SeekOrigin.Begin);
-					texture = Texture.FromStream(General.Map.Graphics.Device, memstream, (int)memstream.Length,
-									img.Size.Width, img.Size.Height, mipmaplevels, Usage.None, Format.Unknown,
-									Pool.Managed, General.Map.Graphics.PostFilter, General.Map.Graphics.MipGenerateFilter, 0);
+					if(dynamictexture)
+					{
+						texture = Texture.FromStream(General.Map.Graphics.Device, memstream, (int)memstream.Length,
+										img.Size.Width, img.Size.Height, mipmaplevels, Usage.Dynamic, Format.A8R8G8B8,
+										Pool.Default, General.Map.Graphics.PostFilter, General.Map.Graphics.MipGenerateFilter, 0);
+					}
+					else
+					{
+						texture = Texture.FromStream(General.Map.Graphics.Device, memstream, (int)memstream.Length,
+										img.Size.Width, img.Size.Height, mipmaplevels, Usage.None, Format.Unknown,
+										Pool.Managed, General.Map.Graphics.PostFilter, General.Map.Graphics.MipGenerateFilter, 0);
+					}
 					memstream.Dispose();
+					
+					if(dynamictexture)
+					{
+						if((width != texture.GetLevelDescription(0).Width) || (height != texture.GetLevelDescription(0).Height))
+							throw new Exception("Could not create a texture with the same size as the image.");
+					}
+
+#if DEBUG
+					texture.Tag = name; //mxd. Helps with tracking undisposed resources...
+#endif
+				}
+			}
+		}
+
+		// This updates a dynamic texture
+		public void UpdateTexture()
+		{
+			if(!dynamictexture)
+				throw new Exception("The image must be a dynamic image to support direct updating.");
+			
+			lock(this)
+			{
+				if((texture != null) && !texture.Disposed)
+				{
+					// Lock the bitmap and texture
+					BitmapData bmpdata = bitmap.LockBits(new Rectangle(0, 0, bitmap.Size.Width, bitmap.Size.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+					DataRectangle texdata = texture.LockRectangle(0, LockFlags.Discard);
+
+					// Copy data
+					int* bp = (int*)bmpdata.Scan0.ToPointer();
+					int* tp = (int*)texdata.Data.DataPointer.ToPointer();
+					for(int y = 0; y < bmpdata.Height; y++)
+					{
+						for(int x = 0; x < bmpdata.Width; x++)
+						{
+							*tp = *bp;
+							bp++;
+							tp++;
+						}
+
+						// Skip extra data in texture
+						int extrapitch = (texdata.Pitch >> 2) - bmpdata.Width;
+						tp += extrapitch;
+					}
+
+					// Unlock
+					texture.UnlockRectangle(0);
+					bitmap.UnlockBits(bmpdata);
 				}
 			}
 		}
@@ -440,15 +546,15 @@ namespace CodeImp.DoomBuilder.Data
 				else if(loadfailed)
 				{
 					// Draw error bitmap
-					targetpos = new Point(targetpos.X + ((General.Map.Data.Previews.MaxImageWidth - Properties.Resources.Hourglass.Width) >> 1),
-										  targetpos.Y + ((General.Map.Data.Previews.MaxImageHeight - Properties.Resources.Hourglass.Height) >> 1));
+					targetpos = new Point(targetpos.X + ((PreviewManager.MAX_PREVIEW_SIZE - Properties.Resources.Hourglass.Width) >> 1),
+										  targetpos.Y + ((PreviewManager.MAX_PREVIEW_SIZE - Properties.Resources.Hourglass.Height) >> 1));
 					target.DrawImageUnscaled(Properties.Resources.Failed, targetpos);
 				}
 				else
 				{
 					// Draw loading bitmap
-					targetpos = new Point(targetpos.X + ((General.Map.Data.Previews.MaxImageWidth - Properties.Resources.Hourglass.Width) >> 1),
-										  targetpos.Y + ((General.Map.Data.Previews.MaxImageHeight - Properties.Resources.Hourglass.Height) >> 1));
+					targetpos = new Point(targetpos.X + ((PreviewManager.MAX_PREVIEW_SIZE - Properties.Resources.Hourglass.Width) >> 1),
+										  targetpos.Y + ((PreviewManager.MAX_PREVIEW_SIZE - Properties.Resources.Hourglass.Height) >> 1));
 					target.DrawImageUnscaled(Properties.Resources.Hourglass, targetpos);
 				}
 			}
@@ -465,18 +571,23 @@ namespace CodeImp.DoomBuilder.Data
 					// Make a copy
 					return General.Map.Data.Previews.GetPreviewCopy(previewindex);
 				}
+				
 				// Loading failed?
-				else if(loadfailed)
+				if(loadfailed)
 				{
 					// Return error bitmap
 					return Properties.Resources.Failed;
 				}
-				else
-				{
-					// Return loading bitmap
-					return Properties.Resources.Hourglass;
-				}
+
+				// Return loading bitmap
+				return Properties.Resources.Hourglass;
 			}
+		}
+
+		//mxd. This greatly speeds up Dictionary lookups
+		public override int GetHashCode()
+		{
+			return hashcode;
 		}
 		
 		#endregion

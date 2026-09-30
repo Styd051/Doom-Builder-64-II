@@ -17,22 +17,15 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Rendering;
-using SlimDX.Direct3D9;
-using System.Drawing;
 using System.IO;
-using CodeImp.DoomBuilder.Map; // villsa
 
 #endregion
 
 namespace CodeImp.DoomBuilder.IO
 {
-	internal sealed class SerializerStream : IReadWriteStream
+	internal sealed class SerializerStream : IReadWriteStream, IDisposable
 	{
 		#region ================== Constants
 
@@ -40,9 +33,10 @@ namespace CodeImp.DoomBuilder.IO
 
 		#region ================== Variables
 
-		private Stream stream;
-		private BinaryWriter writer;
-		private Dictionary<string, ushort> stringstable;
+		//private Stream stream;
+		private readonly BinaryWriter writer;
+		private readonly Dictionary<string, ushort> stringstable;
+		private bool isdisposed; //mxd
 
 		#endregion
 
@@ -58,9 +52,20 @@ namespace CodeImp.DoomBuilder.IO
 		public SerializerStream(Stream stream)
 		{
 			// Initialize
-			this.stream = stream;
+			//this.stream = stream;
 			this.writer = new BinaryWriter(stream);
-			this.stringstable = new Dictionary<string, ushort>();
+			this.stringstable = new Dictionary<string, ushort>(StringComparer.Ordinal);
+		}
+
+		//mxd
+		public void Dispose()
+		{
+			// Not already disposed?
+			if(!isdisposed)
+			{
+				if(writer != null) writer.Close();
+				isdisposed = true;
+			}
 		}
 
 		#endregion
@@ -130,19 +135,6 @@ namespace CodeImp.DoomBuilder.IO
 			writer.Write(v.z);
 		}
 
-        //villsa
-        public void rwLight(ref Lights v)
-        {
-            writer.Write(v.color.r);
-            writer.Write(v.color.g);
-            writer.Write(v.color.b);
-            writer.Write(v.color.a);
-            writer.Write(v.tag);
-            writer.Write(v.isDirect);   // styd: preserves provenance (direct <256 vs LIGHTS input ≥256) across undo/redo
-            writer.Write(v.hasOriginalIndex);   // styd
-            writer.Write(v.originalIndex);   // styd
-        }
-
 		// Write-only
 		public void wInt(int v) { writer.Write(v); }
 
@@ -185,19 +177,6 @@ namespace CodeImp.DoomBuilder.IO
 			writer.Write(v.z);
 		}
 
-        //villsa
-        public void wLight(Lights v)
-        {
-            writer.Write(v.color.r);
-            writer.Write(v.color.g);
-            writer.Write(v.color.b);
-            writer.Write(v.color.a);
-            writer.Write(v.tag);
-            writer.Write(v.isDirect);   // styd
-            writer.Write(v.hasOriginalIndex);   // styd
-            writer.Write(v.originalIndex);   // styd
-        }
-
 		// Read-only is not supported
 		public void rInt(out int v) { v = 0; General.Fail("Read-only is not supported on serialization stream. Consider passing the element by reference for bidirectional support."); }
 
@@ -230,13 +209,6 @@ namespace CodeImp.DoomBuilder.IO
 			v = new Vector3D();
 			General.Fail("Read-only is not supported on serialization stream. Consider passing the element by reference for bidirectional support.");
 		}
-
-        //villsa
-        public void rLight(out Lights v)
-        {
-            v = new Lights();
-            General.Fail("Read-only is not supported on serialization stream. Consider passing the element by reference for bidirectional support.");
-        }
 		
 		#endregion
 	}

@@ -1,153 +1,286 @@
-
-#region ================== Copyright (c) 2007 Pascal vd Heiden
-
-/*
- * Copyright (c) 2007 Pascal vd Heiden, www.codeimp.com
- * This program is released under GNU General Public License
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- * 
- */
-
-#endregion
-
-#region ================== Namespaces
+﻿#region ================== Namespaces
 
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
-using System.Text;
-using System.Windows.Forms;
-using Microsoft.Win32;
-using System.Diagnostics;
-using CodeImp.DoomBuilder.Actions;
 using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.Config;
-using CodeImp.DoomBuilder.Rendering;
-using System.Drawing.Imaging;
 using System.Drawing.Drawing2D;
-using SlimDX.Direct3D9;
-using SlimDX;
-
+using System.Text;
 #endregion
 
 namespace CodeImp.DoomBuilder.Controls
 {
-	internal class ImageBrowserItem : ListViewItem, IComparable<ImageBrowserItem>
+	#region ================== mxd. ImageBrowserItemType
+
+	internal enum ImageBrowserItemType
+	{
+		// Values order is used when sorting ImageBrowserItems!
+		FOLDER_UP,
+		FOLDER,
+		IMAGE,
+	}
+
+	#endregion
+
+	internal class ImageBrowserItem : IComparable<ImageBrowserItem>
 	{
 		#region ================== Variables
 
-		// Display image
-		public ImageData icon;
-		
-		// Group
-		private ListViewGroup listgroup;
-		
-		// Image cache
+		protected ImageData icon;
 		private bool imageloaded;
-		
+		private bool showfullname;
+		protected ImageBrowserItemType itemtype;
+		private string tooltip;
+		private int namewidth;
+		private int shortnamewidth;
+
+        private static Brush bgbrush, fgbrush_used, fgbrush_unused, selectedbgbrush, selectionbrush, selectiontextbrush, bgbrush_alpha;
+        private static Color bgcolor;
+        private static Pen selection, frame_used, frame_unused;
+        private static StringBuilder size_builder;
+        private static Font pixelSizeFont;
+
+        #endregion
+
+        #region ================== Properties
+
+        public ImageData Icon { get { return icon; } }
+		public ImageBrowserItemType ItemType { get { return itemtype; } }
+		public virtual bool IsPreviewLoaded { get { return icon.IsPreviewLoaded; } }
+		public bool ShowFullName { set { showfullname = value; } }
+		public virtual string TextureName { get { return (showfullname ? icon.Name : icon.ShortName); } }
+		public virtual int TextureNameWidth { get { return (showfullname ? namewidth : shortnamewidth); } }
+		public string ToolTip { get { return tooltip; } }
+
 		#endregion
 
-		#region ================== Properties
-
-		public ListViewGroup ListGroup { get { return listgroup; } set { listgroup = value; } }
-		public bool IsPreviewLoaded { get { return imageloaded; } }
-
-		#endregion
-
-		#region ================== Constructor / Disposer
+		#region ================== Constructor
 
 		// Constructors
-		public ImageBrowserItem(string text, ImageData icon, object tag)
+		protected ImageBrowserItem() { } //mxd. Needed for inheritance...
+		public ImageBrowserItem(ImageData icon, string tooltip, bool showfullname)
 		{
 			// Initialize
-			this.Text = text;
 			this.icon = icon;
-			this.Tag = tag;
+			this.itemtype = ImageBrowserItemType.IMAGE; //mxd
+			this.showfullname = showfullname; //mxd
+			this.imageloaded = icon.IsPreviewLoaded; //mxd
+			this.tooltip = tooltip; //mxd
+            
+			//mxd. Calculate names width
+			this.namewidth = (int)Math.Ceiling(General.Interface.MeasureString(icon.Name, SystemFonts.MessageBoxFont, 10000, StringFormat.GenericTypographic).Width)+6;
+			this.shortnamewidth = (int)Math.Ceiling(General.Interface.MeasureString(icon.ShortName, SystemFonts.MessageBoxFont, 10000, StringFormat.GenericTypographic).Width)+6;
 		}
-		
+
 		#endregion
-		
+
 		#region ================== Methods
-		
-		// This checks if a redraw is needed
-		public bool CheckRedrawNeeded()
+
+		internal bool CheckRedrawNeeded()
 		{
-			return (icon.IsPreviewLoaded != imageloaded);
-		}
-		
-		// This draws the images
-		public void Draw(Graphics g, Rectangle bounds)
-		{
-			Brush forecolor;
-			Brush backcolor;
-			
-			// Remember if the preview is loaded
-			imageloaded = icon.IsPreviewLoaded;
-
-			// Drawing settings
-			g.CompositingQuality = CompositingQuality.HighSpeed;
-			g.InterpolationMode = InterpolationMode.NearestNeighbor;
-			g.SmoothingMode = SmoothingMode.HighSpeed;
-			g.PixelOffsetMode = PixelOffsetMode.None;
-
-			// Determine coordinates
-			SizeF textsize = g.MeasureString(this.Text, this.ListView.Font, bounds.Width * 2);
-			Rectangle imagerect = new Rectangle(bounds.Left + ((bounds.Width - General.Map.Data.Previews.MaxImageWidth) >> 1),
-				bounds.Top + ((bounds.Height - General.Map.Data.Previews.MaxImageHeight - (int)textsize.Height) >> 1),
-				General.Map.Data.Previews.MaxImageWidth, General.Map.Data.Previews.MaxImageHeight);
-			PointF textpos = new PointF(bounds.Left + ((float)bounds.Width - textsize.Width) * 0.5f, bounds.Bottom - textsize.Height - 2);
-
-			// Determine colors
-			if(this.Selected)
+			if(icon.IsPreviewLoaded != imageloaded)
 			{
-				// Highlighted
-				backcolor = new LinearGradientBrush(new Point(0, bounds.Top - 1), new Point(0, bounds.Bottom + 1),
-					AdjustedColor(SystemColors.Highlight, 0.2f),
-					AdjustedColor(SystemColors.Highlight, -0.1f));
-				forecolor = SystemBrushes.HighlightText;
+				imageloaded = icon.IsPreviewLoaded;
+				return true;
 			}
-			else
+			return false;
+		}
+
+        internal static void SetBrushes(bool classicview, int x, int y, int w, int h)
+        {
+            if (size_builder == null)
+            {
+                size_builder = new StringBuilder(11); // 11 for 2 parens + 1 'x' + 4 * 2 numbers
+            }
+            // Pick colors and brushes
+            if (General.Settings.BlackBrowsers)
+            {
+                bgcolor = Color.Black;
+                bgbrush = Brushes.Black;
+                fgbrush_used = Brushes.Orange;
+                fgbrush_unused = Brushes.White;
+
+                if (!classicview)
+                {
+                    selectedbgbrush = Brushes.Gray;
+                }
+                else
+                {
+                    // FIXME - ano - okay this is a bit off
+                    // [ZZ] this is not "a bit" off. this is completely off. especially when items have different sizes.
+                    //      moved to item drawing.
+                }
+
+                frame_used = Pens.Orange;
+                frame_unused = Pens.Gray;
+                selection = Pens.Red;
+                selectionbrush = Brushes.Red;
+                selectiontextbrush = Brushes.White;
+            }
+            else
+            {
+                bgcolor = SystemColors.Window;
+                bgbrush = SystemBrushes.Window;
+                fgbrush_used = SystemBrushes.HotTrack;
+                fgbrush_unused = SystemBrushes.ControlText;
+
+                if (!classicview)
+                {
+                    selectedbgbrush = SystemBrushes.Highlight;
+                }
+                else
+                {
+                    selectedbgbrush = null;
+                }
+
+                frame_used = SystemPens.HotTrack;
+                frame_unused = SystemPens.ActiveBorder;
+                selection = SystemPens.HotTrack;
+                selectionbrush = SystemBrushes.HotTrack;
+                selectiontextbrush = SystemBrushes.Window;
+            }
+
+            bgbrush_alpha = new SolidBrush(Color.FromArgb(192, bgcolor));
+
+            if (General.Settings.TextureSizesBelow)
+            {
+                pixelSizeFont = new Font(SystemFonts.MessageBoxFont.FontFamily, SystemFonts.MessageBoxFont.Size * 0.8f, FontStyle.Regular);
+            }
+            else
+            {
+                pixelSizeFont = SystemFonts.MessageBoxFont;
+            }
+        }
+
+		internal void Draw(Graphics g, Image bmp, int x, int y, int w, int h, bool selected, bool used, bool classicview)
+		{
+			if(bmp == null) return;
+
+            int fontH = 4 + SystemFonts.MessageBoxFont.Height;
+            int h2 = h;
+            if (General.Settings.ShowTextureSizes && General.Settings.TextureSizesBelow && ItemType == ImageBrowserItemType.IMAGE)
+                h2 -= fontH;
+
+            var iw = bmp.Width;
+			var ih = bmp.Height;
+
+			if(iw > w && iw >= ih)
 			{
-				// Normal
-				backcolor = new SolidBrush(base.ListView.BackColor);
-				forecolor = new SolidBrush(base.ListView.ForeColor);
+				ih = (int)Math.Floor(h * (ih / (float)iw));
+				iw = w;
+			}
+			else if(ih > h2)
+			{
+				iw = (int)Math.Floor(w * (iw / (float)ih));
+				ih = h2;
 			}
 
-			// Draw!
-			g.FillRectangle(backcolor, bounds);
-			icon.DrawPreview(g, imagerect.Location);
-			g.DrawString(this.Text, this.ListView.Font, forecolor, textpos);
-		}
+            int ix = (iw < w ? x + (w - iw) / 2 : x);
+			int iy = (ih < h2 ? y + (h2 - ih) / 2 : y);
 
-		// This brightens or darkens a color
-		private Color AdjustedColor(Color c, float amount)
-		{
-			Color4 cc = new Color4(c);
-			
-			// Adjust color
-			cc.Red = Saturate((cc.Red * (1f + amount)) + (amount * 0.5f));
-			cc.Green = Saturate((cc.Green * (1f + amount)) + (amount * 0.5f));
-			cc.Blue = Saturate((cc.Blue * (1f + amount)) + (amount * 0.5f));
-			
-			// Return result
-			return Color.FromArgb(cc.ToArgb());
-		}
+			// Item bg
+			g.FillRectangle(bgbrush, x - 2, y - 2, w + 3, h + 8 + SystemFonts.MessageBoxFont.Height);
 
-		// This clamps a value between 0 and 1
-		private float Saturate(float v)
-		{
-			if(v < 0f) return 0f; else if(v > 1f) return 1f; else return v;
+            // Selected image bg
+            if (selected)
+            {
+                if (!classicview)
+                {
+                    g.FillRectangle(selectedbgbrush, x - 2, y - 2, w + 4, h + 2 + SystemFonts.MessageBoxFont.Height);
+                }
+                else
+                {
+                    // calculate selectedbgbrush here. once.
+                    Color topselected = Color.FromArgb(255, 37, 67, 151);
+                    Color bottomselected = Color.FromArgb(255, 1, 20, 83);
+                    selectedbgbrush = new LinearGradientBrush(new Point(x - 2, y - 3), new Point(x - 2, y + h + fontH), topselected, bottomselected);
+
+                    g.FillRectangle(selectedbgbrush, x - 13, y - 2, w + 26, h + fontH);
+                }
+            }
+
+			// Image
+			g.DrawImage(bmp, ix, iy, iw, ih);
+
+			// Frame
+			if(selected && !classicview)
+			{
+				g.DrawRectangle(selection, x - 1, y - 1, w + 1, h2 + 1);
+				g.DrawRectangle(selection, x - 2, y - 2, w + 3, h2 + 3);
+
+				// Image name bg
+				g.FillRectangle(selectionbrush, x - 2, y + h2 + 2, w + 4, SystemFonts.MessageBoxFont.Height + (General.Settings.TextureSizesBelow ? fontH : 0));
+			}
+			else if (!classicview)
+			{
+                g.DrawRectangle(used ? frame_used : frame_unused , x - 1, y - 1, w + 1, h2 + 1);
+			}
+
+            // Image name
+            float textureNameX = classicview ? (x + (float)w / 2 - TextureNameWidth / 2) : (x - 2);
+            g.DrawString(TextureName, SystemFonts.MessageBoxFont, (selected ? selectiontextbrush : (used ? fgbrush_used : fgbrush_unused)), textureNameX, y + h2 + 1);
+
+			// Image size
+			if(General.Settings.ShowTextureSizes && icon.IsPreviewLoaded && itemtype == ImageBrowserItemType.IMAGE)
+			{
+                if (!General.Settings.TextureSizesBelow)
+                {
+                    //string imagesize = Math.Abs(icon.ScaledWidth) + "x" + Math.Abs(icon.ScaledHeight);
+                    //ano - let's do this with a stringbuilder instead
+                    size_builder.Length = 0;
+                    size_builder.Append(Math.Abs(icon.ScaledWidth));
+                    size_builder.Append('x');
+                    size_builder.Append(Math.Abs(icon.ScaledHeight));
+
+                    string imagesize = size_builder.ToString();
+                    SizeF textsize = g.MeasureString(imagesize, pixelSizeFont);
+
+                    textsize.Width += 2;
+                    textsize.Height -= 3;
+
+                    // Draw bg
+                    if (selected)
+                    {
+                        g.FillRectangle(selectionbrush, x, y, textsize.Width, textsize.Height);
+                    }
+                    else
+                    {
+                         g.FillRectangle(bgbrush_alpha, x, y, textsize.Width, textsize.Height);
+                    }
+
+                    g.DrawString(imagesize, pixelSizeFont, (selected ? selectiontextbrush : (used ? fgbrush_used : fgbrush_unused)), x, y - 1);
+                }
+                else
+                {
+                    //string imagesize = "(" + Math.Abs(icon.ScaledWidth) + "x" + Math.Abs(icon.ScaledHeight) + ")";
+                    //ano - let's do this with a stringbuilder instead
+                    size_builder.Length = 0;
+                    size_builder.Append("(");
+                    size_builder.Append(Math.Abs(icon.ScaledWidth));
+                    size_builder.Append('x');
+                    size_builder.Append(Math.Abs(icon.ScaledHeight));
+                    size_builder.Append(")");
+
+                    string imagesize = size_builder.ToString();
+
+                    // [ZZ] we can't draw it with the regular font: it blends in with the texture name.
+                    SolidBrush brush = new SolidBrush(((SolidBrush)(selected ? selectiontextbrush : (used ? fgbrush_used : fgbrush_unused))).Color);
+                    brush.Color = Color.FromArgb((int)(brush.Color.A/* * 0.75f*/), brush.Color.R, brush.Color.G, brush.Color.B);
+                    
+                    SizeF textsize = g.MeasureString(imagesize, pixelSizeFont);
+
+                    float szx = classicview ? (x + (float)w / 2 - textsize.Width / 2) : x;
+                    float szy = (float)y + h;
+
+                    g.DrawString(imagesize, pixelSizeFont, brush, szx, szy);
+                }
+			}
 		}
 
 		// Comparer
 		public int CompareTo(ImageBrowserItem other)
 		{
-			return this.Text.CompareTo(other.Text);
+			if(itemtype != other.itemtype) return ((int)itemtype).CompareTo((int)other.itemtype);
+			return this.TextureName.ToUpperInvariant().CompareTo(other.TextureName.ToUpperInvariant());
 		}
 
 		#endregion

@@ -17,20 +17,16 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
+using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Rendering;
 using CodeImp.DoomBuilder.Actions;
 using CodeImp.DoomBuilder.Geometry;
-using System.Drawing;
+using CodeImp.DoomBuilder.Map;
+using CodeImp.DoomBuilder.Rendering;
+using CodeImp.DoomBuilder.VisualModes;
+using CodeImp.DoomBuilder.Windows;
 
 #endregion
 
@@ -43,7 +39,7 @@ namespace CodeImp.DoomBuilder.Editing
 	{
 		#region ================== Constants
 
-		private const float SCALE_MAX = 20f;
+		private const float SCALE_MAX = 90f;
 		private const float SCALE_MIN = 0.01f;
 		private const float SELECTION_BORDER_SIZE = 2f;
 		private const int SELECTION_ALPHA = 200;
@@ -63,7 +59,7 @@ namespace CodeImp.DoomBuilder.Editing
 		
 		// Mouse status
 		protected Vector2D mousepos;
-        protected Vector2D mouselastpos;
+		protected Vector2D mouselastpos;
 		protected Vector2D mousemappos;
 		protected Vector2D mousedownpos;
 		protected Vector2D mousedownmappos;
@@ -73,12 +69,19 @@ namespace CodeImp.DoomBuilder.Editing
 		
 		// Selection
 		protected bool selecting;
-		private Vector2D selectstart;
+		protected bool selectpressed; //mxd
+		protected bool editpressed; //mxd
+		protected Vector2D selectstart;
 		protected RectangleF selectionrect;
+		protected MarqueSelectionMode marqueSelectionMode; //mxd
 
-        // View panning
-        protected bool panning;
+		// View panning
+		protected bool panning;
 		private bool autopanenabled;
+
+		//mxd. used in "Play From Here" Action
+		private Thing playerStart;
+		private Vector3D playerStartPosition;
 		
 		#endregion
 
@@ -102,27 +105,26 @@ namespace CodeImp.DoomBuilder.Editing
 		// Panning
 		public bool IsPanning { get { return panning; } }
 
-        // Rendering
-        public IRenderer2D Renderer { get { return renderer; } }
+		// Rendering
+		public IRenderer2D Renderer { get { return renderer; } }
 
-        #endregion
+		#endregion
 
-        #region ================== Constructor / Disposer
+		#region ================== Constructor / Disposer
 
-        /// <summary>
-        /// Provides specialized functionality for a classic (2D) Doom Builder editing mode.
-        /// </summary>
-        public ClassicMode()
+		/// <summary>
+		/// Provides specialized functionality for a classic (2D) Doom Builder editing mode.
+		/// </summary>
+		protected ClassicMode()
 		{
 			// Initialize
 			this.renderer = General.Map.Renderer2D;
 			this.renderer2d = (Renderer2D)General.Map.Renderer2D;
 
 			// If the current mode is a ClassicMode, copy mouse properties
-			if(General.Editing.Mode is ClassicMode)
+			ClassicMode oldmode = General.Editing.Mode as ClassicMode;
+			if(oldmode != null)
 			{
-				ClassicMode oldmode = General.Editing.Mode as ClassicMode;
-
 				// Copy mouse properties
 				mousepos = oldmode.mousepos;
 				mousemappos = oldmode.mousemappos;
@@ -206,8 +208,11 @@ namespace CodeImp.DoomBuilder.Editing
 		// This scrolls anywhere
 		private void ScrollBy(float deltax, float deltay)
 		{
+			//mxd. Don't stroll too far from map boundaries
+			Vector2D offset = ClampViewOffset(renderer2d.OffsetX + deltax, renderer2d.OffsetY + deltay);
+
 			// Scroll now
-			renderer2d.PositionView(renderer2d.OffsetX + deltax, renderer2d.OffsetY + deltay);
+			renderer2d.PositionView(offset.x, offset.y);
 			this.OnViewChanged();
 			
 			// Redraw
@@ -215,40 +220,39 @@ namespace CodeImp.DoomBuilder.Editing
 
 			// Determine new unprojected mouse coordinates
 			mousemappos = renderer2d.DisplayToMap(mousepos);
-			General.MainWindow.UpdateCoordinates(mousemappos);
+			General.MainWindow.UpdateCoordinates(mousemappos, true);
 		}
 
-        // This sets the view to be centered at x,y
-        private void ScrollTo(float x, float y)
-        {
-            // Scroll now
-            renderer2d.PositionView(x, y);
-            this.OnViewChanged();
+		// This sets the view to be centered at x,y
+		/*private void ScrollTo(float x, float y)
+		{
+			// Scroll now
+			renderer2d.PositionView(x, y);
+			this.OnViewChanged();
 
-            // Redraw
-            General.MainWindow.RedrawDisplay();
+			// Redraw
+			General.MainWindow.RedrawDisplay();
 
-            // Determine new unprojected mouse coordinates
-            mousemappos = renderer2d.DisplayToMap(mousepos);
-            General.MainWindow.UpdateCoordinates(mousemappos);
-        }
+			// Determine new unprojected mouse coordinates
+			mousemappos = renderer2d.DisplayToMap(mousepos);
+			General.MainWindow.UpdateCoordinates(mousemappos);
+		}*/
 
 		// This zooms
 		private void ZoomBy(float deltaz)
 		{
-			Vector2D zoompos, clientsize, diff;
-			float newscale;
-			
+			Vector2D zoompos;
+
 			// This will be the new zoom scale
-			newscale = renderer2d.Scale * deltaz;
+			float newscale = renderer2d.Scale * deltaz;
 
 			// Limit scale
 			if(newscale > SCALE_MAX) newscale = SCALE_MAX;
 			if(newscale < SCALE_MIN) newscale = SCALE_MIN;
 			
 			// Get the dimensions of the display
-			clientsize = new Vector2D(General.Map.Graphics.RenderTarget.ClientSize.Width,
-									  General.Map.Graphics.RenderTarget.ClientSize.Height);
+			Vector2D clientsize = new Vector2D(General.Map.Graphics.RenderTarget.ClientSize.Width,
+			                                   General.Map.Graphics.RenderTarget.ClientSize.Height);
 			
 			// When mouse is inside display
 			if(mouseinside)
@@ -263,19 +267,58 @@ namespace CodeImp.DoomBuilder.Editing
 			}
 
 			// Calculate view position difference
-			diff = ((clientsize / newscale) - (clientsize / renderer2d.Scale)) * zoompos;
+			Vector2D diff = ((clientsize / newscale) - (clientsize / renderer2d.Scale)) * zoompos;
+			Vector2D offset = ClampViewOffset(renderer2d.OffsetX - diff.x, renderer2d.OffsetY + diff.y); //mxd
 
 			// Zoom now
-			renderer2d.PositionView(renderer2d.OffsetX - diff.x, renderer2d.OffsetY + diff.y);
+			renderer2d.PositionView(offset.x, offset.y);
 			renderer2d.ScaleView(newscale);
 			this.OnViewChanged();
 
+			//mxd. Change grid size?
+			MatchGridSizeToDisplayScale();
+
 			// Redraw
-			//General.Map.Map.Update();
 			General.MainWindow.RedrawDisplay();
 			
 			// Give a new mousemove event to update coordinates
 			if(mouseinside) OnMouseMove(new MouseEventArgs(mousebuttons, 0, (int)mousepos.x, (int)mousepos.y, 0));
+		}
+
+		//mxd. Makes sure given offset stays within map boundaries
+		private static Vector2D ClampViewOffset(float x, float y)
+		{
+			Vector2D diff = new Vector2D(x, y);
+			Vector2D safediff = new Vector2D(General.Clamp(diff.x, General.Map.Config.LeftBoundary, General.Map.Config.RightBoundary),
+											 General.Clamp(diff.y, General.Map.Config.BottomBoundary, General.Map.Config.TopBoundary));
+			return diff - (diff - safediff);
+		}
+
+		//mxd. This changes current grid size based on current zoom level
+		internal void MatchGridSizeToDisplayScale()
+		{
+			if(!General.Settings.DynamicGridSize) return;
+
+			// Get the dimensions of the display
+			Vector2D clientsize = new Vector2D(General.Map.Graphics.RenderTarget.ClientSize.Width,
+											   General.Map.Graphics.RenderTarget.ClientSize.Height);
+
+			Vector2D clientscale = clientsize / renderer2d.Scale;
+
+			// Aim for 32 grid lines on screen, multiplied by 8 to support integer representation of 0.125 grid size (clientscale / 32 * 8)
+			int targetsize = (int)Math.Ceiling(Math.Min(clientscale.x, clientscale.y) / 4);
+
+			// Convert to nearest power of 2
+			targetsize--;
+			targetsize |= targetsize >> 1;
+			targetsize |= targetsize >> 2;
+			targetsize |= targetsize >> 4;
+			targetsize |= targetsize >> 8;
+			targetsize |= targetsize >> 16;
+			targetsize++;
+
+			// Apply changes
+			General.Map.Grid.SetGridSize(targetsize / 8f);
 		}
 
 		// This zooms to a specific level
@@ -284,6 +327,9 @@ namespace CodeImp.DoomBuilder.Editing
 			// Zoom now
 			renderer2d.ScaleView(newscale);
 			this.OnViewChanged();
+
+			//mxd. Change grid size?
+			MatchGridSizeToDisplayScale();
 
 			// Redraw
 			//General.Map.Map.Update();
@@ -349,20 +395,28 @@ namespace CodeImp.DoomBuilder.Editing
 		// This zooms and moves to view the given area
 		public void CenterOnArea(RectangleF area, float padding)
 		{
-			float scalew, scaleh, scale;
-			
 			// Add size to the area for better overview
 			area.Inflate(area.Width * padding, area.Height * padding);
 			
 			// Calculate scale to view map at
-			scalew = (float)General.Map.Graphics.RenderTarget.ClientSize.Width / area.Width;
-			scaleh = (float)General.Map.Graphics.RenderTarget.ClientSize.Height / area.Height;
-			if(scalew < scaleh) scale = scalew; else scale = scaleh;
+			float scalew = General.Map.Graphics.RenderTarget.ClientSize.Width / area.Width;
+			float scaleh = General.Map.Graphics.RenderTarget.ClientSize.Height / area.Height;
+			float scale = scalew < scaleh ? scalew : scaleh;
 			
-			// Change the view to see the whole map
+			//mxd. Change the view to see the whole map
+			CenterOnCoordinates(new Vector2D(area.Left + area.Width * 0.5f, area.Top + area.Height * 0.5f), scale);
+		}
+
+		//mxd
+		public void CenterOnCoordinates(Vector2D offset, float scale)
+		{
+			// Change the view
 			renderer2d.ScaleView(scale);
-			renderer2d.PositionView(area.Left + area.Width * 0.5f, area.Top + area.Height * 0.5f);
+			renderer2d.PositionView(offset.x, offset.y);
 			this.OnViewChanged();
+
+			//mxd. Change grid size?
+			MatchGridSizeToDisplayScale();
 			
 			// Redraw
 			General.MainWindow.RedrawDisplay();
@@ -378,6 +432,11 @@ namespace CodeImp.DoomBuilder.Editing
 			renderer2d.ScaleView(0.5f);
 			renderer2d.PositionView(0.0f, 0.0f);
 			this.OnViewChanged();
+
+			//mxd. Change grid size?
+			MatchGridSizeToDisplayScale();
+			
+			// Redraw
 			General.MainWindow.RedrawDisplay();
 
 			// Give a new mousemove event to update coordinates
@@ -419,7 +478,7 @@ namespace CodeImp.DoomBuilder.Editing
 		#region ================== Processing
 
 		// Processing
-		public override void OnProcess(double deltatime)
+		public override void OnProcess(long deltatime)
 		{
 			base.OnProcess(deltatime);
 
@@ -444,11 +503,11 @@ namespace CodeImp.DoomBuilder.Editing
 				{
 					// Scale and power this for nicer usability
 					Vector2D pansign = panamount.GetSign();
-					panamount = (panamount * panamount) * pansign * 0.0001f * (float)General.Settings.AutoScrollSpeed / renderer.Scale;
+					panamount = (panamount * panamount) * pansign * 0.0001f * General.Settings.AutoScrollSpeed / renderer.Scale;
 					
 					// Multiply by delta time
-					panamount.x = (float)((double)panamount.x * deltatime);
-					panamount.y = (float)((double)panamount.y * deltatime);
+					panamount.x *= deltatime;
+					panamount.y *= deltatime;
 
 					// Pan the view
 					ScrollBy(panamount.x, panamount.y);
@@ -470,7 +529,7 @@ namespace CodeImp.DoomBuilder.Editing
 			mousebuttons = MouseButtons.None;
 			
 			// Determine new unprojected mouse coordinates
-			General.MainWindow.UpdateCoordinates(mousemappos);
+			General.MainWindow.UpdateCoordinates(mousemappos, true);
 			
 			// Let the base class know
 			base.OnMouseLeave(e);
@@ -479,17 +538,15 @@ namespace CodeImp.DoomBuilder.Editing
 		// Mouse moved inside the display
 		public override void OnMouseMove(MouseEventArgs e)
 		{
-			Vector2D delta;
-
 			// Record last position
 			mouseinside = true;
-            mouselastpos = mousepos;
+			mouselastpos = mousepos;
 			mousepos = new Vector2D(e.X, e.Y);
 			mousemappos = renderer2d.DisplayToMap(mousepos);
 			mousebuttons = e.Button;
 			
 			// Update labels in main window
-			General.MainWindow.UpdateCoordinates(mousemappos);
+			General.MainWindow.UpdateCoordinates(mousemappos, true);
 			
 			// Holding a button?
 			if(e.Button != MouseButtons.None)
@@ -498,7 +555,7 @@ namespace CodeImp.DoomBuilder.Editing
 				if(mousedragging == MouseButtons.None)
 				{
 					// Check if moved enough pixels for dragging
-					delta = mousedownpos - mousepos;
+					Vector2D delta = mousedownpos - mousepos;
 					if((Math.Abs(delta.x) > DRAG_START_MOVE_PIXELS) ||
 					   (Math.Abs(delta.y) > DRAG_START_MOVE_PIXELS))
 					{
@@ -512,8 +569,8 @@ namespace CodeImp.DoomBuilder.Editing
 			// Selecting?
 			if(selecting) OnUpdateMultiSelection();
 
-            // Panning?
-            if (panning) OnUpdateViewPanning();
+			// Panning?
+			if(panning) OnUpdateViewPanning();
 			
 			// Let the base class know
 			base.OnMouseMove(e);
@@ -525,6 +582,10 @@ namespace CodeImp.DoomBuilder.Editing
 			// Save mouse down position
 			mousedownpos = mousepos;
 			mousedownmappos = mousemappos;
+
+			//mxd. Looks like in some cases (very detailed maps / slow CPUs) OnMouseUp is not fired
+			// This is my attempt at fixing this...
+			if(e.Button == mousedragging) mousedragging = MouseButtons.None;
 			
 			// Let the base class know
 			base.OnMouseDown(e);
@@ -543,6 +604,26 @@ namespace CodeImp.DoomBuilder.Editing
 			
 			// Let the base class know
 			base.OnMouseUp(e);
+		}
+
+		//mxd
+		public override void OnKeyDown(KeyEventArgs e)
+		{
+			// Update marque color when modifier keys are pressed
+			if(selecting && (e.Control || e.Shift) && marqueSelectionMode != GetMultiSelectionMode())
+				OnUpdateMultiSelection();
+
+			base.OnKeyDown(e);
+		}
+
+		//mxd
+		public override void OnKeyUp(KeyEventArgs e)
+		{
+			// Update marque color when modifier keys are released
+			if(selecting && (!e.Control || !e.Shift) && marqueSelectionMode != GetMultiSelectionMode())
+				OnUpdateMultiSelection();
+
+			base.OnKeyUp(e);
 		}
 
 		/// <summary>
@@ -570,7 +651,7 @@ namespace CodeImp.DoomBuilder.Editing
 		}
 
 		// This sets the view mode
-		private void SetViewMode(ViewMode mode)
+		internal static void SetViewMode(ViewMode mode)
 		{
 			General.Map.CRenderer2D.SetViewMode(mode);
 			General.MainWindow.UpdateInterface();
@@ -586,9 +667,23 @@ namespace CodeImp.DoomBuilder.Editing
 		/// </summary>
 		public override void OnEngage()
 		{
-			// Clear display overlay
-			renderer.StartOverlay(true);
-			renderer.Finish();
+			//mxd. Clear display overlay
+			if(renderer.StartOverlay(true))
+			{
+				//mxd. Center 2d view on camera position in 3d view
+				if(General.Settings.GZSynchCameras && !General.Interface.CtrlState 
+					&& General.Editing.PreviousMode != null && General.Editing.PreviousMode.IsSubclassOf(typeof(VisualMode)))
+				{
+					Vector2D campos = ClampViewOffset(General.Map.VisualCamera.Position.x, General.Map.VisualCamera.Position.y);
+					renderer2d.PositionView(campos.x, campos.y);
+				}
+
+				renderer.Finish();
+			}
+			
+			//mxd. We want map center drawn by default
+			renderer.DrawMapCenter = true;
+
 			base.OnEngage();
 		}
 
@@ -601,6 +696,80 @@ namespace CodeImp.DoomBuilder.Editing
 			base.OnCancel();
 		}
 
+		//mxd
+		public override bool OnMapTestBegin(bool testFromCurrentPosition) 
+		{
+			if(testFromCurrentPosition) 
+			{
+				if(!mouseinside)
+				{
+					General.MainWindow.DisplayStatus(StatusType.Warning, "Can't test from current position: mouse is outside editing window!");
+					return false;
+				}
+				
+				//find Single Player Start. Should be type 1 in all games
+				Thing start = null;
+				
+				foreach(Thing t in General.Map.Map.Things) 
+				{
+					if(t.Type == 1) 
+					{
+						//store thing and position
+						if(start == null) 
+						{
+							start = t;
+						} 
+						else if(t.Index > start.Index) 
+						{
+							//if there are several Player Start 1 things, GZDoom uses one with the biggest index.
+							start = t;
+						}
+					}
+				}
+
+				if(start == null) 
+				{
+					General.MainWindow.DisplayStatus(StatusType.Warning, "Can't test from current position: no Player 1 start found!");
+					return false;
+				}
+
+				//now check if cursor is located inside a sector
+				Sector s = General.Map.Map.GetSectorByCoordinates(mousemappos);
+
+				if(s == null)
+				{
+					General.MainWindow.DisplayStatus(StatusType.Warning, "Can't test from current position: mouse cursor must be inside a sector!");
+					return false;
+				}
+
+				//41 = player's height in Doom. Is that so in all other games as well?
+				if(s.CeilHeight - s.FloorHeight < 41) 
+				{
+					General.MainWindow.DisplayStatus(StatusType.Warning, "Can't test from current position: sector is too low!");
+					return false;
+				}
+				
+				//store initial position
+				playerStart = start;
+				playerStartPosition = start.Position;
+
+				//everything should be valid, let's move player start here
+				start.Move(new Vector3D(mousemappos.x, mousemappos.y, s.FloorHeight));
+			}
+
+			return true;
+		}
+
+		public override void OnMapTestEnd(bool testFromCurrentPosition) 
+		{
+			if(testFromCurrentPosition) 
+			{
+				//restore position
+				playerStart.Move(playerStartPosition);
+				playerStart = null;
+			}
+		}
+
 		/// <summary>
 		/// This is called automatically when the Edit button is pressed.
 		/// (in Doom Builder 1, this was always the right mousebutton)
@@ -608,6 +777,7 @@ namespace CodeImp.DoomBuilder.Editing
 		[BeginAction("classicedit", BaseAction = true)]
 		protected virtual void OnEditBegin()
 		{
+			editpressed = true; //mxd
 		}
 
 		/// <summary>
@@ -617,6 +787,7 @@ namespace CodeImp.DoomBuilder.Editing
 		[EndAction("classicedit", BaseAction = true)]
 		protected virtual void OnEditEnd()
 		{
+			editpressed = false; //mxd
 		}
 
 		/// <summary>
@@ -626,6 +797,7 @@ namespace CodeImp.DoomBuilder.Editing
 		[BeginAction("classicselect", BaseAction = true)]
 		protected virtual void OnSelectBegin()
 		{
+			selectpressed = true;//mxd
 		}
 
 		/// <summary>
@@ -635,6 +807,7 @@ namespace CodeImp.DoomBuilder.Editing
 		[EndAction("classicselect", BaseAction = true)]
 		protected virtual void OnSelectEnd()
 		{
+			selectpressed = false;//mxd
 			if(selecting) OnEndMultiSelection();
 		}
 
@@ -644,6 +817,7 @@ namespace CodeImp.DoomBuilder.Editing
 		protected virtual void OnEndMultiSelection()
 		{
 			selecting = false;
+			General.Hints.ShowHints(this.GetType(), HintsManager.GENERAL);
 		}
 
 		/// <summary>
@@ -654,6 +828,9 @@ namespace CodeImp.DoomBuilder.Editing
 			selecting = true;
 			selectstart = mousemappos;
 			selectionrect = new RectangleF(selectstart.x, selectstart.y, 0, 0);
+
+			//mxd
+			General.Hints.ShowHints(this.GetType(), HintsManager.MULTISELECTION);
 		}
 
 		/// <summary>
@@ -661,6 +838,8 @@ namespace CodeImp.DoomBuilder.Editing
 		/// </summary>
 		protected virtual void OnUpdateMultiSelection()
 		{
+			marqueSelectionMode = GetMultiSelectionMode(); //mxd
+			
 			selectionrect.X = selectstart.x;
 			selectionrect.Y = selectstart.y;
 			selectionrect.Width = mousemappos.x - selectstart.x;
@@ -679,21 +858,48 @@ namespace CodeImp.DoomBuilder.Editing
 			}
 		}
 
+		//mxd
+		protected virtual MarqueSelectionMode GetMultiSelectionMode()
+		{
+			return MarqueSelectionMode.SELECT;
+		}
+
 		/// <summary>
 		/// Call this to draw the selection on the overlay layer.
 		/// Must call renderer.StartOverlay first!
 		/// </summary>
 		protected virtual void RenderMultiSelection()
 		{
-			renderer.RenderRectangle(selectionrect, SELECTION_BORDER_SIZE,
-				General.Colors.Highlight.WithAlpha(SELECTION_ALPHA), true);
+			//mxd
+			PixelColor marqueColor;
+
+			switch(marqueSelectionMode) 
+			{
+				case MarqueSelectionMode.SELECT:
+					marqueColor = General.Colors.Selection.WithAlpha(SELECTION_ALPHA);
+					break;
+
+				case MarqueSelectionMode.ADD:
+					marqueColor = General.Colors.Highlight.WithAlpha(SELECTION_ALPHA);
+					break;
+
+				case MarqueSelectionMode.SUBTRACT:
+					marqueColor = General.Colors.Selection.WithAlpha(SELECTION_ALPHA).InverseKeepAlpha();
+					break;
+
+				default: //should be Intersect
+					marqueColor = General.Colors.Highlight.WithAlpha(SELECTION_ALPHA).InverseKeepAlpha();
+					break;
+			}
+						
+			renderer.RenderRectangle(selectionrect, SELECTION_BORDER_SIZE, marqueColor, true);
 		}
 
-        /// <summary>
-        /// This is called automatically when the mouse is moved while panning
-        /// </summary>
-        protected virtual void OnUpdateViewPanning()
-        {
+		/// <summary>
+		/// This is called automatically when the mouse is moved while panning
+		/// </summary>
+		protected virtual void OnUpdateViewPanning()
+		{
 			// We can only drag the map when the mouse pointer is inside
 			// otherwise we don't have coordinates where to drag the map to
 			if(mouseinside && !float.IsNaN(mouselastpos.x) && !float.IsNaN(mouselastpos.y))
@@ -704,7 +910,15 @@ namespace CodeImp.DoomBuilder.Editing
 				// Do the scroll
 				ScrollBy(lastmappos.x - mousemappos.x, lastmappos.y - mousemappos.y);
 			}
-        }
+		}
+
+		/// <summary>
+		/// This selects given map element (mxd)
+		/// </summary>
+		public virtual void SelectMapElement(SelectableElement element) 
+		{
+			element.Selected = true;
+		}
 		
 		#endregion
 		
@@ -713,20 +927,20 @@ namespace CodeImp.DoomBuilder.Editing
 		[BeginAction("gridsetup", BaseAction = true)]
 		protected void ShowGridSetup()
 		{
-			General.Map.Grid.ShowGridSetup();
+			GridSetup.ShowGridSetup();
 		}
 		
-        [BeginAction("pan_view", BaseAction = true)]
-        protected virtual void BeginViewPan()
-        {
-            panning = true;
-        }
+		[BeginAction("pan_view", BaseAction = true)]
+		protected virtual void BeginViewPan()
+		{
+			panning = true;
+		}
 
-        [EndAction("pan_view", BaseAction = true)]
-        protected virtual void EndViewPan()
-        {
-            panning = false;
-        }
+		[EndAction("pan_view", BaseAction = true)]
+		protected virtual void EndViewPan()
+		{
+			panning = false;
+		}
 
 		[BeginAction("viewmodenormal", BaseAction = true)]
 		protected virtual void ViewModeNormal()
@@ -737,90 +951,77 @@ namespace CodeImp.DoomBuilder.Editing
 		[BeginAction("viewmodebrightness", BaseAction = true)]
 		protected virtual void ViewModeBrightness()
 		{
-			/*SetViewMode(ViewMode.Brightness);
-
-            // villsa
-            if (General.Map.FormatInterface.InDoom64Mode)
-            {
-                foreach (Sector s in General.Map.Map.Sectors)
-                    s.UpdateNeeded = true;
-
-                General.Map.Map.Update();
-                General.MainWindow.RedrawDisplay();
-            }*/
+			SetViewMode(ViewMode.Brightness);
 		}
-
-        // villsa
-        [BeginAction("viewmodefloorcolor", BaseAction = true)]
-        protected virtual void ViewModeFloorColor()
-        {
-            SetViewMode(ViewMode.FloorColor);
-
-            foreach (Sector s in General.Map.Map.Sectors)
-                s.UpdateNeeded = true;
-
-            General.Map.Map.Update();
-            General.MainWindow.RedrawDisplay();
-        }
-
-        // villsa
-        [BeginAction("viewmodeceilingcolor", BaseAction = true)]
-        protected virtual void ViewModeCeilingColor()
-        {
-            SetViewMode(ViewMode.CeilingColor);
-
-            foreach (Sector s in General.Map.Map.Sectors)
-                s.UpdateNeeded = true;
-
-            General.Map.Map.Update();
-            General.MainWindow.RedrawDisplay();
-        }
-
-        // villsa
-        [BeginAction("viewmodethingcolor", BaseAction = true)]
-        protected virtual void ViewModeThingColor()
-        {
-            SetViewMode(ViewMode.ThingColor);
-
-            foreach (Sector s in General.Map.Map.Sectors)
-                s.UpdateNeeded = true;
-
-            General.Map.Map.Update();
-            General.MainWindow.RedrawDisplay();
-        }
 
 		[BeginAction("viewmodefloors", BaseAction = true)]
 		protected virtual void ViewModeFloors()
 		{
 			SetViewMode(ViewMode.FloorTextures);
-
-            // villsa
-            if (General.Map.FormatInterface.InDoom64Mode)
-            {
-                foreach (Sector s in General.Map.Map.Sectors)
-                    s.UpdateNeeded = true;
-
-                General.Map.Map.Update();
-                General.MainWindow.RedrawDisplay();
-            }
 		}
 
 		[BeginAction("viewmodeceilings", BaseAction = true)]
 		protected virtual void ViewModeCeilings()
 		{
 			SetViewMode(ViewMode.CeilingTextures);
+		}
 
-            // villsa
-            if (General.Map.FormatInterface.InDoom64Mode)
-            {
-                foreach (Sector s in General.Map.Map.Sectors)
-                    s.UpdateNeeded = true;
+		//mxd
+		[BeginAction("nextviewmode", BaseAction = true)]
+		protected virtual void NextViewMode()
+		{
+			List<ViewMode> vmodes = new List<ViewMode>(Enum.GetValues(typeof(ViewMode)).Cast<ViewMode>());
+			int curmode = vmodes.IndexOf(General.Map.Renderer2D.ViewMode);
+			curmode = (curmode == vmodes.Count - 1 ? 0 : ++curmode);
 
-                General.Map.Map.Update();
-				General.MainWindow.RedrawDisplay();
-            }
+			SetViewMode(vmodes[curmode]);
+		}
+
+		//mxd
+		[BeginAction("previousviewmode", BaseAction = true)]
+		protected virtual void PreviousViewMode()
+		{
+			List<ViewMode> vmodes = new List<ViewMode>(Enum.GetValues(typeof(ViewMode)).Cast<ViewMode>());
+			int curmode = vmodes.IndexOf(General.Map.Renderer2D.ViewMode);
+			curmode = (curmode == 0 ? vmodes.Count - 1 : --curmode);
+
+			SetViewMode(vmodes[curmode]);
+		}
+
+		//mxd
+		[BeginAction("centeroncoordinates", BaseAction = true)]
+		protected virtual void CenterOnCoordinates() 
+		{
+			//show form...
+			CenterOnCoordinatesForm form = new CenterOnCoordinatesForm();
+			if(form.ShowDialog() == DialogResult.OK) 
+			{
+				//center view
+				renderer2d.PositionView(form.Coordinates.x, form.Coordinates.y);
+				General.Interface.RedrawDisplay();
+			}
+		}
+
+		//mxd
+		[BeginAction("togglehighlight", BaseAction = true)]
+		protected virtual void ToggleHighlight()
+		{
+			General.Settings.UseHighlight = !General.Settings.UseHighlight;
+			General.Interface.DisplayStatus(StatusType.Action, "Highlight is now " + (General.Settings.UseHighlight ? "ON" : "OFF") + ".");
+
+			// Redraw display to show changes
+			General.Interface.RedrawDisplay();
 		}
 
 		#endregion
+	}
+
+	//mxd
+	public enum MarqueSelectionMode
+	{
+		SELECT,
+		ADD,
+		SUBTRACT,
+		INTERSECT,
 	}
 }

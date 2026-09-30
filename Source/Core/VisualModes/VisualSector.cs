@@ -17,30 +17,17 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using System.Drawing;
-using System.ComponentModel;
 using CodeImp.DoomBuilder.Map;
 using SlimDX.Direct3D9;
 using SlimDX;
-using CodeImp.DoomBuilder.Geometry;
-using System.Drawing.Imaging;
-using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.Editing;
-using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Rendering;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.VisualModes
 {
-	public class VisualSector : ID3DResource
+	public class VisualSector : ID3DResource, IDisposable
 	{
 		#region ================== Constants
 
@@ -49,17 +36,17 @@ namespace CodeImp.DoomBuilder.VisualModes
 		#region ================== Variables
 
 		// Geometry
-		private List<VisualGeometry> fixedgeometry;
-		private List<VisualGeometry> allgeometry;
-		private Dictionary<Sidedef, List<VisualGeometry>> sidedefgeometry;
+		private readonly List<VisualGeometry> fixedgeometry;
+		private readonly List<VisualGeometry> allgeometry;
+		private readonly Dictionary<Sidedef, List<VisualGeometry>> sidedefgeometry;
 		private VertexBuffer geobuffer;
 		private bool updategeo;
 		
 		// Original sector
-		private Sector sector;
+		private readonly Sector sector;
 		
 		// Disposing
-		private bool isdisposed = false;
+		private bool isdisposed;
 
 		#endregion
 
@@ -72,7 +59,7 @@ namespace CodeImp.DoomBuilder.VisualModes
 		
 		public bool IsDisposed { get { return isdisposed; } }
 		public Sector Sector { get { return sector; } }
-		
+
 		#endregion
 
 		#region ================== Constructor / Disposer
@@ -85,6 +72,7 @@ namespace CodeImp.DoomBuilder.VisualModes
 			allgeometry = new List<VisualGeometry>();
 			fixedgeometry = new List<VisualGeometry>();
 			sidedefgeometry = new Dictionary<Sidedef, List<VisualGeometry>>();
+			this.sector.UpdateFogColor(); //mxd
 
 			// Register as resource
 			General.Map.Graphics.RegisterResource(this);
@@ -129,11 +117,14 @@ namespace CodeImp.DoomBuilder.VisualModes
 			// Make new geometry
 			//Update();
 		}
+
+		//mxd. Added to allow to properly update visual geometry from plugins
+		public virtual void UpdateSectorData() { }
+		public virtual void UpdateSectorGeometry(bool includeneighbours) { }
 		
 		// This updates the visual sector
 		public void Update()
 		{
-			DataStream bufferstream;
 			int numverts = 0;
 			int v = 0;
 			
@@ -152,12 +143,12 @@ namespace CodeImp.DoomBuilder.VisualModes
 											 Usage.WriteOnly | Usage.Dynamic, VertexFormat.None, Pool.Default);
 
 				// Fill the buffer
-				bufferstream = geobuffer.Lock(0, WorldVertex.Stride * numverts, LockFlags.Discard);
+				DataStream bufferstream = geobuffer.Lock(0, WorldVertex.Stride * numverts, LockFlags.Discard);
 				foreach(VisualGeometry g in allgeometry)
 				{
 					if((g.Vertices != null) && (g.Vertices.Length > 0))
 					{
-						bufferstream.WriteRange<WorldVertex>(g.Vertices);
+						bufferstream.WriteRange(g.Vertices);
 						g.VertexOffset = v;
 						v += g.Vertices.Length;
 					}
@@ -165,6 +156,8 @@ namespace CodeImp.DoomBuilder.VisualModes
 				geobuffer.Unlock();
 				bufferstream.Dispose();
 			}
+
+			this.sector.UpdateFogColor(); //mxd
 			
 			// Done
 			updategeo = false;
@@ -204,10 +197,8 @@ namespace CodeImp.DoomBuilder.VisualModes
 		// This gets the geometry list for the specified sidedef
 		public List<VisualGeometry> GetSidedefGeometry(Sidedef sd)
 		{
-			if(sidedefgeometry.ContainsKey(sd))
-				return sidedefgeometry[sd];
-			else
-				return new List<VisualGeometry>();
+			if(sidedefgeometry.ContainsKey(sd)) return sidedefgeometry[sd];
+			return new List<VisualGeometry>();
 		}
 		
 		#endregion

@@ -17,34 +17,30 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
 using System.Drawing;
-using SlimDX.Direct3D9;
-using System.ComponentModel;
+using System.Windows.Forms;
+using CodeImp.DoomBuilder.Controls;
 using CodeImp.DoomBuilder.Geometry;
 using SlimDX;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.Data;
-
-using Configuration = CodeImp.DoomBuilder.IO.Configuration;
-using CodeImp.DoomBuilder.Controls;
+using SlimDX.Direct3D9;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.Rendering
 {
-	internal class D3DDevice
+	internal class D3DDevice : IDisposable
 	{
 		#region ================== Constants
 
 		// NVPerfHUD device name
-		public const string NVPERFHUD_ADAPTER = "NVPerfHUD";
+		private const string NVPERFHUD_ADAPTER = "NVPerfHUD";
+
+		//mxd. Anisotropic filtering steps
+		public static readonly List<float> AF_STEPS = new List<float> { 1.0f, 2.0f, 4.0f, 8.0f, 16.0f }; 
+		
+		//mxd. Antialiasing steps
+		public static readonly List<int> AA_STEPS = new List<int> { 0, 2, 4, 8 };
 
 		#endregion
 
@@ -54,6 +50,7 @@ namespace CodeImp.DoomBuilder.Rendering
 		private int adapter;
 		private Filter postfilter;
 		private Filter mipgeneratefilter;
+		private static bool isrendering; //mxd
 		
 		// Main objects
 		private static Direct3D d3d;
@@ -61,15 +58,13 @@ namespace CodeImp.DoomBuilder.Rendering
 		private Capabilities devicecaps;
 		private Device device;
 		private Viewport viewport;
-		private Dictionary<ID3DResource, ID3DResource> resources;
+		private readonly HashSet<ID3DResource> resources;
 		private ShaderManager shaders;
 		private Surface backbuffer;
 		private Surface depthbuffer;
-		private TextFont font;
-		private ResourceImage fonttexture;
 		
 		// Disposing
-		private bool isdisposed = false;
+		private bool isdisposed;
 
 		#endregion
 
@@ -77,13 +72,12 @@ namespace CodeImp.DoomBuilder.Rendering
 
 		internal Device Device { get { return device; } }
 		public bool IsDisposed { get { return isdisposed; } }
+		public static bool IsRendering { get { return isrendering; } } //mxd
 		internal RenderTargetControl RenderTarget { get { return rendertarget; } }
 		internal Viewport Viewport { get { return viewport; } }
 		internal ShaderManager Shaders { get { return shaders; } }
 		internal Surface BackBuffer { get { return backbuffer; } }
 		internal Surface DepthBuffer { get { return depthbuffer; } }
-		internal TextFont Font { get { return font; } }
-		internal Texture FontTexture { get { return fonttexture.Texture; } }
 		internal Filter PostFilter { get { return postfilter; } }
 		internal Filter MipGenerateFilter { get { return mipgeneratefilter; } }
 		
@@ -98,29 +92,46 @@ namespace CodeImp.DoomBuilder.Rendering
 			this.rendertarget = rendertarget;
 
 			// Create resources list
-			resources = new Dictionary<ID3DResource, ID3DResource>();
+			resources = new HashSet<ID3DResource>();
 			
 			// We have no destructor
 			GC.SuppressFinalize(this);
 		}
 
 		// Disposer
-		internal void Dispose()
+		public void Dispose()
 		{
 			// Not already disposed?
 			if(!isdisposed)
 			{
 				// Clean up
-				foreach(ID3DResource res in resources.Values) res.UnloadResource();
+				foreach(ID3DResource res in resources) res.UnloadResource();
 				if(shaders != null) shaders.Dispose();
 				rendertarget = null;
 				if(backbuffer != null) backbuffer.Dispose();
 				if(depthbuffer != null) depthbuffer.Dispose();
 				if(device != null) device.Dispose();
-				if(font != null) font.Dispose();
-				if(fonttexture != null) fonttexture.Dispose();
+
+				if(ObjectTable.Objects.Count > 1) //mxd. Direct3D itself is not disposed while the editor is running
+				{
+					//mxd. Get rid of any remaining D3D objects...
+					foreach(ComObject o in ObjectTable.Objects) 
+					{
+						if(o is Direct3D) continue; // Don't dispose the device itself...
+						General.WriteLogLine("WARNING: D3D resource " + o
+							+ (o.Tag != null ? " (" + o.Tag + ")" : string.Empty) + " was not disposed properly!"
+							+ (o.CreationSource != null ? " Stack trace: " + o.CreationSource : string.Empty));
+						o.Dispose();
+					}
+
+#if DEBUG
+					General.ShowWarningMessage("Some D3D resources were not disposed properly! See the event log for more details.",
+					                           MessageBoxButtons.OK);
+#endif
+				}
 				
 				// Done
+				isrendering = false; //mxd
 				isdisposed = true;
 			}
 		}
@@ -147,15 +158,17 @@ namespace CodeImp.DoomBuilder.Rendering
 			device.SetRenderState(RenderState.CullMode, Cull.None);
 			device.SetRenderState(RenderState.DestinationBlend, Blend.InverseSourceAlpha);
 			device.SetRenderState(RenderState.DiffuseMaterialSource, ColorSource.Color1);
-			device.SetRenderState(RenderState.DitherEnable, true);
+			//device.SetRenderState(RenderState.DitherEnable, true);
 			device.SetRenderState(RenderState.FillMode, FillMode.Solid);
 			device.SetRenderState(RenderState.FogEnable, false);
 			device.SetRenderState(RenderState.FogTableMode, FogMode.Linear);
 			device.SetRenderState(RenderState.Lighting, false);
 			device.SetRenderState(RenderState.LocalViewer, false);
+			device.SetRenderState(RenderState.MultisampleAntialias, (General.Settings.AntiAliasingSamples > 0)); //mxd
 			device.SetRenderState(RenderState.NormalizeNormals, false);
 			device.SetRenderState(RenderState.PointSpriteEnable, false);
 			device.SetRenderState(RenderState.RangeFogEnable, false);
+			device.SetRenderState(RenderState.ShadeMode, ShadeMode.Gouraud);
 			device.SetRenderState(RenderState.SourceBlend, Blend.SourceAlpha);
 			device.SetRenderState(RenderState.SpecularEnable, false);
 			device.SetRenderState(RenderState.StencilEnable, false);
@@ -170,66 +183,20 @@ namespace CodeImp.DoomBuilder.Rendering
 			device.SetTransform(TransformState.View, Matrix.Identity);
 			device.SetTransform(TransformState.Projection, Matrix.Identity);
 			
-			// Sampler settings
-			if(General.Settings.ClassicBilinear)
-			{
-				device.SetSamplerState(0, SamplerState.MagFilter, TextureFilter.Linear);
-				device.SetSamplerState(0, SamplerState.MinFilter, TextureFilter.Linear);
-				device.SetSamplerState(0, SamplerState.MipFilter, TextureFilter.Linear);
-				device.SetSamplerState(0, SamplerState.MipMapLodBias, 0f);
-			}
-			else
-			{
-				device.SetSamplerState(0, SamplerState.MagFilter, TextureFilter.Point);
-				device.SetSamplerState(0, SamplerState.MinFilter, TextureFilter.Point);
-				device.SetSamplerState(0, SamplerState.MipFilter, TextureFilter.Point);
-				device.SetSamplerState(0, SamplerState.MipMapLodBias, 0f);
-			}
-			
 			// Texture addressing
 			device.SetSamplerState(0, SamplerState.AddressU, TextureAddress.Wrap);
 			device.SetSamplerState(0, SamplerState.AddressV, TextureAddress.Wrap);
 			device.SetSamplerState(0, SamplerState.AddressW, TextureAddress.Wrap);
-
-			// First texture stage
-			device.SetTextureStageState(0, TextureStage.ColorOperation, TextureOperation.Modulate);
-			device.SetTextureStageState(0, TextureStage.ColorArg1, TextureArgument.Texture);
-			device.SetTextureStageState(0, TextureStage.ColorArg2, TextureArgument.Diffuse);
-			device.SetTextureStageState(0, TextureStage.ResultArg, TextureArgument.Current);
-			device.SetTextureStageState(0, TextureStage.TexCoordIndex, 0);
-
-			// Second texture stage
-			device.SetTextureStageState(1, TextureStage.ColorOperation, TextureOperation.Modulate);
-			device.SetTextureStageState(1, TextureStage.ColorArg1, TextureArgument.Current);
-			device.SetTextureStageState(1, TextureStage.ColorArg2, TextureArgument.TFactor);
-			device.SetTextureStageState(1, TextureStage.ResultArg, TextureArgument.Current);
-			device.SetTextureStageState(1, TextureStage.TexCoordIndex, 0);
-
-			// No more further stages
-			device.SetTextureStageState(2, TextureStage.ColorOperation, TextureOperation.Disable);
-			
-			// First alpha stage
-			device.SetTextureStageState(0, TextureStage.AlphaOperation, TextureOperation.Modulate);
-			device.SetTextureStageState(0, TextureStage.AlphaArg1, TextureArgument.Texture);
-			device.SetTextureStageState(0, TextureStage.AlphaArg2, TextureArgument.Diffuse);
-
-			// Second alpha stage
-			device.SetTextureStageState(1, TextureStage.AlphaOperation, TextureOperation.Modulate);
-			device.SetTextureStageState(1, TextureStage.AlphaArg1, TextureArgument.Current);
-			device.SetTextureStageState(1, TextureStage.AlphaArg2, TextureArgument.TFactor);
-			
-			// No more further stages
-			device.SetTextureStageState(2, TextureStage.AlphaOperation, TextureOperation.Disable);
 			
 			// Setup material
-			Material material = new Material();
-			material.Ambient = new Color4(Color.White);
-			material.Diffuse = new Color4(Color.White);
-			material.Specular = new Color4(Color.White);
-			device.Material = material;
+			device.Material = new Material {
+				Ambient = new Color4(Color.White),
+				Diffuse = new Color4(Color.White),
+				Specular = new Color4(Color.White)
+			};
 			
 			// Shader settings
-			shaders.World3D.SetConstants(General.Settings.VisualBilinear, true);
+			shaders.World3D.SetConstants(General.Settings.VisualBilinear, Math.Min(devicecaps.MaxAnisotropy, General.Settings.FilterAnisotropy));
 			
 			// Texture filters
 			postfilter = Filter.Point;
@@ -262,22 +229,37 @@ namespace CodeImp.DoomBuilder.Rendering
 		// This initializes the graphics
 		public bool Initialize()
 		{
-			PresentParameters displaypp;
-			DeviceType devtype;
-			
 			// Use default adapter
 			this.adapter = 0; // Manager.Adapters.Default.Adapter;
 
 			try
 			{
 				// Make present parameters
-				displaypp = CreatePresentParameters(adapter);
+				PresentParameters displaypp = CreatePresentParameters(adapter);
 
 				// Determine device type for compatability with NVPerfHUD
+				DeviceType devtype;
 				if(d3d.Adapters[adapter].Details.Description.EndsWith(NVPERFHUD_ADAPTER))
 					devtype = DeviceType.Reference;
 				else
 					devtype = DeviceType.Hardware;
+
+				//mxd. Check maximum supported AA level...
+				for(int i = AA_STEPS.Count - 1; i > 0; i--)
+				{
+					if(General.Settings.AntiAliasingSamples < AA_STEPS[i]) continue;
+					if(d3d.CheckDeviceMultisampleType(this.adapter, devtype, d3d.Adapters[adapter].CurrentDisplayMode.Format, displaypp.Windowed, (MultisampleType)AA_STEPS[i]))
+						break;
+
+					if(General.Settings.AntiAliasingSamples > AA_STEPS[i - 1])
+					{
+						General.Settings.AntiAliasingSamples = AA_STEPS[i - 1];
+						
+						// TODO: looks like setting Multisample here just resets it to MultisampleType.None, 
+						// regardless of value in displaypp.Multisample. Why?..
+						displaypp.Multisample = (MultisampleType)General.Settings.AntiAliasingSamples;
+					}
+				}
 
 				// Get the device capabilities
 				devicecaps = d3d.GetDeviceCaps(adapter, devtype);
@@ -303,6 +285,14 @@ namespace CodeImp.DoomBuilder.Rendering
 				return false;
 			}
 
+			//mxd. Check if we can use shaders
+			if(device.Capabilities.PixelShaderVersion.Major < 2)
+			{
+				// Failed
+				MessageBox.Show(General.MainWindow, "Unable to initialize the Direct3D video device. Video device with Shader Model 2.0 support is required.", Application.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+				return false;
+			}
+
 			// Add event to cancel resize event
 			//device.DeviceResizing += new CancelEventHandler(CancelResize);
 
@@ -316,14 +306,6 @@ namespace CodeImp.DoomBuilder.Rendering
 			// Create shader manager
 			shaders = new ShaderManager(this);
 			
-			// Font
-			postfilter = Filter.Box;
-			font = new TextFont();
-			fonttexture = new ResourceImage("CodeImp.DoomBuilder.Resources.Font.png");
-			fonttexture.LoadImage();
-			fonttexture.MipMapLevels = 2;
-			fonttexture.CreateTexture();
-			
 			// Initialize settings
 			SetupSettings();
 			
@@ -332,20 +314,19 @@ namespace CodeImp.DoomBuilder.Rendering
 		}
 
 		// This is to disable the automatic resize reset
-		private static void CancelResize(object sender, CancelEventArgs e)
+		/*private static void CancelResize(object sender, CancelEventArgs e)
 		{
 			// Cancel resize event
 			e.Cancel = true;
-		}
+		}*/
 		
 		// This creates present parameters
 		private PresentParameters CreatePresentParameters(int adapter)
 		{
 			PresentParameters displaypp = new PresentParameters();
-			DisplayMode currentmode;
-			
+
 			// Get current display mode
-			currentmode = d3d.Adapters[adapter].CurrentDisplayMode;
+			DisplayMode currentmode = d3d.Adapters[adapter].CurrentDisplayMode;
 
 			// Make present parameters
 			displaypp.Windowed = true;
@@ -355,8 +336,8 @@ namespace CodeImp.DoomBuilder.Rendering
 			displaypp.BackBufferWidth = rendertarget.ClientSize.Width;
 			displaypp.BackBufferHeight = rendertarget.ClientSize.Height;
 			displaypp.EnableAutoDepthStencil = true;
-			displaypp.AutoDepthStencilFormat = Format.D16;
-			displaypp.Multisample = MultisampleType.None;
+			displaypp.AutoDepthStencilFormat = Format.D24X8; //Format.D16;
+			displaypp.Multisample = (MultisampleType)General.Settings.AntiAliasingSamples;
 			displaypp.PresentationInterval = PresentInterval.Immediate;
 
 			// Return result
@@ -371,7 +352,7 @@ namespace CodeImp.DoomBuilder.Rendering
 		internal void RegisterResource(ID3DResource res)
 		{
 			// Add resource
-			resources.Add(res, res);
+			resources.Add(res);
 		}
 
 		// This unregisters a resource
@@ -384,60 +365,53 @@ namespace CodeImp.DoomBuilder.Rendering
 		// This resets the device and returns true on success
 		internal bool Reset()
 		{
-			PresentParameters displaypp;
+			// Unload all Direct3D resources
+			foreach(ID3DResource res in resources) res.UnloadResource();
 
-			// Test the cooperative level
-			Result coopresult = device.TestCooperativeLevel();
-			
-			// Can we reset?
-			//if(coopresult.Name != "D3DERR_DEVICENOTRESET")
+			// Lose backbuffers
+			if(backbuffer != null) backbuffer.Dispose();
+			if(depthbuffer != null) depthbuffer.Dispose();
+			backbuffer = null;
+			depthbuffer = null;
+
+			try
 			{
-				// Unload all Direct3D resources
-				foreach(ID3DResource res in resources.Values) res.UnloadResource();
-
-				// Lose backbuffers
-				if(backbuffer != null) backbuffer.Dispose();
-				if(depthbuffer != null) depthbuffer.Dispose();
-				backbuffer = null;
-				depthbuffer = null;
-
 				// Make present parameters
-				displaypp = CreatePresentParameters(adapter);
-
-				try
-				{
-					// Reset the device
-					device.Reset(displaypp);
-				}
-				catch(Exception)
-				{
-					// Failed to re-initialize
-					return false;
-				}
-
-				// Keep a reference to the original buffers
-				backbuffer = device.GetBackBuffer(0, 0);
-				depthbuffer = device.DepthStencilSurface;
-
-				// Get the viewport
-				viewport = device.Viewport;
-
-				// Reload all Direct3D resources
-				foreach(ID3DResource res in resources.Values) res.ReloadResource();
-
-				// Re-apply settings
-				SetupSettings();
+				PresentParameters displaypp = CreatePresentParameters(adapter);
 				
-				// Success
-				return true;
+				// Reset the device
+				device.Reset(displaypp);
 			}
-			/*
-			else
+#if DEBUG
+			catch(Exception e)
 			{
-				// Failed
+				// Failed to re-initialize
+				Console.WriteLine("Device reset failed: " + e.Message);
 				return false;
 			}
-			*/
+#else
+			catch(Exception) 
+			{
+				// Failed to re-initialize
+				return false;
+			}
+#endif
+
+			// Keep a reference to the original buffers
+			backbuffer = device.GetBackBuffer(0, 0);
+			depthbuffer = device.DepthStencilSurface;
+
+			// Get the viewport
+			viewport = device.Viewport;
+
+			// Reload all Direct3D resources
+			foreach(ID3DResource res in resources) res.ReloadResource();
+
+			// Re-apply settings
+			SetupSettings();
+			
+			// Success
+			return true;
 		}
 
 		#endregion
@@ -448,7 +422,7 @@ namespace CodeImp.DoomBuilder.Rendering
 		public bool StartRendering(bool clear, Color4 backcolor, Surface target, Surface depthbuffer)
 		{
 			// Check if we can render
-			if(CheckAvailability())
+			if(CheckAvailability() && !isrendering) //mxd. Added isrendering check
 			{
 				// Set rendertarget
 				device.DepthStencilSurface = depthbuffer;
@@ -465,11 +439,13 @@ namespace CodeImp.DoomBuilder.Rendering
 
 				// Ready to render
 				device.BeginScene();
+				isrendering = true; //mxd
 				return true;
 			}
 			else
 			{
 				// Minimized, you cannot see anything
+				isrendering = false; //mxd
 				return false;
 			}
 		}
@@ -494,6 +470,7 @@ namespace CodeImp.DoomBuilder.Rendering
 			{
 				// Done
 				device.EndScene();
+				isrendering = false; //mxd
 			}
 			// Errors are not a problem here
 			catch(Exception) { }
@@ -505,6 +482,7 @@ namespace CodeImp.DoomBuilder.Rendering
 			try
 			{
 				device.Present();
+				isrendering = false; //mxd
 			}
 			// Errors are not a problem here
 			catch(Exception) { }
@@ -534,7 +512,7 @@ namespace CodeImp.DoomBuilder.Rendering
 				}
 				else
 				{
-					// Read to go!
+					// Ready to go!
 					return true;
 				}
 			}

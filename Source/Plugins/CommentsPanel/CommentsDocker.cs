@@ -19,18 +19,8 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
-using System.Text;
 using System.Windows.Forms;
-using Microsoft.Win32;
-using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.Config;
 using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Controls;
-using CodeImp.DoomBuilder.Windows;
-using System.Reflection;
-using System.Globalization;
-using System.Threading;
 using CodeImp.DoomBuilder.Editing;
 using CodeImp.DoomBuilder.Geometry;
 using CodeImp.DoomBuilder.Types;
@@ -42,12 +32,12 @@ namespace CodeImp.DoomBuilder.CommentsPanel
 	public partial class CommentsDocker : UserControl
 	{
 		#region ================== Variables
-		
-		Dictionary<string, CommentInfo> v_comments = new Dictionary<string, CommentInfo>();
-		Dictionary<string, CommentInfo> l_comments = new Dictionary<string, CommentInfo>();
-		Dictionary<string, CommentInfo> s_comments = new Dictionary<string, CommentInfo>();
-		Dictionary<string, CommentInfo> t_comments = new Dictionary<string, CommentInfo>();
-		bool preventupdate = false;
+
+		private readonly Dictionary<string, CommentInfo> v_comments = new Dictionary<string, CommentInfo>(StringComparer.Ordinal);
+		private readonly Dictionary<string, CommentInfo> l_comments = new Dictionary<string, CommentInfo>(StringComparer.Ordinal);
+		private readonly Dictionary<string, CommentInfo> s_comments = new Dictionary<string, CommentInfo>(StringComparer.Ordinal);
+		private readonly Dictionary<string, CommentInfo> t_comments = new Dictionary<string, CommentInfo>(StringComparer.Ordinal);
+		private bool preventupdate;
 		
 		#endregion
 		
@@ -96,11 +86,10 @@ namespace CodeImp.DoomBuilder.CommentsPanel
 		// Before detached from the docker
 		public void Terminate()
 		{
-			if(this.ParentForm != null)
-			{
-				this.ParentForm.Activated -= ParentForm_Activated;
-			}
-
+			preventupdate = true; //mxd
+			if(this.ParentForm != null) this.ParentForm.Activated -= ParentForm_Activated;
+			updatetimer.Tick -= updatetimer_Tick; //mxd
+			enabledtimer.Tick -= enabledtimer_Tick; //mxd
 			updatetimer.Stop();
 			enabledtimer.Stop();
 		}
@@ -131,14 +120,13 @@ namespace CodeImp.DoomBuilder.CommentsPanel
 			// Update the list with comments
 			foreach(KeyValuePair<string, CommentInfo> c in newcomments)
 			{
-				DataGridViewRow row;
 				CommentInfo cc = c.Value;
 				
 				if(!comments.ContainsKey(c.Key))
 				{
 					// Create grid row
 					int index = grid.Rows.Add();
-					row = grid.Rows[index];
+					DataGridViewRow row = grid.Rows[index];
 					row.Cells[0].Value = icon;
 					row.Cells[0].Style.Alignment = DataGridViewContentAlignment.TopCenter;
 					row.Cells[0].Style.Padding = new Padding(0, 5, 0, 0);
@@ -153,7 +141,7 @@ namespace CodeImp.DoomBuilder.CommentsPanel
 				else
 				{
 					cc = comments[c.Key];
-					row = cc.Row;
+					//row = cc.Row;
 					cc.ReplaceElements(c.Value);
 				}
 			}
@@ -170,12 +158,10 @@ namespace CodeImp.DoomBuilder.CommentsPanel
 		// This finds all comments and updates the list
 		public void UpdateList()
 		{
-			//bool firstitem = (grid.Rows.Count == 0);
-
 			if(!preventupdate)
 			{
 				// Update vertices
-				Dictionary<string, CommentInfo> newcomments = new Dictionary<string, CommentInfo>();
+				Dictionary<string, CommentInfo> newcomments = new Dictionary<string, CommentInfo>(StringComparer.Ordinal);
 				if(!filtermode.Checked || (General.Editing.Mode.GetType().Name == "VerticesMode"))
 				{
 					foreach(Vertex v in General.Map.Map.Vertices) AddComments(v, newcomments);
@@ -219,7 +205,7 @@ namespace CodeImp.DoomBuilder.CommentsPanel
 		}
 		
 		// This adds comments from a MapElement
-		private void AddComments(MapElement e, Dictionary<string, CommentInfo> comments)
+		private static void AddComments(MapElement e, Dictionary<string, CommentInfo> comments)
 		{
 			if(e.Fields.ContainsKey("comment"))
 			{
@@ -232,7 +218,7 @@ namespace CodeImp.DoomBuilder.CommentsPanel
 		}
 		
 		// This changes the view to see the objects of a comment
-		private void ViewComment(CommentInfo c)
+		private static void ViewComment(CommentInfo c)
 		{
 			List<Vector2D> points = new List<Vector2D>();
 			RectangleF area = MapSet.CreateEmptyArea();
@@ -266,7 +252,7 @@ namespace CodeImp.DoomBuilder.CommentsPanel
 				else if(obj is Thing)
 				{
 					Thing t = (obj as Thing);
-					Vector2D p = (Vector2D)t.Position;
+					Vector2D p = t.Position;
 					points.Add(p);
 					points.Add(p + new Vector2D(t.Size * 2.0f, t.Size * 2.0f));
 					points.Add(p + new Vector2D(t.Size * 2.0f, -t.Size * 2.0f));
@@ -305,9 +291,9 @@ namespace CodeImp.DoomBuilder.CommentsPanel
 		}
 		
 		// This selects the elements in a comment
-		private void SelectComment(CommentInfo c, bool clear)
+		private static void SelectComment(CommentInfo c, bool clear)
 		{
-			string editmode = "";
+			//string editmode = "";
 
 			// Leave any volatile mode
 			General.Editing.CancelVolatileMode();
@@ -353,6 +339,7 @@ namespace CodeImp.DoomBuilder.CommentsPanel
 				}
 			}
 
+			General.Editing.Mode.UpdateSelectionInfo(); //mxd
 			General.Interface.RedrawDisplay();
 		}
 		
@@ -619,14 +606,22 @@ namespace CodeImp.DoomBuilder.CommentsPanel
 		// Check if the add comment box should be enabled
 		private void enabledtimer_Tick(object sender, EventArgs e)
 		{
-			if(General.Editing.Mode.GetType().Name == "VerticesMode")
-				addcommentgroup.Enabled = (General.Map.Map.SelectedVerticessCount > 0);
-			else if(General.Editing.Mode.GetType().Name == "LinedefsMode")
-				addcommentgroup.Enabled = (General.Map.Map.SelectedLinedefsCount > 0);
-			else if(General.Editing.Mode.GetType().Name == "SectorsMode")
-				addcommentgroup.Enabled = (General.Map.Map.SelectedSectorsCount > 0);
-			else if(General.Editing.Mode.GetType().Name == "ThingsMode")
-				addcommentgroup.Enabled = (General.Map.Map.SelectedThingsCount > 0);
+			if(General.Editing.Mode == null) return; //mxd
+			switch(General.Editing.Mode.GetType().Name)
+			{
+				case "VerticesMode":
+					addcommentgroup.Enabled = (General.Map.Map.SelectedVerticessCount > 0);
+					break;
+				case "LinedefsMode":
+					addcommentgroup.Enabled = (General.Map.Map.SelectedLinedefsCount > 0);
+					break;
+				case "SectorsMode":
+					addcommentgroup.Enabled = (General.Map.Map.SelectedSectorsCount > 0);
+					break;
+				case "ThingsMode":
+					addcommentgroup.Enabled = (General.Map.Map.SelectedThingsCount > 0);
+					break;
+			}
 		}
 
 		// Focus lost

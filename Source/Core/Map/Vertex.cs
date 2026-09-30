@@ -17,14 +17,8 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Rendering;
-using SlimDX.Direct3D9;
-using System.Drawing;
 using CodeImp.DoomBuilder.IO;
 
 #endregion
@@ -51,6 +45,10 @@ namespace CodeImp.DoomBuilder.Map
 		// Position
 		private Vector2D pos;
 
+		//mxd. Height
+		private float zfloor;
+		private float zceiling;
+
 		// References
 		private LinkedList<Linedef> linedefs;
 		
@@ -67,6 +65,26 @@ namespace CodeImp.DoomBuilder.Map
 		public Vector2D Position { get { return pos; } }
 		internal Vertex Clone { get { return clone; } set { clone = value; } }
 		internal int SerializedIndex { get { return serializedindex; } set { serializedindex = value; } }
+		public float ZCeiling {	//mxd
+			get { return zceiling; }
+			set {
+				if(zceiling != value) 
+				{
+					BeforeFieldsChange();
+					zceiling = value;
+				}
+			}
+		}
+		public float ZFloor { //mxd
+			get { return zfloor; }
+			set {
+				if(zfloor != value) 
+				{
+					BeforeFieldsChange();
+					zfloor = value;
+				}
+			}
+		}
 
 		#endregion
 
@@ -76,10 +94,13 @@ namespace CodeImp.DoomBuilder.Map
 		internal Vertex(MapSet map, int listindex, Vector2D pos)
 		{
 			// Initialize
+			this.elementtype = MapElementType.VERTEX; //mxd
 			this.map = map;
 			this.linedefs = new LinkedList<Linedef>();
 			this.listindex = listindex;
 			this.pos = pos;
+			this.zceiling = float.NaN; //mxd
+			this.zfloor = float.NaN; //mxd
 			
 			if(map == General.Map.Map)
 				General.Map.UndoRedo.RecAddVertex(this);
@@ -118,6 +139,9 @@ namespace CodeImp.DoomBuilder.Map
 				// Clean up
 				linedefs = null;
 				map = null;
+
+				//mxd. Restore isdisposed so base classes can do their disposal job
+				isdisposed = false;
 
 				// Dispose base
 				base.Dispose();
@@ -160,13 +184,15 @@ namespace CodeImp.DoomBuilder.Map
 		}
 
 		// Serialize / deserialize
-		internal void ReadWrite(IReadWriteStream s)
+		new internal void ReadWrite(IReadWriteStream s)
 		{
 			if(!s.IsWriting) BeforePropsChange();
 			
 			base.ReadWrite(s);
 			
 			s.rwVector2D(ref pos);
+			s.rwFloat(ref zceiling); //mxd
+			s.rwFloat(ref zfloor); //mxd
 			
 			if(s.IsWriting)
 			{
@@ -201,6 +227,8 @@ namespace CodeImp.DoomBuilder.Map
 			
 			// Copy properties
 			v.pos = pos;
+			v.zceiling = zceiling; //mxd
+			v.zfloor = zfloor; //mxd
 			base.CopyPropertiesTo(v);
 		}
 		
@@ -247,9 +275,15 @@ namespace CodeImp.DoomBuilder.Map
 		// This snaps the vertex to the map format accuracy
 		public void SnapToAccuracy()
 		{
+			SnapToAccuracy(true);
+		}
+
+		// This snaps the vertex to the map format accuracy
+		public void SnapToAccuracy(bool usepreciseposition)
+		{
 			// Round the coordinates
-			Vector2D newpos = new Vector2D((float)Math.Round(pos.x, General.Map.FormatInterface.VertexDecimals),
-										   (float)Math.Round(pos.y, General.Map.FormatInterface.VertexDecimals));
+			Vector2D newpos = new Vector2D((float)Math.Round(pos.x, (usepreciseposition ? General.Map.FormatInterface.VertexDecimals : 0)),
+										   (float)Math.Round(pos.y, (usepreciseposition ? General.Map.FormatInterface.VertexDecimals : 0)));
 			this.Move(newpos);
 		}
 
@@ -295,7 +329,11 @@ namespace CodeImp.DoomBuilder.Map
 		// String representation
 		public override string ToString()
 		{
+#if DEBUG
+			return "Vertex " + Index + " (" + pos + (marked ? "; marked" : "") + ")";
+#else
 			return "Vertex (" + pos + ")";
+#endif
 		}
 
 		#endregion

@@ -17,14 +17,6 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Data;
-using System.IO;
-using System.Diagnostics;
 using CodeImp.DoomBuilder.Config;
 
 #endregion
@@ -69,8 +61,6 @@ namespace CodeImp.DoomBuilder.Types
 
 		public override void SetValue(object value)
 		{
-			bool result;
-
 			// null?
 			if(value == null)
 			{
@@ -103,7 +93,7 @@ namespace CodeImp.DoomBuilder.Types
 
 		public override int GetIntValue()
 		{
-			if(this.value) return 1; else return 0;
+			return (this.value ? 1 : 0);
 		}
 
 		public override string GetStringValue()
@@ -115,6 +105,11 @@ namespace CodeImp.DoomBuilder.Types
 		public override EnumList GetEnumList()
 		{
 			return list;
+		}
+
+		public override object GetDefaultValue()
+		{
+			return false;
 		}
 		
 		#endregion

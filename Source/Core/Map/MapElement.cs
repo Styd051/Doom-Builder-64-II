@@ -17,20 +17,23 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Rendering;
-using SlimDX.Direct3D9;
-using System.Drawing;
 using CodeImp.DoomBuilder.IO;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.Map
 {
+	public enum MapElementType
+	{
+		UNKNOWN,
+		VERTEX,
+		SIDEDEF,
+		LINEDEF,
+		SECTOR,
+		THING
+	}
+	
 	public abstract class MapElement : IDisposable
 	{
 		#region ================== Constants
@@ -49,7 +52,17 @@ namespace CodeImp.DoomBuilder.Map
 		protected bool marked;
 		
 		// Disposing
-		protected bool isdisposed = false;
+		protected bool isdisposed;
+		
+		// Error Ignoring (mxd)
+		private List<Type> ignorederrorchecks;
+
+		//mxd. Hashing
+		private static int hashcounter;
+		private readonly int hashcode;
+
+		//mxd. Element type
+		protected MapElementType elementtype;
 		
 		#endregion
 		
@@ -59,27 +72,34 @@ namespace CodeImp.DoomBuilder.Map
 		public UniFields Fields { get { return fields; } }
 		public bool Marked { get { return marked; } set { marked = value; } }
 		public bool IsDisposed { get { return isdisposed; } }
-		
+		public List<Type> IgnoredErrorChecks { get { return ignorederrorchecks; } } //mxd
+		public MapElementType ElementType { get { return elementtype; } } //mxd
+
 		#endregion
 
 		#region ================== Constructor / Disposer
 
 		// Constructor
-		internal MapElement()
+		protected MapElement()
 		{
 			// Initialize
 			fields = new UniFields(this);
+			ignorederrorchecks = new List<Type>(); //mxd
+			hashcode = hashcounter++; //mxd
 		}
 
 		// Disposer
 		public virtual void Dispose()
 		{
-			// Clean up
-			fields.Owner = null;
-			fields = null;
-			
-			// Done
-			isdisposed = true;
+			if(!isdisposed)
+			{
+				// Clean up
+				fields.Owner = null;
+				fields = null;
+
+				// Done
+				isdisposed = true;
+			}
 		}
 
 		#endregion
@@ -115,7 +135,8 @@ namespace CodeImp.DoomBuilder.Map
 		// This copies properties to any other element
 		public void CopyPropertiesTo(MapElement element)
 		{
-			element.fields = new UniFields(this, this.fields);
+			//element.fields = new UniFields(this, this.fields);
+			element.fields = new UniFields(element, this.fields); //mxd
 		}
 		
 		// This must implement the call to the undo system to record the change of properties
@@ -125,6 +146,12 @@ namespace CodeImp.DoomBuilder.Map
 		internal void BeforeFieldsChange()
 		{
 			BeforePropsChange();
+		}
+
+		//mxd. This greatly speeds up Dictionary lookups
+		public override int GetHashCode()
+		{
+			return hashcode;
 		}
 		
 		#endregion

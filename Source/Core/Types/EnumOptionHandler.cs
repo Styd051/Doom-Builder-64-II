@@ -17,14 +17,7 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Data;
-using System.IO;
-using System.Diagnostics;
 using CodeImp.DoomBuilder.Config;
 
 #endregion
@@ -42,6 +35,7 @@ namespace CodeImp.DoomBuilder.Types
 
 		private EnumList list;
 		private EnumItem value;
+		private EnumItem defaultvalue; //mxd
 		
 		#endregion
 
@@ -52,11 +46,12 @@ namespace CodeImp.DoomBuilder.Types
 		
 		#endregion
 
-		#region ================== Constructor
+		#region ================== Setup
 
 		// When set up for an argument
 		public override void SetupArgument(TypeHandlerAttribute attr, ArgumentInfo arginfo)
 		{
+			defaultvalue = new EnumItem(arginfo.DefaultValue.ToString(), arginfo.DefaultValue.ToString());//mxd
 			base.SetupArgument(attr, arginfo);
 
 			// Keep enum list reference
@@ -66,10 +61,11 @@ namespace CodeImp.DoomBuilder.Types
 		// When set up for a universal field
 		public override void SetupField(TypeHandlerAttribute attr, UniversalFieldInfo fieldinfo)
 		{
+			defaultvalue = (fieldinfo != null ? new EnumItem(fieldinfo.Default.ToString(), fieldinfo.Default.ToString()) : new EnumItem("0", "0")); //mxd
 			base.SetupField(attr, fieldinfo);
 
 			// Keep enum list reference
-			if(fieldinfo != null) list = fieldinfo.Enum; else list = new EnumList();
+			list = (fieldinfo != null ? fieldinfo.Enum : new EnumList());
 		}
 
 		#endregion
@@ -144,6 +140,12 @@ namespace CodeImp.DoomBuilder.Types
 			}
 		}
 
+		//mxd
+		public override void ApplyDefaultValue() 
+		{
+			value = defaultvalue;
+		}
+
 		public override object GetValue()
 		{
 			return GetIntValue();
@@ -171,9 +173,9 @@ namespace CodeImp.DoomBuilder.Types
 			}
 		}
 		
-		public override string GetStringValue()
+		public override string GetStringValue() 
 		{
-			if(this.value != null) return this.value.Title; else return "NULL";
+			return (this.value != null ? this.value.Title : "NULL");
 		}
 
 		// This returns an enum list
@@ -187,6 +189,11 @@ namespace CodeImp.DoomBuilder.Types
 		public override TypeHandlerAttribute GetDisplayType()
 		{
 			return General.Types.GetAttribute((int)UniversalType.Integer);
+		}
+
+		public override object GetDefaultValue()
+		{
+			return defaultvalue;
 		}
 		
 		#endregion

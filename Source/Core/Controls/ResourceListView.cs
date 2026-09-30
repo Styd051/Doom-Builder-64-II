@@ -18,15 +18,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
-using System.Text;
-using System.Globalization;
 using System.Windows.Forms;
-using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Editing;
 
 #endregion
 
@@ -43,7 +36,7 @@ namespace CodeImp.DoomBuilder.Controls
 		#region ================== Variables
 
 		// List of items
-		private List<ListViewItem> dragitems;
+		private readonly List<ListViewItem> dragitems;
 
 		#endregion
 
@@ -70,10 +63,6 @@ namespace CodeImp.DoomBuilder.Controls
 		// When items are dropped
 		protected override void OnDragDrop(DragEventArgs e)
 		{
-			int dropindex, i;
-			ListViewItem insertatitem;
-			Point cp;
-
 			// Pass on to base
 			base.OnDragDrop(e);
 
@@ -81,8 +70,8 @@ namespace CodeImp.DoomBuilder.Controls
 			if(dragitems.Count == 0) return;
 
 			// Determine where to insert
-			cp = base.PointToClient(new Point(e.X, e.Y));
-			insertatitem = base.GetItemAt(cp.X, cp.Y);
+			Point cp = base.PointToClient(new Point(e.X, e.Y));
+			ListViewItem insertatitem = base.GetItemAt(cp.X, cp.Y);
 
 			// Leave when nowhere to insert or same as selected item
 			if((insertatitem == null) || (dragitems.Contains(insertatitem))) return;
@@ -94,14 +83,14 @@ namespace CodeImp.DoomBuilder.Controls
 			base.BeginUpdate();
 			
 			// Determine index where to insert
-			dropindex = insertatitem.Index;
+			int dropindex = insertatitem.Index;
 			if(dropindex > dragitems[0].Index) dropindex++;
 
 			// Deselect items
 			DeselectAll();
 
 			// Insert items
-			for(i = dragitems.Count - 1; i >= 0; i--)
+			for(int i = dragitems.Count - 1; i >= 0; i--)
 			{
 				// Insert a copy of the item here
 				base.Items.Insert(dropindex, (ListViewItem)dragitems[i].Clone());
@@ -123,9 +112,12 @@ namespace CodeImp.DoomBuilder.Controls
 		// When items are dragged over
 		protected override void OnDragOver(DragEventArgs e)
 		{
-			int dropindex, i;
-			ListViewItem insertatitem;
-			Point cp;
+			//mxd. Check if valid extenal data is present
+			if(e.Data.GetDataPresent(DataFormats.FileDrop)) 
+			{
+				e.Effect = DragDropEffects.Copy;
+				return;
+			}
 
 			// Check if our data format is present
 			if(!e.Data.GetDataPresent(DataFormats.Text))
@@ -136,11 +128,11 @@ namespace CodeImp.DoomBuilder.Controls
 
 			// Check if the data matches our data
 			String text = (String)e.Data.GetData(DRAG_TYPE.GetType());
-			if(text.CompareTo(DRAG_TYPE + this.Name) == 0)
+			if(String.Compare(text, DRAG_TYPE + this.Name, StringComparison.Ordinal) == 0)
 			{
 				// Determine where to insert
-				cp = base.PointToClient(new Point(e.X, e.Y));
-				insertatitem = base.GetItemAt(cp.X, cp.Y);
+				Point cp = base.PointToClient(new Point(e.X, e.Y));
+				ListViewItem insertatitem = base.GetItemAt(cp.X, cp.Y);
 				if(insertatitem == null)
 				{
 					// Cannot insert here
@@ -174,7 +166,7 @@ namespace CodeImp.DoomBuilder.Controls
 				insertatitem.EnsureVisible();
 
 				// Determine index where to insert
-				dropindex = insertatitem.Index;
+				int dropindex = insertatitem.Index;
 				if(dropindex > dragitems[0].Index) dropindex++;
 
 				// Begin updating
@@ -184,7 +176,7 @@ namespace CodeImp.DoomBuilder.Controls
 				DeselectAll();
 
 				// Insert items
-				for(i = dragitems.Count - 1; i >= 0; i--)
+				for(int i = dragitems.Count - 1; i >= 0; i--)
 				{
 					// Insert a copy of the item here
 					base.Items.Insert(dropindex, (ListViewItem)dragitems[i].Clone());
@@ -217,6 +209,13 @@ namespace CodeImp.DoomBuilder.Controls
 		{
 			// Pass on to base
 			base.OnDragEnter(e);
+
+			//mxd. Check if valid extenal data is present
+			if(e.Data.GetDataPresent(DataFormats.FileDrop)) 
+			{
+				e.Effect = DragDropEffects.Copy;
+				return;
+			}
 
 			// Check if our data format is present
 			if(!e.Data.GetDataPresent(DataFormats.Text))

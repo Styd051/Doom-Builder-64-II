@@ -16,16 +16,6 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Rendering;
-using SlimDX.Direct3D9;
-using System.Drawing;
-
 #endregion
 
 namespace CodeImp.DoomBuilder.Map
@@ -54,19 +44,18 @@ namespace CodeImp.DoomBuilder.Map
 		
 		#region ================== Constructor / Disposer
 		
-		// Constructor
-		internal SelectableElement()
-		{
-		}
-		
 		// Disposer
 		public override void Dispose()
 		{
-			// Remove from selection
-			if(selected) Selected = false;
-			
-			// Done
-			base.Dispose();
+			// Not already disposed?
+			if(!isdisposed)
+			{
+				// Remove from selection
+				if(selected) Selected = false;
+
+				// Done
+				base.Dispose();
+			}
 		}
 		
 		#endregion
@@ -109,6 +98,12 @@ namespace CodeImp.DoomBuilder.Map
 		public void SelectByGroup(int groupsmask)
 		{
 			this.Selected = ((groups & groupsmask) != 0);
+		}
+
+		//mxd. This checks if given element belongs to a particular group
+		public bool IsInGroup(int groupsmask) 
+		{
+			return ((groups & groupsmask) != 0);
 		}
 		
 		#endregion

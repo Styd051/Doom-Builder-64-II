@@ -18,17 +18,10 @@
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Text;
 using System.Windows.Forms;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.IO;
-using System.IO;
-using CodeImp.DoomBuilder.Config;
-using CodeImp.DoomBuilder.Editing;
 using CodeImp.DoomBuilder.Controls;
+using CodeImp.DoomBuilder.Data;
+using CodeImp.DoomBuilder.Config;
 
 #endregion
 
@@ -43,7 +36,10 @@ namespace CodeImp.DoomBuilder.Windows
 		public TextureSetForm()
 		{
 			InitializeComponent();
-			matcheslist.ApplySettings();
+            // [ZZ] change default texture size
+            matcheslist.ImageSize = 64;
+            //
+            matcheslist.ApplySettings();
 			
 			// Show/hide components
 			matchesbutton.Visible = (General.Map != null);
@@ -102,7 +98,17 @@ namespace CodeImp.DoomBuilder.Windows
 		// Remove selected items
 		private void removefilter_Click(object sender, EventArgs e)
 		{
+			int index = filters.SelectedIndices[0]; //mxd
 			foreach(ListViewItem i in filters.SelectedItems) i.Remove();
+
+			//mxd
+			if(filters.Items.Count > 0)
+			{
+				if(index >= filters.Items.Count) index = filters.Items.Count - 1;
+				filters.Items[index].Selected = true;
+			}
+
+			filters.Focus(); //mxd
 			
 			// Run the timer
 			filterstimer.Start();
@@ -157,7 +163,7 @@ namespace CodeImp.DoomBuilder.Windows
 				
 				// Determine tooltip text
 				string tooltiptext = null;
-				if(nomatchesbutton.Checked) tooltiptext = "Doubleclick to include this texture";
+				if(nomatchesbutton.Checked) tooltiptext = "Double-click to include this texture";
 				
 				// Start adding
 				matcheslist.PreventSelection = matchesbutton.Checked;
@@ -168,7 +174,7 @@ namespace CodeImp.DoomBuilder.Windows
 				{
 					bool ismatch = set.IsMatch(img);
 					if((ismatch && matchesbutton.Checked) || (!ismatch && nomatchesbutton.Checked))
-						matcheslist.Add(img.Name, img, img, null, tooltiptext);
+						matcheslist.AddItem(img, tooltiptext);
 				}
 				
 				// If not already mixed, add flats as well
@@ -179,7 +185,7 @@ namespace CodeImp.DoomBuilder.Windows
 					{
 						bool ismatch = set.IsMatch(img);
 						if((ismatch && matchesbutton.Checked) || (!ismatch && nomatchesbutton.Checked))
-							matcheslist.Add(img.Name, img, img, null, tooltiptext);
+							matcheslist.AddItem(img, tooltiptext);
 					}
 				}
 				
@@ -211,11 +217,10 @@ namespace CodeImp.DoomBuilder.Windows
 		}
 		
 		// Texture doubleclicked
-		private void matcheslist_SelectedItemDoubleClicked()
+		private void matcheslist_SelectedItemDoubleClicked(ImageBrowserItem item)
 		{
 			// Add texture name to the list
-			if(matcheslist.SelectedItem != null)
-				filters.Items.Add(matcheslist.SelectedItem.Text);
+			if(item != null) filters.Items.Add(item.TextureName);
 			
 			// Run the timer
 			filterstimer.Start();

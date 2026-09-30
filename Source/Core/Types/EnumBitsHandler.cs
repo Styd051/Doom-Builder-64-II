@@ -17,15 +17,8 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Data;
-using System.IO;
-using System.Diagnostics;
 using CodeImp.DoomBuilder.Config;
 using System.Windows.Forms;
 using CodeImp.DoomBuilder.Windows;
@@ -43,8 +36,9 @@ namespace CodeImp.DoomBuilder.Types
 
 		#region ================== Variables
 
-		private EnumList list;
-		private int value;
+		protected EnumList list;
+		protected int value;
+		protected int defaultvalue; //mxd
 
 		#endregion
 
@@ -61,6 +55,7 @@ namespace CodeImp.DoomBuilder.Types
 		// When set up for an argument
 		public override void SetupArgument(TypeHandlerAttribute attr, ArgumentInfo arginfo)
 		{
+			defaultvalue = (int)arginfo.DefaultValue;//mxd
 			base.SetupArgument(attr, arginfo);
 
 			// Keep enum list reference
@@ -78,8 +73,6 @@ namespace CodeImp.DoomBuilder.Types
 
 		public override void SetValue(object value)
 		{
-			int result;
-
 			// Null?
 			if(value == null)
 			{
@@ -94,6 +87,7 @@ namespace CodeImp.DoomBuilder.Types
 			else
 			{
 				// Try parsing as string
+				int result;
 				if(int.TryParse(value.ToString(), NumberStyles.Integer, CultureInfo.CurrentCulture, out result))
 				{
 					this.value = result;
@@ -103,6 +97,12 @@ namespace CodeImp.DoomBuilder.Types
 					this.value = 0;
 				}
 			}
+		}
+
+		//mxd
+		public override void ApplyDefaultValue() 
+		{
+			value = defaultvalue;
 		}
 
 		public override object GetValue()
@@ -118,6 +118,11 @@ namespace CodeImp.DoomBuilder.Types
 		public override string GetStringValue()
 		{
 			return this.value.ToString();
+		}
+
+		public override object GetDefaultValue()
+		{
+			return defaultvalue;
 		}
 
 		#endregion

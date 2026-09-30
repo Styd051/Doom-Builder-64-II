@@ -17,10 +17,6 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using System.IO;
 
 #endregion
@@ -40,7 +36,7 @@ namespace CodeImp.DoomBuilder.IO
 		private long position;
 
 		// Disposing
-		private bool isdisposed = false;
+		private bool isdisposed;
 		
 		#endregion
 
@@ -226,7 +222,6 @@ namespace CodeImp.DoomBuilder.IO
 		{
 			basestream = null;
 			base.Close();
-			this.Dispose();
 		}
 		
 		// This reads a single byte from the stream

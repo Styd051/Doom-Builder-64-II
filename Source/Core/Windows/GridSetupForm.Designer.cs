@@ -68,12 +68,20 @@ namespace CodeImp.DoomBuilder.Windows
 			// 
 			// gridsize
 			// 
+			this.gridsize.AllowDecimal = true;
+			this.gridsize.AllowExpressions = false;
 			this.gridsize.AllowNegative = false;
-			this.gridsize.AllowRelative = true;
+			this.gridsize.AllowRelative = false;
 			this.gridsize.ButtonStep = 8;
+			this.gridsize.ButtonStepBig = 10F;
+			this.gridsize.ButtonStepFloat = 1F;
+			this.gridsize.ButtonStepSmall = 0.25F;
+			this.gridsize.ButtonStepsUseModifierKeys = false;
+			this.gridsize.ButtonStepsWrapAround = false;
 			this.gridsize.Location = new System.Drawing.Point(146, 26);
 			this.gridsize.Name = "gridsize";
 			this.gridsize.Size = new System.Drawing.Size(75, 24);
+			this.gridsize.StepValues = null;
 			this.gridsize.TabIndex = 1;
 			// 
 			// label1
@@ -81,7 +89,7 @@ namespace CodeImp.DoomBuilder.Windows
 			label1.AutoSize = true;
 			label1.Location = new System.Drawing.Point(25, 31);
 			label1.Name = "label1";
-			label1.Size = new System.Drawing.Size(115, 14);
+			label1.Size = new System.Drawing.Size(110, 13);
 			label1.TabIndex = 0;
 			label1.Text = "Grid size in mappixels:";
 			// 
@@ -109,46 +117,78 @@ namespace CodeImp.DoomBuilder.Windows
 			// 
 			// backscaley
 			// 
+			this.backscaley.AllowDecimal = false;
+			this.backscaley.AllowExpressions = false;
 			this.backscaley.AllowNegative = false;
 			this.backscaley.AllowRelative = true;
 			this.backscaley.ButtonStep = 1;
+			this.backscaley.ButtonStepBig = 10F;
+			this.backscaley.ButtonStepFloat = 1F;
+			this.backscaley.ButtonStepSmall = 0.1F;
+			this.backscaley.ButtonStepsUseModifierKeys = false;
+			this.backscaley.ButtonStepsWrapAround = false;
 			this.backscaley.Enabled = false;
 			this.backscaley.Location = new System.Drawing.Point(197, 212);
 			this.backscaley.Name = "backscaley";
 			this.backscaley.Size = new System.Drawing.Size(67, 24);
+			this.backscaley.StepValues = null;
 			this.backscaley.TabIndex = 13;
 			// 
 			// backscalex
 			// 
+			this.backscalex.AllowDecimal = false;
+			this.backscalex.AllowExpressions = false;
 			this.backscalex.AllowNegative = false;
 			this.backscalex.AllowRelative = true;
 			this.backscalex.ButtonStep = 1;
+			this.backscalex.ButtonStepBig = 10F;
+			this.backscalex.ButtonStepFloat = 1F;
+			this.backscalex.ButtonStepSmall = 0.1F;
+			this.backscalex.ButtonStepsUseModifierKeys = false;
+			this.backscalex.ButtonStepsWrapAround = false;
 			this.backscalex.Enabled = false;
 			this.backscalex.Location = new System.Drawing.Point(124, 212);
 			this.backscalex.Name = "backscalex";
 			this.backscalex.Size = new System.Drawing.Size(67, 24);
+			this.backscalex.StepValues = null;
 			this.backscalex.TabIndex = 12;
 			// 
 			// backoffsety
 			// 
+			this.backoffsety.AllowDecimal = false;
+			this.backoffsety.AllowExpressions = false;
 			this.backoffsety.AllowNegative = true;
 			this.backoffsety.AllowRelative = true;
 			this.backoffsety.ButtonStep = 1;
+			this.backoffsety.ButtonStepBig = 10F;
+			this.backoffsety.ButtonStepFloat = 1F;
+			this.backoffsety.ButtonStepSmall = 0.1F;
+			this.backoffsety.ButtonStepsUseModifierKeys = false;
+			this.backoffsety.ButtonStepsWrapAround = false;
 			this.backoffsety.Enabled = false;
 			this.backoffsety.Location = new System.Drawing.Point(197, 173);
 			this.backoffsety.Name = "backoffsety";
 			this.backoffsety.Size = new System.Drawing.Size(67, 24);
+			this.backoffsety.StepValues = null;
 			this.backoffsety.TabIndex = 11;
 			// 
 			// backoffsetx
 			// 
+			this.backoffsetx.AllowDecimal = false;
+			this.backoffsetx.AllowExpressions = false;
 			this.backoffsetx.AllowNegative = true;
 			this.backoffsetx.AllowRelative = true;
 			this.backoffsetx.ButtonStep = 1;
+			this.backoffsetx.ButtonStepBig = 10F;
+			this.backoffsetx.ButtonStepFloat = 1F;
+			this.backoffsetx.ButtonStepSmall = 0.1F;
+			this.backoffsetx.ButtonStepsUseModifierKeys = false;
+			this.backoffsetx.ButtonStepsWrapAround = false;
 			this.backoffsetx.Enabled = false;
 			this.backoffsetx.Location = new System.Drawing.Point(124, 173);
 			this.backoffsetx.Name = "backoffsetx";
 			this.backoffsetx.Size = new System.Drawing.Size(67, 24);
+			this.backoffsetx.StepValues = null;
 			this.backoffsetx.TabIndex = 10;
 			// 
 			// backscale
@@ -157,7 +197,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.backscale.Enabled = false;
 			this.backscale.Location = new System.Drawing.Point(30, 217);
 			this.backscale.Name = "backscale";
-			this.backscale.Size = new System.Drawing.Size(88, 14);
+			this.backscale.Size = new System.Drawing.Size(87, 13);
 			this.backscale.TabIndex = 9;
 			this.backscale.Text = "Scale in percent:";
 			// 
@@ -177,7 +217,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.showbackground.AutoSize = true;
 			this.showbackground.Location = new System.Drawing.Point(28, 29);
 			this.showbackground.Name = "showbackground";
-			this.showbackground.Size = new System.Drawing.Size(146, 18);
+			this.showbackground.Size = new System.Drawing.Size(144, 17);
 			this.showbackground.TabIndex = 0;
 			this.showbackground.Text = "Show background image";
 			this.showbackground.UseVisualStyleBackColor = true;
@@ -189,7 +229,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.backoffset.Enabled = false;
 			this.backoffset.Location = new System.Drawing.Point(15, 178);
 			this.backoffset.Name = "backoffset";
-			this.backoffset.Size = new System.Drawing.Size(103, 14);
+			this.backoffset.Size = new System.Drawing.Size(98, 13);
 			this.backoffset.TabIndex = 4;
 			this.backoffset.Text = "Offset in mappixels:";
 			// 
@@ -229,7 +269,7 @@ namespace CodeImp.DoomBuilder.Windows
 			// 
 			this.cancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
 			this.cancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-			this.cancel.Location = new System.Drawing.Point(193, 368);
+			this.cancel.Location = new System.Drawing.Point(193, 359);
 			this.cancel.Name = "cancel";
 			this.cancel.Size = new System.Drawing.Size(112, 25);
 			this.cancel.TabIndex = 3;
@@ -240,7 +280,7 @@ namespace CodeImp.DoomBuilder.Windows
 			// apply
 			// 
 			this.apply.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-			this.apply.Location = new System.Drawing.Point(75, 368);
+			this.apply.Location = new System.Drawing.Point(75, 359);
 			this.apply.Name = "apply";
 			this.apply.Size = new System.Drawing.Size(112, 25);
 			this.apply.TabIndex = 2;
@@ -260,12 +300,11 @@ namespace CodeImp.DoomBuilder.Windows
 			this.AutoScaleDimensions = new System.Drawing.SizeF(96F, 96F);
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
 			this.CancelButton = this.cancel;
-			this.ClientSize = new System.Drawing.Size(317, 403);
+			this.ClientSize = new System.Drawing.Size(317, 392);
 			this.Controls.Add(this.cancel);
 			this.Controls.Add(this.apply);
 			this.Controls.Add(groupBox2);
 			this.Controls.Add(groupBox1);
-			this.Font = new System.Drawing.Font("Arial", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
 			this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
 			this.MaximizeBox = false;
 			this.MinimizeBox = false;

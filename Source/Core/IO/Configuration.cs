@@ -132,6 +132,7 @@
 #region ================== Namespaces
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Globalization;
@@ -155,25 +156,33 @@ namespace CodeImp.DoomBuilder.IO
 		private const string ERROR_ASSIGNINVALID = "Invalid assignment. Missing a previous terminator symbol?";
 		private const string ERROR_VALUEINVALID = "Invalid value in assignment. Missing a previous terminator symbol?";
 		private const string ERROR_VALUETOOBIG = "Value too big.";
-		private const string ERROR_KEYNOTUNQIUE = "Key is not unique within scope.";
+		//private const string ERROR_KEYNOTUNQIUE = "Key is not unique within scope.";
 		private const string ERROR_KEYWORDUNKNOWN = "Unknown keyword in assignment. Missing a previous terminator symbol?";
 		private const string ERROR_UNEXPECTED_END = "Unexpected end of data. Missing a previous terminator symbol?";
 		private const string ERROR_UNKNOWN_FUNCTION = "Unknown function call.";
 		private const string ERROR_INVALID_ARGS = "Invalid function arguments.";
 		private const string ERROR_INCLUDE_UNSUPPORTED = "Include function is not supported in data parsed from stream.";
-		
+
+		public const string NUMBERS = "0123456789"; 
+		public const string NUMBERS2 = "0123456789-.&"; 
+
 		#endregion
 		
 		#region ================== Variables
 		
 		// Error result
-		private bool cpErrorResult = false;
+		private bool cpErrorResult;
 		private string cpErrorDescription = "";
-		private int cpErrorLine = 0;
+		private int cpErrorLine;
 		private string cpErrorFile = "";
+		private static readonly char[] space = new[] { ' ' }; //mxd
+		private static readonly char[] newline = new[] { '\n' }; //mxd
 		
 		// Configuration root
-		private IDictionary root = null;
+		private IDictionary root;
+
+		//mxd. Cache
+		private static Dictionary<string, IDictionary> cfgcache = new Dictionary<string, IDictionary>(StringComparer.Ordinal);
 		
 		#endregion
 		
@@ -265,12 +274,12 @@ namespace CodeImp.DoomBuilder.IO
 						if(sorted)
 						{
 							// Sorted combine
-							result[d2e.Key] = Combine(new ListDictionary(), (IDictionary)d2e.Value, sorted);
+							result[d2e.Key] = Combine(new ListDictionary(), (IDictionary)d2e.Value, true);
 						}
 						else
 						{
 							// Unsorted combine
-							result[d2e.Key] = Combine(new Hashtable(), (IDictionary)d2e.Value, sorted);
+							result[d2e.Key] = Combine(new Hashtable(), (IDictionary)d2e.Value, false);
 						}
 					}
 				}
@@ -297,8 +306,6 @@ namespace CodeImp.DoomBuilder.IO
 		// This is called by all the ReadSetting overloads to perform the read
 		private bool CheckSetting(IDictionary dic, string setting, string pathseperator)
 		{
-			IDictionary cs = null;
-
 			// Split the path in an array
 			string[] keys = setting.Split(pathseperator.ToCharArray());
 
@@ -306,22 +313,22 @@ namespace CodeImp.DoomBuilder.IO
 			object item = dic;
 
 			// Go for each item
-			for(int i = 0; i < keys.Length; i++)
+			foreach(string key in keys)
 			{
 				// Check if the current item is of ConfigStruct type
 				if(item is IDictionary)
 				{
 					// Check if the key is valid
-					if(ValidateKey(null, keys[i].Trim(), "", -1) == true)
+					if(ValidateKey(key.Trim(), "", -1))
 					{
 						// Cast to ConfigStruct
-						cs = (IDictionary)item;
+						IDictionary cs = (IDictionary)item;
 						
 						// Check if the requested item exists
-						if(cs.Contains(keys[i]) == true)
+						if(cs.Contains(key))
 						{
 							// Set the item to the next item
-							item = cs[keys[i]];
+							item = cs[key];
 						}
 						else
 						{
@@ -351,8 +358,6 @@ namespace CodeImp.DoomBuilder.IO
 		private object ReadAnySetting(IDictionary dic, string setting, object defaultsetting, string pathseperator) { return ReadAnySetting(dic, "", -1, setting, defaultsetting, pathseperator); }
 		private object ReadAnySetting(IDictionary dic, string file, int line, string setting, object defaultsetting, string pathseperator)
 		{
-			IDictionary cs = null;
-			
 			// Split the path in an array
 			string[] keys = setting.Split(pathseperator.ToCharArray());
 			
@@ -360,22 +365,22 @@ namespace CodeImp.DoomBuilder.IO
 			object item = dic;
 			
 			// Go for each item
-			for(int i = 0; i < keys.Length; i++)
+			foreach(string key in keys)
 			{
 				// Check if the current item is of ConfigStruct type
 				if(item is IDictionary)
 				{
 					// Check if the key is valid
-					if(ValidateKey(null, keys[i].Trim(), file, line) == true)
+					if(ValidateKey(key.Trim(), file, line))
 					{
 						// Cast to ConfigStruct
-						cs = (IDictionary)item;
+						IDictionary cs = (IDictionary)item;
 						
 						// Check if the requested item exists
-						if(cs.Contains(keys[i]) == true)
+						if(cs.Contains(key))
 						{
 							// Set the item to the next item
-							item = cs[keys[i]];
+							item = cs[key];
 						}
 						else
 						{
@@ -405,7 +410,7 @@ namespace CodeImp.DoomBuilder.IO
 		
 		
 		// This returns a string added with escape characters
-		private string EscapedString(string str)
+		private static string EscapedString(string str)
 		{
 			// Replace the \ with \\ first!
 			str = str.Replace("\\", "\\\\");
@@ -435,12 +440,12 @@ namespace CodeImp.DoomBuilder.IO
 		
 		// This validates a given key and sets
 		// error properties if key is invalid and errorline > -1
-		private bool ValidateKey(IDictionary container, string key, string file, int errorline)
+		private bool ValidateKey(string key, string file, int errorline)
 		{
 			bool validateresult;
 			
 			// Check if key is an empty string
-			if(key == "")
+			if(string.IsNullOrEmpty(key))
 			{
 				// ERROR: Missing key name in statement
 				if(errorline > -1) RaiseError(file, errorline, ERROR_KEYMISSING);
@@ -449,7 +454,7 @@ namespace CodeImp.DoomBuilder.IO
 			else
 			{
 				// Check if there are spaces in the key
-				if(key.IndexOfAny(" ".ToCharArray()) > -1)
+				if(key.IndexOfAny(space) > -1)
 				{
 					// ERROR: Spaces not allowed in key names
 					if(errorline > -1) RaiseError(file, errorline, ERROR_KEYSPACES);
@@ -458,8 +463,8 @@ namespace CodeImp.DoomBuilder.IO
 				else
 				{
 					// Check if we can test existance
-					if(container != null)
-					{
+					//if(container != null)
+					//{
 						/*
 						// Test if the key exists in this container
 						if(container.Contains(key) == true)
@@ -470,16 +475,16 @@ namespace CodeImp.DoomBuilder.IO
 						}
 						else
 						*/
-						{
+						//{
 							// Key OK
-							validateresult = true;
-						}
-					}
-					else
-					{
+							//validateresult = true;
+						//}
+					//}
+					//else
+					//{
 						// Key OK
 						validateresult = true;
-					}
+					//}
 				}
 			}
 			
@@ -495,7 +500,7 @@ namespace CodeImp.DoomBuilder.IO
 			bool validateresult;
 			
 			// Check if key is an empty string
-			if(keyword == "")
+			if(string.IsNullOrEmpty(keyword))
 			{
 				// ERROR: Missing key name in statement
 				if(errorline > -1) RaiseError(file, errorline, ERROR_ASSIGNINVALID);
@@ -504,7 +509,7 @@ namespace CodeImp.DoomBuilder.IO
 			else
 			{
 				// Check if there are spaces in the key
-				if(keyword.IndexOfAny(" ".ToCharArray()) > -1)
+				if(keyword.IndexOfAny(space) > -1)
 				{
 					// ERROR: Spaces not allowed in key names
 					if(errorline > -1) RaiseError(file, errorline, ERROR_ASSIGNINVALID);
@@ -543,7 +548,7 @@ namespace CodeImp.DoomBuilder.IO
 					if(cpErrorResult) return null;
 				}
 				// Check for numeric character
-				else if("0123456789-.&".IndexOf(c.ToString(CultureInfo.InvariantCulture)) > -1)
+				else if(NUMBERS2.IndexOf(c.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal) > -1)
 				{
 					// Go one byte back, because this
 					// byte is part of the number!
@@ -610,15 +615,15 @@ namespace CodeImp.DoomBuilder.IO
 						default:
 
 							// Is it a number?
-							if("0123456789".IndexOf(c.ToString(CultureInfo.InvariantCulture)) > -1)
+							if(NUMBERS.IndexOf(c.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal) > -1)
 							{
-								int vv = 0;
-								char vc = '0';
+								int vv;
+								char vc;
 
 								// Convert the next 3 characters to a number
 								string v = data.Substring(pos, 3);
-								try { vv = System.Convert.ToInt32(v.Trim(), CultureInfo.InvariantCulture); }
-								catch(System.FormatException)
+								try { vv = Convert.ToInt32(v.Trim(), CultureInfo.InvariantCulture); }
+								catch(FormatException)
 								{
 									// ERROR: Invalid value in assignment
 									RaiseError(file, line, ERROR_VALUEINVALID);
@@ -626,8 +631,8 @@ namespace CodeImp.DoomBuilder.IO
 								}
 
 								// Convert the number to a char
-								try { vc = System.Convert.ToChar(vv, CultureInfo.InvariantCulture); }
-								catch(System.FormatException)
+								try { vc = Convert.ToChar(vv, CultureInfo.InvariantCulture); }
+								catch(FormatException)
 								{
 									// ERROR: Invalid value in assignment
 									RaiseError(file, line, ERROR_VALUEINVALID);
@@ -652,28 +657,29 @@ namespace CodeImp.DoomBuilder.IO
 				}
 				else
 				{
-					// Check for sequence start
-					if(c == '\\')
-					{
-						// Next character is of escape sequence
-						escape = true;
-					}
-					// Check if string ends
-					else if(c == '\"')
-					{
-						return val;
-					}
-					// Check for new line
-					else if(c == '\n')
-					{
-						// Count the new line
-						line++;
-					}
-					// Everything else is just part of string
-					else
-					{
-						// Add to value
-						val += c.ToString(CultureInfo.InvariantCulture);
+					switch(c) //mxd
+					{ 
+						// Check for sequence start
+						case '\\':
+							// Next character is of escape sequence
+							escape = true;
+							break;
+
+						// Check if string ends
+						case '\"':
+							return val;
+
+						// Check for new line
+						case '\n':
+							// Count the new line
+							line++;
+							break;
+
+						// Everything else is just part of string
+						default:
+							// Add to value
+							val += c.ToString(CultureInfo.InvariantCulture);
+							break;
 					}
 				}
 			}
@@ -701,13 +707,13 @@ namespace CodeImp.DoomBuilder.IO
 					pos--;
 					
 					// Floating point?
-					if(val.IndexOf("f") > -1)
+					if(val.IndexOf("f", StringComparison.Ordinal) > -1)
 					{
-						float fval = 0;
+						float fval;
 						
 						// Convert to float (remove the f first)
-						try { fval = System.Convert.ToSingle(val.Trim().Replace("f", ""), CultureInfo.InvariantCulture); }
-						catch(System.FormatException)
+						try { fval = Convert.ToSingle(val.Trim().Replace("f", ""), CultureInfo.InvariantCulture); }
+						catch(FormatException)
 						{
 							// ERROR: Invalid value in assignment
 							RaiseError(file, line, ERROR_VALUEINVALID);
@@ -717,39 +723,36 @@ namespace CodeImp.DoomBuilder.IO
 					}
 					else
 					{
-						int ival = 0;
-						long lval = 0;
-						
 						// Convert to int
 						try
 						{
 							// Convert to value
-							ival = System.Convert.ToInt32(val.Trim(), CultureInfo.InvariantCulture);
+							int ival = Convert.ToInt32(val.Trim(), CultureInfo.InvariantCulture);
 							return ival;
 						}
-						catch(System.OverflowException)
+						catch(OverflowException)
 						{
 							// Too large for Int32, try Int64
 							try
 							{
 								// Convert to value
-								lval = System.Convert.ToInt64(val.Trim(), CultureInfo.InvariantCulture);
+								long lval = Convert.ToInt64(val.Trim(), CultureInfo.InvariantCulture);
 								return lval;
 							}
-							catch(System.OverflowException)
+							catch(OverflowException)
 							{
 								// Too large for Int64, return error
 								RaiseError(file, line, ERROR_VALUETOOBIG);
 								return null;
 							}
-							catch(System.FormatException)
+							catch(FormatException)
 							{
 								// ERROR: Invalid value in assignment
 								RaiseError(file, line, ERROR_VALUEINVALID);
 								return null;
 							}
 						}
-						catch(System.FormatException)
+						catch(FormatException)
 						{
 							// ERROR: Invalid value in assignment
 							RaiseError(file, line, ERROR_VALUEINVALID);
@@ -798,10 +801,11 @@ namespace CodeImp.DoomBuilder.IO
 						// Return result depending on the keyword
 						switch(val.Trim().ToLowerInvariant())
 						{
-							case "true": return (bool)true;
-							case "false": return (bool)false;
+							case "true": return true;
+							case "false": return false;
 							case "null": return null;
-							default: RaiseError(file, line, ERROR_KEYWORDUNKNOWN); return null;
+							default: RaiseError(file, line, ERROR_KEYWORDUNKNOWN + "\nUnrecognized token: \"" + val.Trim().ToLowerInvariant() + "\"");
+								return null;
 						}
 					}
 				}
@@ -825,7 +829,7 @@ namespace CodeImp.DoomBuilder.IO
 		
 		
 		// This includes another file
-		private void FunctionInclude(IDictionary cs, ArrayList args, ref string file, int line)
+		private void FunctionInclude(IDictionary cs, List<object> args, ref string file, int line)
 		{
 			string data;
 			
@@ -833,10 +837,41 @@ namespace CodeImp.DoomBuilder.IO
 			if(args.Count < 1) RaiseError(file, line, ERROR_INVALID_ARGS);
 			if(!(args[0] is string)) RaiseError(file, line, ERROR_INVALID_ARGS + " Expected a string for argument 1.");
 			if((args.Count > 1) && !(args[1] is string)) RaiseError(file, line, ERROR_INVALID_ARGS + " Expected a string for argument 2.");
+			string filename = Path.GetFileName(file);
+			if(string.IsNullOrEmpty(filename)) RaiseError(file, line, "Invalid include statement: file name is missing."); //mxd
+			else if(args[0].ToString().ToUpperInvariant() == filename.ToUpperInvariant()) RaiseError(file, line, "A file cannot call include() on itself."); //mxd
 			if(cpErrorResult) return;
 			
 			// Determine the full path of the file to include
-			string includefile = Path.GetDirectoryName(file) + Path.DirectorySeparatorChar + args[0].ToString();
+			string includefile = Path.GetDirectoryName(file) + Path.DirectorySeparatorChar + args[0];
+
+			//mxd. Caching
+			if(cfgcache.ContainsKey(includefile)) 
+			{
+				IDictionary cinc = cfgcache[includefile];
+				
+				// Check if a path is given
+				if((args.Count > 1) && !string.IsNullOrEmpty(args[1].ToString())) 
+				{
+					IDictionary def;
+					if(cs is ListDictionary) def = new ListDictionary(); else def = new Hashtable();
+					if(CheckSetting(cinc, args[1].ToString(), DEFAULT_SEPERATOR)) 
+					{
+						cinc = (IDictionary)ReadAnySetting(cinc, file, line, args[1].ToString(), def, DEFAULT_SEPERATOR);
+					} 
+					else 
+					{
+						RaiseError(file, line, "Include missing structure \"" + args[1] + "\" in file \"" + includefile + "\"");
+						return;
+					}
+				}
+
+				// Recursively merge the structures with the current structure
+				IDictionary newcs = Combine(cs, cinc, (cs is ListDictionary));
+				cs.Clear();
+				foreach(DictionaryEntry de in newcs) cs.Add(de.Key, de.Value);
+				return;
+			}
 			
 			try
 			{
@@ -851,7 +886,7 @@ namespace CodeImp.DoomBuilder.IO
 			}
 			catch(Exception e)
 			{
-				RaiseError(file, line, "Unable to include file '" + includefile + "'. " + e.GetType().Name + ": " + e.Message);
+				RaiseError(file, line, "Unable to include file \"" + includefile + "\". " + e.GetType().Name + ": " + e.Message);
 				return;
 			}
 			
@@ -867,6 +902,9 @@ namespace CodeImp.DoomBuilder.IO
 			InputStructure(inc, ref includefile, ref data, ref npos, ref nline);
 			if(!cpErrorResult)
 			{
+				//mxd. Add to cache
+				cfgcache.Add(includefile, inc);
+				
 				// Check if a path is given
 				if((args.Count > 1) && !string.IsNullOrEmpty(args[1].ToString()))
 				{
@@ -878,7 +916,7 @@ namespace CodeImp.DoomBuilder.IO
 					}
 					else
 					{
-						RaiseError(file, line, "Include missing structure '" + args[1].ToString() + "' in file '" + includefile + "'");
+						RaiseError(file, line, "Include missing structure \"" + args[1] + "\" in file \"" + includefile + "\"");
 						return;
 					}
 				}
@@ -895,8 +933,7 @@ namespace CodeImp.DoomBuilder.IO
 		private void ParseFunction(IDictionary cs, ref string file, ref string data, ref int pos, ref int line, ref string functionname)
 		{
 			// We now parse arguments, separated by commas, until we reach the end of the function
-			ArrayList args = new ArrayList();
-			object val = null;
+			List<object> args = new List<object>();
 			while((pos < data.Length) && !cpErrorResult)
 			{
 				// Get current character
@@ -918,23 +955,24 @@ namespace CodeImp.DoomBuilder.IO
 							return;
 					}
 				}
+
 				// Check for string opening
-				else if(c == '\"')
+				if(c == '\"')
 				{
 					// Now parsing a string
-					val = ParseString(ref file, ref data, ref pos, ref line);
+					object val = ParseString(ref file, ref data, ref pos, ref line);
 					if(cpErrorResult) return;
 					args.Add(val);
 				}
 				// Check for numeric character
-				else if("0123456789-.&".IndexOf(c.ToString(CultureInfo.InvariantCulture)) > -1)
+				else if(NUMBERS2.IndexOf(c.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal) > -1)
 				{
 					// Go one byte back, because this
 					// byte is part of the number!
 					pos--;
 					
 					// Now parsing a number
-					val = ParseNumber(ref file, ref data, ref pos, ref line);
+					object val = ParseNumber(ref file, ref data, ref pos, ref line);
 					if(cpErrorResult) return;
 					args.Add(val);
 				}
@@ -957,14 +995,13 @@ namespace CodeImp.DoomBuilder.IO
 					pos--;
 					
 					// Now parsing a keyword
-					val = ParseKeyword(ref file, ref data, ref pos, ref line);
+					object val = ParseKeyword(ref file, ref data, ref pos, ref line);
 					if(cpErrorResult) return;
 					args.Add(val);
 				}
 			}
 			
 			RaiseError(file, line, ERROR_UNEXPECTED_END);
-			return;
 		}
 		
 		
@@ -977,7 +1014,7 @@ namespace CodeImp.DoomBuilder.IO
 			// Go through all of the data until
 			// the end or until the struct closes
 			// or when an arror occurred
-			while ((pos < data.Length) && !cpErrorResult)
+			while((pos < data.Length) && !cpErrorResult)
 			{
 				// Get current character
 				char c = data[pos++];
@@ -988,7 +1025,7 @@ namespace CodeImp.DoomBuilder.IO
 					case '{': // Begin of new struct
 						
 						// Validate key
-						if(ValidateKey(cs, key.Trim(), file, line))
+						if(ValidateKey(key.Trim(), file, line))
 						{
 							// Parse this struct and add it
 							IDictionary cs2;
@@ -1015,7 +1052,7 @@ namespace CodeImp.DoomBuilder.IO
 					case '=': // Assignment
 						
 						// Validate key
-						if(ValidateKey(cs, key.Trim(), file, line))
+						if(ValidateKey(key.Trim(), file, line))
 						{
 							// Now parsing assignment
 							object val = ParseAssignment(ref file, ref data, ref pos, ref line);
@@ -1032,7 +1069,7 @@ namespace CodeImp.DoomBuilder.IO
 						// Validate key
 						if(!string.IsNullOrEmpty(key))
 						{
-							if(ValidateKey(cs, key.Trim(), file, line))
+							if(ValidateKey(key.Trim(), file, line))
 							{
 								// Add the key with null as value
 								cs[key.Trim()] = null;
@@ -1062,7 +1099,7 @@ namespace CodeImp.DoomBuilder.IO
 						if(data.Substring(pos, 2) == "//")
 						{
 							// Find the next line
-							int np = data.IndexOf("\n", pos);
+							int np = data.IndexOf("\n", pos, StringComparison.Ordinal);
 							
 							// Next line found?
 							if(np > -1)
@@ -1084,14 +1121,14 @@ namespace CodeImp.DoomBuilder.IO
 						else if(data.Substring(pos, 2) == "/*")
 						{
 							// Find the next closing block comment
-							int np = data.IndexOf("*/", pos);
+							int np = data.IndexOf("*/", pos, StringComparison.Ordinal);
 							
 							// Closing block comment found?
 							if(np > -1)
 							{
 								// Count the lines in the block comment
 								string blockdata = data.Substring(pos, np - pos + 2);
-								line += (blockdata.Split("\n".ToCharArray()).Length - 1);
+								line += (blockdata.Split(newline).Length - 1);
 								
 								// Skip everything in this block
 								pos = np + 2;
@@ -1124,7 +1161,7 @@ namespace CodeImp.DoomBuilder.IO
 		#region ================== Writing
 
 		// This will create a data structure from the given object
-		private string OutputStructure(IDictionary cs, int level, string newline, bool whitespace)
+		private static string OutputStructure(IDictionary cs, int level, string newline, bool whitespace)
 		{
 			string leveltabs = "";
 			string spacing = "";
@@ -1152,12 +1189,8 @@ namespace CodeImp.DoomBuilder.IO
 					// Check if the value is null
 					if(de.Value == null)
 					{
-						// Output the keyword "null"
-						//db.Append(leveltabs); db.Append(de.Key.ToString()); db.Append(spacing);
-						//db.Append("="); db.Append(spacing); db.Append("null;"); db.Append(newline);
-						
 						// Output key only
-						db.Append(leveltabs); db.Append(de.Key.ToString()); db.Append(";"); db.Append(newline);
+						db.Append(leveltabs); db.Append(de.Key); db.Append(";"); db.Append(newline);
 					}
 					// Check if the value if of ConfigStruct type
 					else if(de.Value is IDictionary)
@@ -1168,22 +1201,22 @@ namespace CodeImp.DoomBuilder.IO
 						db.Append(leveltabs); db.Append("{"); db.Append(newline);
 						db.Append(OutputStructure((IDictionary)de.Value, level + 1, newline, whitespace));
 						db.Append(leveltabs); db.Append("}"); db.Append(newline);
-						if(whitespace) { db.Append(leveltabs); db.Append(newline); }
+						//if(whitespace) { db.Append(leveltabs); db.Append(newline); }
 					}
 					// Check if the value is of boolean type
 					else if(de.Value is bool)
 					{
 						// Check value
-						if((bool)de.Value == true)
+						if((bool)de.Value)
 						{
 							// Output the keyword "true"
-							db.Append(leveltabs); db.Append(de.Key.ToString()); db.Append(spacing);
+							db.Append(leveltabs); db.Append(de.Key); db.Append(spacing);
 							db.Append("="); db.Append(spacing); db.Append("true;"); db.Append(newline);
 						}
 						else
 						{
 							// Output the keyword "false"
-							db.Append(leveltabs); db.Append(de.Key.ToString()); db.Append(spacing);
+							db.Append(leveltabs); db.Append(de.Key); db.Append(spacing);
 							db.Append("="); db.Append(spacing); db.Append("false;"); db.Append(newline);
 						}
 					}
@@ -1270,7 +1303,7 @@ namespace CodeImp.DoomBuilder.IO
 		public bool WriteSetting(string setting, object settingvalue) { return WriteSetting(setting, settingvalue, DEFAULT_SEPERATOR); }
 		public bool WriteSetting(string setting, object settingvalue, string pathseperator)
 		{
-			IDictionary cs = null;
+			IDictionary cs;
 			
 			// Split the path in an array
 			string[] keys = setting.Split(pathseperator.ToCharArray());
@@ -1283,13 +1316,13 @@ namespace CodeImp.DoomBuilder.IO
 			for(int i = 0; i < (keys.Length - 1); i++)
 			{
 				// Check if the key is valid
-				if(ValidateKey(null, keys[i].Trim(), "", -1) == true)
+				if(ValidateKey(keys[i].Trim(), "", -1))
 				{
 					// Cast to ConfigStruct
 					cs = (IDictionary)item;
 					
 					// Check if the requested item exists
-					if(cs.Contains(keys[i]) == true)
+					if(cs.Contains(keys[i]))
 					{
 						// Check if the requested item is a ConfigStruct
 						if(cs[keys[i]] is IDictionary)
@@ -1326,7 +1359,7 @@ namespace CodeImp.DoomBuilder.IO
 			cs = (IDictionary)item;
 			
 			// Check if the key already exists
-			if(cs.Contains(finalkey) == true)
+			if(cs.Contains(finalkey))
 			{
 				// Update the value
 				cs[finalkey] = settingvalue;
@@ -1346,7 +1379,7 @@ namespace CodeImp.DoomBuilder.IO
 		public bool DeleteSetting(string setting) { return DeleteSetting(setting, DEFAULT_SEPERATOR); }
 		public bool DeleteSetting(string setting, string pathseperator)
 		{
-			IDictionary cs = null;
+			IDictionary cs;
 			
 			// Split the path in an array
 			string[] keys = setting.Split(pathseperator.ToCharArray());
@@ -1359,13 +1392,13 @@ namespace CodeImp.DoomBuilder.IO
 			for(int i = 0; i < (keys.Length - 1); i++)
 			{
 				// Check if the key is valid
-				if(ValidateKey(null, keys[i].Trim(), "", -1) == true)
+				if(ValidateKey(keys[i].Trim(), "", -1))
 				{
 					// Cast to ConfigStruct
 					cs = (IDictionary)item;
 					
 					// Check if the requested item exists
-					if(cs.Contains(keys[i]) == true)
+					if(cs.Contains(keys[i]))
 					{
 						// Check if the requested item is a ConfigStruct
 						if(cs[keys[i]] is IDictionary)
@@ -1403,7 +1436,7 @@ namespace CodeImp.DoomBuilder.IO
 			
 			// Arrived at our destination
 			// Delete the key if the key exists
-			if(cs.Contains(finalkey) == true)
+			if(cs.Contains(finalkey))
 			{
 				// Key exists, delete it
 				cs.Remove(finalkey);
@@ -1425,7 +1458,7 @@ namespace CodeImp.DoomBuilder.IO
 		public bool SaveConfiguration(string filename, string newline, bool whitespace)
 		{
 			// Kill the file if it exists
-			if(File.Exists(filename) == true) File.Delete(filename);
+			if(File.Exists(filename)) File.Delete(filename);
 			
 			// Open file stream for writing
 			FileStream fstream = File.OpenWrite(filename);
@@ -1457,7 +1490,7 @@ namespace CodeImp.DoomBuilder.IO
 		public bool LoadConfiguration(string filename, bool sorted)
 		{
 			// Check if the file is missing
-			if(File.Exists(filename) == false)
+			if(!File.Exists(filename))
 			{
 				throw(new FileNotFoundException("File not found \"" + filename + "\"", filename));
 			}

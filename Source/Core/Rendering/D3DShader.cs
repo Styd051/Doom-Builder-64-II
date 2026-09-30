@@ -17,26 +17,14 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
 using System.IO;
-using System.Reflection;
-using System.Drawing;
-using System.ComponentModel;
-using CodeImp.DoomBuilder.Map;
 using SlimDX.Direct3D9;
-using SlimDX;
-using CodeImp.DoomBuilder.Geometry;
-using System.Drawing.Imaging;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.Rendering
 {
-	internal abstract class D3DShader
+	internal abstract class D3DShader : IDisposable
 	{
 		#region ================== Constants
 
@@ -54,7 +42,10 @@ namespace CodeImp.DoomBuilder.Rendering
 		protected VertexDeclaration vertexdecl;
 		
 		// Disposing
-		protected bool isdisposed = false;
+		protected bool isdisposed;
+
+		//mxd. Settings changes
+		protected bool settingschanged;
 
 		#endregion
 
@@ -68,7 +59,7 @@ namespace CodeImp.DoomBuilder.Rendering
 		#region ================== Constructor / Disposer
 
 		// Constructor
-		public D3DShader(ShaderManager manager)
+		protected D3DShader(ShaderManager manager)
 		{
 			// Initialize
 			this.manager = manager;
@@ -101,14 +92,10 @@ namespace CodeImp.DoomBuilder.Rendering
 		protected Effect LoadEffect(string fxfile)
 		{
 			Effect fx;
-			string errors;
-			Stream fxdata;
-			
-			// Return null when not using shaders
-			if(!manager.Enabled) return null;
+			string errors = string.Empty;
 			
 			// Load the resource
-			fxdata = General.ThisAssembly.GetManifestResourceStream("CodeImp.DoomBuilder.Resources." + fxfile);
+			Stream fxdata = General.ThisAssembly.GetManifestResourceStream("CodeImp.DoomBuilder.Resources." + fxfile);
 			fxdata.Seek(0, SeekOrigin.Begin);
 			
 			try
@@ -122,20 +109,36 @@ namespace CodeImp.DoomBuilder.Rendering
 			}
 			catch(Exception)
 			{
+				string debugerrors = string.Empty; //mxd
+				
 				// Compiling failed, try with debug information
 				try
 				{
+					//mxd. Rewind before use!
+					fxdata.Seek(0, SeekOrigin.Begin);
+					
 					// Compile effect
-					fx = Effect.FromStream(General.Map.Graphics.Device, fxdata, null, null, null, ShaderFlags.Debug, null, out errors);
-					if(!string.IsNullOrEmpty(errors))
+					fx = Effect.FromStream(General.Map.Graphics.Device, fxdata, null, null, null, ShaderFlags.Debug, null, out debugerrors);
+					if(!string.IsNullOrEmpty(debugerrors))
 					{
-						throw new Exception("Errors in effect file " + fxfile + ": " + errors);
+						throw new Exception("Errors in effect file " + fxfile + ": " + debugerrors);
 					}
 				}
 				catch(Exception e)
 				{
+					//mxd. Try to get something. Anything!
+					string message;
+					if(!string.IsNullOrEmpty(debugerrors))
+						message = e.Message + "\nInitial message (debug mode): \"" + debugerrors + "\"";
+					else if(!string.IsNullOrEmpty(errors))
+						message = e.Message + "\nInitial message: \"" + errors + "\"";
+					else
+						message = e.ToString();
+
+					if(string.IsNullOrEmpty(message)) message = "No initial message...";
+					
 					// No debug information, just crash
-					throw new Exception(e.GetType().Name + " while loading effect " + fxfile + ": " + e.Message);
+					throw new Exception(e.GetType().Name + " while loading effect " + fxfile + ": " + message);
 				}
 			}
 			
@@ -155,31 +158,35 @@ namespace CodeImp.DoomBuilder.Rendering
 			General.Map.Graphics.Device.VertexDeclaration = vertexdecl;
 
 			// Set effect
-			if(manager.Enabled) effect.Begin(FX.DoNotSaveState);
+			effect.Begin(FX.DoNotSaveState);
 		}
 
 		// This begins a pass
 		public virtual void BeginPass(int index)
 		{
-			if(manager.Enabled) effect.BeginPass(index);
+			effect.BeginPass(index);
 		}
 
 		// This ends a pass
 		public void EndPass()
 		{
-			if(manager.Enabled) effect.EndPass();
+			effect.EndPass();
 		}
 		
 		// This ends te shader
 		public void End()
 		{
-			if(manager.Enabled) effect.End();
+			effect.End();
 		}
 
 		// This applies properties during a pass
 		public void ApplySettings()
 		{
-			if(manager.Enabled) effect.CommitChanges();
+			if(settingschanged)
+			{
+				effect.CommitChanges();
+				settingschanged = false; //mxd
+			}
 		}
 		
 		#endregion

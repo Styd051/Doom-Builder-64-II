@@ -17,28 +17,22 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 using System.IO;
-using System.Reflection;
 using CodeImp.DoomBuilder.Geometry;
 using CodeImp.DoomBuilder.Plugins;
 using CodeImp.DoomBuilder.Windows;
 using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Rendering;
-using System.Diagnostics;
 using CodeImp.DoomBuilder.Actions;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.Editing
 {
-	public class UndoManager
+	public class UndoManager : IDisposable
 	{
 		#region ================== Constants
 
@@ -109,7 +103,7 @@ namespace CodeImp.DoomBuilder.Editing
 		private Thread backgroundthread;
 		
 		// Disposing
-		private bool isdisposed = false;
+		private bool isdisposed;
 
 		#endregion
 
@@ -176,7 +170,7 @@ namespace CodeImp.DoomBuilder.Editing
 			General.Actions.BindMethods(this);
 
 			// Start background thread
-			backgroundthread = new Thread(new ThreadStart(BackgroundThread));
+			backgroundthread = new Thread(BackgroundThread);
 			backgroundthread.Name = "Snapshot Compressor";
 			backgroundthread.Priority = ThreadPriority.Lowest;
 			backgroundthread.IsBackground = true;
@@ -187,7 +181,7 @@ namespace CodeImp.DoomBuilder.Editing
 		}
 
 		// Disposer
-		internal void Dispose()
+		public void Dispose()
 		{
 			// Not already disposed?
 			if(!isdisposed)
@@ -204,6 +198,11 @@ namespace CodeImp.DoomBuilder.Editing
 				ClearUndos();
 				ClearRedos();
 				General.WriteLogLine("All undo and redo levels cleared.");
+
+				//mxd
+				if(snapshot != null) { snapshot.Dispose(); snapshot = null; }
+				if(ss != null) { ss.Dispose(); ss = null; }
+				if(stream != null) { stream.Dispose(); stream = null; }
 				
 				// Done
 				isdisposed = true;
@@ -253,15 +252,13 @@ namespace CodeImp.DoomBuilder.Editing
 		}
 
 		// This checks and removes a level when the limit is reached
-		private void LimitUndoRedoLevel(List<UndoSnapshot> list)
+		private static void LimitUndoRedoLevel(List<UndoSnapshot> list)
 		{
-			UndoSnapshot u;
-			
 			// Too many?
 			if(list.Count > MAX_UNDO_LEVELS)
 			{
 				// Remove one and dispose map
-				u = list[list.Count - 1];
+				UndoSnapshot u = list[list.Count - 1];
 				u.Dispose();
 				list.RemoveAt(list.Count - 1);
 			}
@@ -375,12 +372,12 @@ namespace CodeImp.DoomBuilder.Editing
 		}
 
 		// This outputs record info, if desired
-		private void LogRecordInfo(string info)
+		/*private void LogRecordInfo(string info)
 		{
 			#if DEBUG
 				//General.WriteLogLine(info);
 			#endif
-		}
+		}*/
 
 		// This plays back a stream in reverse
 		private void PlaybackStream(MemoryStream pstream)
@@ -440,6 +437,10 @@ namespace CodeImp.DoomBuilder.Editing
 					numcmds--;
 				}
 			}
+
+			//mxd
+			ds.End();
+			ds.Dispose();
 			
 			General.Map.Map.AutoRemove = true;
 		}
@@ -475,6 +476,13 @@ namespace CodeImp.DoomBuilder.Editing
 			General.MainWindow.UpdateInterface();
 		}
 
+		// This clears all undos (mxd)
+		internal void ClearAllUndos() 
+		{
+			ClearUndos();
+			General.MainWindow.UpdateInterface();
+		}
+
 		/// <summary>
 		/// This makes an undo and returns the unique ticket id. Also automatically indicates that the map is changed.
 		/// </summary>
@@ -495,7 +503,7 @@ namespace CodeImp.DoomBuilder.Editing
 		/// <returns>Ticket ID that identifies the created undo level. Returns -1 when no undo level was created.</returns>
 		public int CreateUndo(string description, object groupsource, int groupid, int grouptag)
 		{
-			UndoSnapshot u;
+			//UndoSnapshot u;
 			Plugin p = null;
 			string groupsourcename = "Null";
 			
@@ -697,7 +705,7 @@ namespace CodeImp.DoomBuilder.Editing
 							General.Map.ThingsFilter.Update();
 							General.Map.Data.UpdateUsedTextures();
 							General.MainWindow.RefreshInfo();
-							General.MainWindow.RedrawDisplay();
+							//General.MainWindow.RedrawDisplay();
 							
 							// Map changed!
 							General.Map.IsChanged = true;
@@ -707,6 +715,8 @@ namespace CodeImp.DoomBuilder.Editing
 							General.Plugins.OnUndoEnd();
 
 							// Update interface
+							General.Editing.Mode.UpdateSelectionInfo(); //mxd
+							General.MainWindow.RedrawDisplay(); //mxd
 							dobackgroundwork = true;
 							General.MainWindow.UpdateInterface();
 						}
@@ -839,7 +849,7 @@ namespace CodeImp.DoomBuilder.Editing
 							General.Map.ThingsFilter.Update();
 							General.Map.Data.UpdateUsedTextures();
 							General.MainWindow.RefreshInfo();
-							General.MainWindow.RedrawDisplay();
+							//General.MainWindow.RedrawDisplay();
 							
 							// Map changed!
 							General.Map.IsChanged = true;
@@ -849,6 +859,8 @@ namespace CodeImp.DoomBuilder.Editing
 							General.Plugins.OnRedoEnd();
 
 							// Update interface
+							General.MainWindow.RedrawDisplay(); //mxd
+							General.Editing.Mode.UpdateSelectionInfo(); //mxd
 							dobackgroundwork = true;
 							General.MainWindow.UpdateInterface();
 						}
@@ -873,7 +885,7 @@ namespace CodeImp.DoomBuilder.Editing
 			propsrecorded = null;
 		}
 
-		internal void PlayAddVertex(DeserializerStream ds)
+		private void PlayAddVertex(DeserializerStream ds)
 		{
 			int index; ds.rInt(out index);
 			//LogRecordInfo("PLY: Removing vertex " + index);
@@ -895,7 +907,7 @@ namespace CodeImp.DoomBuilder.Editing
 			propsrecorded = null;
 		}
 
-		internal void PlayRemVertex(DeserializerStream ds)
+		private void PlayRemVertex(DeserializerStream ds)
 		{
 			int index; ds.rInt(out index);
 			Vector2D pos; ds.rVector2D(out pos);
@@ -918,7 +930,7 @@ namespace CodeImp.DoomBuilder.Editing
 			}
 		}
 
-		internal void PlayPrpVertex(DeserializerStream ds)
+		private void PlayPrpVertex(DeserializerStream ds)
 		{
 			int index; ds.rInt(out index);
 			Vertex v = General.Map.Map.GetVertexByIndex(index);
@@ -937,7 +949,7 @@ namespace CodeImp.DoomBuilder.Editing
 			propsrecorded = null;
 		}
 
-		internal void PlayAddLinedef(DeserializerStream ds)
+		private void PlayAddLinedef(DeserializerStream ds)
 		{
 			int index; ds.rInt(out index);
 			//LogRecordInfo("PLY: Removing linedef " + index);
@@ -961,7 +973,7 @@ namespace CodeImp.DoomBuilder.Editing
 			propsrecorded = null;
 		}
 
-		internal void PlayRemLinedef(DeserializerStream ds)
+		private void PlayRemLinedef(DeserializerStream ds)
 		{
 			int index; ds.rInt(out index);
 			int sindex; ds.rInt(out sindex);
@@ -987,7 +999,7 @@ namespace CodeImp.DoomBuilder.Editing
 			}
 		}
 
-		internal void PlayPrpLinedef(DeserializerStream ds)
+		private static void PlayPrpLinedef(DeserializerStream ds)
 		{
 			int index; ds.rInt(out index);
 			Linedef l = General.Map.Map.GetLinedefByIndex(index);
@@ -1006,7 +1018,7 @@ namespace CodeImp.DoomBuilder.Editing
 			propsrecorded = null;
 		}
 
-		internal void PlayRefLinedefStart(DeserializerStream ds)
+		private void PlayRefLinedefStart(DeserializerStream ds)
 		{
 			int index; ds.rInt(out index);
 			Linedef l = General.Map.Map.GetLinedefByIndex(index);
@@ -1030,7 +1042,7 @@ namespace CodeImp.DoomBuilder.Editing
 			propsrecorded = null;
 		}
 
-		internal void PlayRefLinedefEnd(DeserializerStream ds)
+		private void PlayRefLinedefEnd(DeserializerStream ds)
 		{
 			int index; ds.rInt(out index);
 			Linedef l = General.Map.Map.GetLinedefByIndex(index);
@@ -1054,7 +1066,7 @@ namespace CodeImp.DoomBuilder.Editing
 			propsrecorded = null;
 		}
 
-		internal void PlayRefLinedefFront(DeserializerStream ds)
+		private void PlayRefLinedefFront(DeserializerStream ds)
 		{
 			int index; ds.rInt(out index);
 			Linedef l = General.Map.Map.GetLinedefByIndex(index);
@@ -1063,7 +1075,11 @@ namespace CodeImp.DoomBuilder.Editing
 			Sidedef sd = (sindex >= 0) ? General.Map.Map.GetSidedefByIndex(sindex) : null;
 			l.AttachFront(sd);
 			l.Marked = true;
-			if(sd != null) sd.Marked = true;
+			if(sd != null)
+			{
+				sd.Marked = true;
+				if(sd.Sector != null) sd.Sector.UpdateNeeded = true; //mxd. Sector needs to be updated as well...
+			}
 			geometrychanged = true;
 		}
 
@@ -1078,7 +1094,7 @@ namespace CodeImp.DoomBuilder.Editing
 			propsrecorded = null;
 		}
 
-		internal void PlayRefLinedefBack(DeserializerStream ds)
+		private void PlayRefLinedefBack(DeserializerStream ds)
 		{
 			int index; ds.rInt(out index);
 			Linedef l = General.Map.Map.GetLinedefByIndex(index);
@@ -1087,7 +1103,11 @@ namespace CodeImp.DoomBuilder.Editing
 			Sidedef sd = (sindex >= 0) ? General.Map.Map.GetSidedefByIndex(sindex) : null;
 			l.AttachBack(sd);
 			l.Marked = true;
-			if(sd != null) sd.Marked = true;
+			if(sd != null)
+			{
+				sd.Marked = true;
+				if(sd.Sector != null) sd.Sector.UpdateNeeded = true; //mxd. Sector needs to be updated as well...
+			}
 			geometrychanged = true;
 		}
 
@@ -1101,7 +1121,7 @@ namespace CodeImp.DoomBuilder.Editing
 			propsrecorded = null;
 		}
 
-		internal void PlayAddSidedef(DeserializerStream ds)
+		private void PlayAddSidedef(DeserializerStream ds)
 		{
 			int index; ds.rInt(out index);
 			//LogRecordInfo("PLY: Removing sidedef " + index);
@@ -1125,7 +1145,7 @@ namespace CodeImp.DoomBuilder.Editing
 			propsrecorded = null;
 		}
 
-		internal void PlayRemSidedef(DeserializerStream ds)
+		private void PlayRemSidedef(DeserializerStream ds)
 		{
 			int index; ds.rInt(out index);
 			int dindex; ds.rInt(out dindex);
@@ -1152,7 +1172,7 @@ namespace CodeImp.DoomBuilder.Editing
 			}
 		}
 
-		internal void PlayPrpSidedef(DeserializerStream ds)
+		private static void PlayPrpSidedef(DeserializerStream ds)
 		{
 			int index; ds.rInt(out index);
 			Sidedef s = General.Map.Map.GetSidedefByIndex(index);
@@ -1171,7 +1191,7 @@ namespace CodeImp.DoomBuilder.Editing
 			propsrecorded = null;
 		}
 
-		internal void PlayRefSidedefSector(DeserializerStream ds)
+		private void PlayRefSidedefSector(DeserializerStream ds)
 		{
 			int index; ds.rInt(out index);
 			Sidedef sd = General.Map.Map.GetSidedefByIndex(index);
@@ -1194,7 +1214,7 @@ namespace CodeImp.DoomBuilder.Editing
 			propsrecorded = null;
 		}
 
-		internal void PlayAddSector(DeserializerStream ds)
+		private void PlayAddSector(DeserializerStream ds)
 		{
 			int index; ds.rInt(out index);
 			//LogRecordInfo("PLY: Removing sector " + index);
@@ -1214,7 +1234,7 @@ namespace CodeImp.DoomBuilder.Editing
 			propsrecorded = null;
 		}
 
-		internal void PlayRemSector(DeserializerStream ds)
+		private void PlayRemSector(DeserializerStream ds)
 		{
 			int index; ds.rInt(out index);
 			//LogRecordInfo("PLY: Adding sector " + index);
@@ -1236,7 +1256,7 @@ namespace CodeImp.DoomBuilder.Editing
 			}
 		}
 
-		internal void PlayPrpSector(DeserializerStream ds)
+		private static void PlayPrpSector(DeserializerStream ds)
 		{
 			int index; ds.rInt(out index);
 			Sector s = General.Map.Map.GetSectorByIndex(index);
@@ -1254,7 +1274,7 @@ namespace CodeImp.DoomBuilder.Editing
 			propsrecorded = null;
 		}
 
-		internal void PlayAddThing(DeserializerStream ds)
+		private void PlayAddThing(DeserializerStream ds)
 		{
 			int index; ds.rInt(out index);
 			//LogRecordInfo("PLY: Removing thing " + index);
@@ -1274,7 +1294,7 @@ namespace CodeImp.DoomBuilder.Editing
 			propsrecorded = null;
 		}
 
-		internal void PlayRemThing(DeserializerStream ds)
+		private void PlayRemThing(DeserializerStream ds)
 		{
 			int index; ds.rInt(out index);
 			//LogRecordInfo("PLY: Adding thing " + index);
@@ -1296,7 +1316,7 @@ namespace CodeImp.DoomBuilder.Editing
 			}
 		}
 
-		internal void PlayPrpThing(DeserializerStream ds)
+		private static void PlayPrpThing(DeserializerStream ds)
 		{
 			int index; ds.rInt(out index);
 			Thing t = General.Map.Map.GetThingByIndex(index);

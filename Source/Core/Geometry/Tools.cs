@@ -17,22 +17,16 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Windows;
-using SlimDX;
-using SlimDX.Direct3D9;
 using System.Drawing;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Data;
-using System.Threading;
+using System.Windows.Forms;
 using CodeImp.DoomBuilder.Config;
+using CodeImp.DoomBuilder.Data;
+using CodeImp.DoomBuilder.Map;
+using CodeImp.DoomBuilder.Rendering;
 using CodeImp.DoomBuilder.Types;
+using CodeImp.DoomBuilder.VisualModes;
+using SlimDX;
 
 #endregion
 
@@ -52,20 +46,7 @@ namespace CodeImp.DoomBuilder.Geometry
 			public string newtexlow;
 		}
 
-		private struct SidedefAlignJob
-		{
-			public Sidedef sidedef;
-			
-			public int offsetx;
-
-			// When this is true, the previous sidedef was on the left of
-			// this one and the texture X offset of this sidedef can be set
-			// directly. When this is false, the length of this sidedef
-			// must be subtracted from the X offset first.
-			public bool forward;
-		}
-
-		private struct SidedefFillJob
+		public struct SidedefFillJob
 		{
 			public Sidedef sidedef;
 
@@ -76,6 +57,9 @@ namespace CodeImp.DoomBuilder.Geometry
 		#endregion
 		
 		#region ================== Constants
+
+		//mxd
+		private const float MINIMUM_INTERSECTION_DISTANCE = 0.25f;
 		
 		#endregion
 
@@ -148,18 +132,15 @@ namespace CodeImp.DoomBuilder.Geometry
 				FindInnerLines(p, alllines);
 				return alllines;
 			}
-			else
-				return null;
+
+			return null;
 		}
 
 		// This finds the inner lines of the sector and adds them to the sector polygon
 		private static void FindInnerLines(EarClipPolygon p, List<LinedefSide> alllines)
 		{
-			Vertex foundv;
-			bool vvalid, findmore;
-			Linedef foundline;
+			bool findmore;
 			float foundangle = 0f;
-			bool foundlinefront;
 			RectangleF bbox = p.CreateBBox();
 			
 			do
@@ -167,36 +148,35 @@ namespace CodeImp.DoomBuilder.Geometry
 				findmore = false;
 
 				// Go for all vertices to find the right-most vertex inside the polygon
-				foundv = null;
+				Vertex foundv = null;
 				foreach(Vertex v in General.Map.Map.Vertices)
 				{
 					// Inside the polygon bounding box?
-					if((v.Position.x >= bbox.Left) && (v.Position.x <= bbox.Right) &&
-					   (v.Position.y >= bbox.Top) && (v.Position.y <= bbox.Bottom))
-					{
-						// More to the right?
-						if((foundv == null) || (v.Position.x >= foundv.Position.x))
-						{
-							// Vertex is inside the polygon?
-							if(p.Intersect(v.Position))
-							{
-								// Vertex has lines attached?
-								if(v.Linedefs.Count > 0)
-								{
-									// Go for all lines to see if the vertex is not of the polygon itsself
-									vvalid = true;
-									foreach(LinedefSide ls in alllines)
-									{
-										if((ls.Line.Start == v) || (ls.Line.End == v))
-										{
-											vvalid = false;
-											break;
-										}
-									}
+					if(v.Position.x < bbox.Left || v.Position.x > bbox.Right || v.Position.y < bbox.Top || v.Position.y > bbox.Bottom)
+						continue;
 
-									// Valid vertex?
-									if(vvalid) foundv = v;
+					// More to the right?
+					if((foundv == null) || (v.Position.x >= foundv.Position.x)) 
+					{
+						// Vertex is inside the polygon?
+						if(p.Intersect(v.Position)) 
+						{
+							// Vertex has lines attached?
+							if(v.Linedefs.Count > 0)
+							{
+								// Go for all lines to see if the vertex is not of the polygon itsself
+								bool vvalid = true;
+								foreach(LinedefSide ls in alllines) 
+								{
+									if((ls.Line.Start == v) || (ls.Line.End == v)) 
+									{
+										vvalid = false;
+										break;
+									}
 								}
+
+								// Valid vertex?
+								if(vvalid) foundv = v;
 							}
 						}
 					}
@@ -206,8 +186,8 @@ namespace CodeImp.DoomBuilder.Geometry
 				if(foundv != null)
 				{
 					// Find the attached linedef with the smallest angle to the right
-					float targetangle = Angle2D.PIHALF;
-					foundline = null;
+					const float targetangle = Angle2D.PIHALF;
+					Linedef foundline = null;
 					foreach(Linedef l in foundv.Linedefs)
 					{
 						// We need an angle unrelated to line direction, so correct for that
@@ -233,7 +213,7 @@ namespace CodeImp.DoomBuilder.Geometry
 
 					// Find the side at which to start pathfinding
 					Vector2D testpos = new Vector2D(100.0f, 0.0f);
-					foundlinefront = (foundline.SideOfLine(foundv.Position + testpos) < 0.0f);
+					bool foundlinefront = (foundline.SideOfLine(foundv.Position + testpos) < 0.0f);
 
 					// Find inner path
 					List<LinedefSide> innerlines = FindClosestPath(foundline, foundlinefront, true);
@@ -243,8 +223,13 @@ namespace CodeImp.DoomBuilder.Geometry
 						LinedefTracePath tracepath = new LinedefTracePath(innerlines);
 						EarClipPolygon innerpoly = tracepath.MakePolygon(true);
 
+						//mxd. Check bbox first...
+						Vector2D foundsidepoint = foundline.GetSidePoint(foundlinefront);
+						RectangleF innerbbox = innerpoly.CreateBBox();
+						bool outsidebbox = (foundsidepoint.x < innerbbox.Left || foundsidepoint.x > innerbbox.Right || foundsidepoint.y < innerbbox.Top || foundsidepoint.y > innerbbox.Bottom);
+
 						// Check if the front of the line is outside the polygon
-						if(!innerpoly.Intersect(foundline.GetSidePoint(foundlinefront)))
+						if(outsidebbox || !innerpoly.Intersect(foundsidepoint))
 						{
 							// Valid hole found!
 							alllines.AddRange(innerlines);
@@ -264,6 +249,7 @@ namespace CodeImp.DoomBuilder.Geometry
 		{
 			Linedef scanline = line;
 			bool scanfront = front;
+			Vector2D sidepoint = line.GetSidePoint(front); //mxd
 
 			do
 			{
@@ -275,8 +261,12 @@ namespace CodeImp.DoomBuilder.Geometry
 					LinedefTracePath tracepath = new LinedefTracePath(pathlines);
 					EarClipPolygon poly = tracepath.MakePolygon(true);
 
+					//mxd. Check bbox first...
+					RectangleF bbox = poly.CreateBBox();
+					bool outsidebbox = (sidepoint.x < bbox.Left || sidepoint.x > bbox.Right || sidepoint.y < bbox.Top || sidepoint.y > bbox.Bottom);
+
 					// Check if the front of the line is inside the polygon
-					if(poly.Intersect(line.GetSidePoint(front)))
+					if(!outsidebbox && poly.Intersect(sidepoint))
 					{
 						// Outer lines found!
 						alllines.AddRange(pathlines);
@@ -300,32 +290,48 @@ namespace CodeImp.DoomBuilder.Geometry
 						// path we received from FindClosestPath!
 						if(foundv == null) throw new Exception("FAIL!");
 						
-						// From the right-most vertex trace outward to the right to
-						// find the next closest linedef, this is based on the idea that
-						// all sectors are closed.
-						Vector2D lineoffset = new Vector2D(100.0f, 0.0f);
-						Line2D testline = new Line2D(foundv.Position, foundv.Position + lineoffset);
+						// From the right-most vertex trace outward to the right to find the next closest linedef,
+						// this is based on the idea that all sectors are closed.
+
+						//mxd. Intersection test is bounded, so extend end position x to the right map boundary
+						Line2D testline = new Line2D(foundv.Position, new Vector2D(General.Map.Config.RightBoundary, foundv.Position.y));
 						scanline = null;
 						float foundu = float.MaxValue;
-						foreach(Linedef ld in General.Map.Map.Linedefs)
+
+						float px = foundv.Position.x; //mxd
+						float py = foundv.Position.y; //mxd
+
+						foreach(Linedef ld in General.Map.Map.Linedefs) 
 						{
 							// Line to the right of start point?
-							if((ld.Start.Position.x > foundv.Position.x) ||
-							   (ld.End.Position.x > foundv.Position.x))
+							if((ld.Start.Position.x > px) || (ld.End.Position.x > px)) 
 							{
 								// Line intersecting the y axis?
-								if( !((ld.Start.Position.y > foundv.Position.y) &&
-									  (ld.End.Position.y > foundv.Position.y)) &&
-								    !((ld.Start.Position.y < foundv.Position.y) &&
-									  (ld.End.Position.y < foundv.Position.y)))
-								{
+								if((ld.Start.Position.y >= py && ld.End.Position.y <= py) 
+									|| (ld.Start.Position.y <= py && ld.End.Position.y >= py)) //mxd
+								{ 
 									// Check if this linedef intersects our test line at a closer range
 									float thisu;
 									ld.Line.GetIntersection(testline, out thisu);
-									if((thisu > 0.00001f) && (thisu < foundu) && !float.IsNaN(thisu))
+									if(!float.IsNaN(thisu) && (thisu > 0.00001f))
 									{
-										scanline = ld;
-										foundu = thisu;
+										if(thisu < foundu)
+										{
+											scanline = ld;
+											foundu = thisu;
+										}
+										//mxd. Special cases: when foundv.y matches ld's start or end y, 
+										// prefer the line, which is clser to being parallel to the x axis
+										else if(scanline != null && Math.Round(thisu, 4) == Math.Round(foundu, 4))
+										{
+											float ldanglerel, scanlineanglerel;
+											if(GetRelativeAngle(ld, foundv.Position, out ldanglerel) 
+												&& GetRelativeAngle(scanline, foundv.Position, out scanlineanglerel)
+												&& (ldanglerel < scanlineanglerel))
+											{
+												scanline = ld; // foundu already matches
+											}
+										}
 									}
 								}
 							}
@@ -353,15 +359,25 @@ namespace CodeImp.DoomBuilder.Geometry
 			while(true);
 		}
 
-		/// <summary>
-		/// This finds the closest path from one vertex to another.
-		/// When turnatends is true, the algorithm will continue at the other side of the
-		/// line when a dead end has been reached. Returns null when no path could be found.
-		/// </summary>
-		//public static List<LinedefSide> FindClosestPath(Vertex start, float startangle, Vertex end, bool turnatends)
-		//{
+		//mxd. Gets angle between pos and l when pos.y matches l.Start.Position.y or l.End.Position.y
+		private static bool GetRelativeAngle(Linedef l, Vector2D pos, out float result)
+		{
+			if(l.Start.Position.y == pos.y)
+			{
+				result = Angle2D.GetAngle(pos, l.Start.Position, l.End.Position);
+				return true;
+			}
 
-		//}
+			if(l.End.Position.y == pos.y)
+			{
+				result = Angle2D.GetAngle(pos, l.End.Position, l.Start.Position);
+				return true;
+			}
+
+			// We just don't know...
+			result = float.MaxValue;
+			return false;
+		}
 
 		/// <summary>
 		/// This finds the closest path from the beginning of a line to the end of the line.
@@ -389,7 +405,6 @@ namespace CodeImp.DoomBuilder.Geometry
 			{
 				// Add line to path
 				path.Add(new LinedefSide(nextline, nextfront));
-				if(!tracecount.ContainsKey(nextline)) tracecount.Add(nextline, 1); else tracecount[nextline]++;
 
 				// Determine next vertex to use
 				Vertex v = nextfront ? nextline.End : nextline.Start;
@@ -418,14 +433,31 @@ namespace CodeImp.DoomBuilder.Geometry
 				{
 					// Trace along the next line
 					Linedef prevline = nextline;
-					if(lines[0] == nextline) nextline = lines[1]; else nextline = lines[0];
+					nextline = (lines[0] == nextline ? lines[1] : lines[0]);
+
+					//mxd. Try to pick a line with lower tracecount, otherwise we will just walk the same path trise
+					int curcount = (!tracecount.ContainsKey(nextline) ? 0 : tracecount[nextline]);
+
+					//mxd. Don't pick a different line for start and end lines, otherwise the path can go away from it instead of closing the path
+					//mxd. Also don't pick a different line for marked lines (these are newly drawn lines, and we don't want to skip them)
+					if(curcount > 0 && !nextline.Marked && nextline != startline && nextline != endline)
+					{
+						foreach(Linedef l in lines)
+						{
+							if(l != nextline && l != prevline && (!tracecount.ContainsKey(l) || tracecount[l] < curcount))
+							{
+								nextline = l;
+								break;
+							}
+						}
+					}
 
 					// Are we allowed to trace this line again?
 					if(!tracecount.ContainsKey(nextline) || (tracecount[nextline] < 3))
 					{
 						// Check if front side changes
-						if((prevline.Start == nextline.Start) ||
-						   (prevline.End == nextline.End)) nextfront = !nextfront;
+						if(prevline.Start == nextline.Start || prevline.End == nextline.End)
+							nextfront = !nextfront;
 					}
 					else
 					{
@@ -433,6 +465,9 @@ namespace CodeImp.DoomBuilder.Geometry
 						path = null;
 					}
 				}
+
+				//mxd. Increase trace count
+				if(!tracecount.ContainsKey(nextline)) tracecount.Add(nextline, 1); else tracecount[nextline]++;
 			}
 			// Continue as long as we have not reached the start yet
 			// or we have no next line to trace
@@ -455,7 +490,7 @@ namespace CodeImp.DoomBuilder.Geometry
 		// properties from the nearest line in this collection when the
 		// default properties can't be found in the alllines collection.
 		// Return null when no new sector could be made.
-		public static Sector MakeSector(List<LinedefSide> alllines, List<Linedef> nearbylines)
+		public static Sector MakeSector(List<LinedefSide> alllines, List<Linedef> nearbylines, bool useOverrides)
 		{
 			Sector sourcesector = null;
 			SidedefSettings sourceside = new SidedefSettings();
@@ -524,24 +559,31 @@ namespace CodeImp.DoomBuilder.Geometry
 				}
 			}
 			
-			// Use default settings from neares linedef, if settings have been found yet
+			// Use default settings from the nearest linedef, if settings have not been found yet
+			Sector nearestsector = null; //mxd
 			if( (nearbylines != null) && (alllines.Count > 0) && (!foundsidedefaults || (sourcesector == null)) )
 			{
 				Vector2D testpoint = alllines[0].Line.GetSidePoint(alllines[0].Front);
 				Linedef nearest = MapSet.NearestLinedef(nearbylines, testpoint);
 				if(nearest != null)
 				{
-					Sidedef defaultside;
 					float side = nearest.SideOfLine(testpoint);
-					if(side < 0.0f)
-						defaultside = nearest.Front;
-					else
-						defaultside = nearest.Back;
+					Sidedef defaultside = (side < 0.0f ? nearest.Front : nearest.Back);
 
 					if(defaultside != null)
 					{
 						if(sourcesector == null) sourcesector = defaultside.Sector;
 						TakeSidedefSettings(ref sourceside, defaultside);
+					}
+					else
+					{
+						//mxd. Any side is better than no side (but we'll want only basic settings from that)...
+						defaultside = (side < 0.0f ? nearest.Back : nearest.Front);
+						if(defaultside != null)
+						{
+							TakeSidedefSettings(ref sourceside, defaultside);
+							nearestsector = defaultside.Sector;
+						}
 					}
 				}
 			}
@@ -555,10 +597,38 @@ namespace CodeImp.DoomBuilder.Geometry
 				// Copy properties from source to new sector
 				sourcesector.CopyPropertiesTo(newsector);
 			}
+			else if(nearestsector != null)
+			{
+				//mxd. Apply basic properties from the nearest sector
+				newsector.SetFloorTexture(nearestsector.FloorTexture);
+				newsector.SetCeilTexture(nearestsector.CeilTexture);
+				newsector.FloorHeight = nearestsector.FloorHeight;
+				newsector.CeilHeight = nearestsector.CeilHeight;
+				newsector.Brightness = nearestsector.Brightness;
+			}
 			else
 			{
 				// No source sector, apply default sector properties
-				ApplyDefaultsToSector(newsector);
+				newsector.SetFloorTexture(General.Map.Options.DefaultFloorTexture);
+				newsector.SetCeilTexture(General.Map.Options.DefaultCeilingTexture);
+				newsector.FloorHeight = General.Settings.DefaultFloorHeight;
+				newsector.CeilHeight = General.Settings.DefaultCeilingHeight;
+				newsector.Brightness = General.Settings.DefaultBrightness;
+			}
+
+			//mxd. Apply overrides?
+			if(useOverrides) 
+			{
+				if(General.Map.Options.OverrideCeilingTexture) newsector.SetCeilTexture(General.Map.Options.DefaultCeilingTexture);
+				if(General.Map.Options.OverrideFloorTexture) newsector.SetFloorTexture(General.Map.Options.DefaultFloorTexture);
+				if(General.Map.Options.OverrideCeilingHeight) newsector.CeilHeight = General.Map.Options.CustomCeilingHeight;
+				if(General.Map.Options.OverrideFloorHeight) newsector.FloorHeight = General.Map.Options.CustomFloorHeight;
+				if(General.Map.Options.OverrideBrightness) newsector.Brightness = General.Map.Options.CustomBrightness;
+			}
+			//mxd. Avoid invalid height
+			else if(newsector.CeilHeight < newsector.FloorHeight)
+			{
+				 newsector.CeilHeight = newsector.FloorHeight;
 			}
 
 			// Go for all sides to make sidedefs
@@ -586,8 +656,8 @@ namespace CodeImp.DoomBuilder.Geometry
 				}
 
 				// Update line
-				if(ls.Line.Front != null) ls.Line.Front.RemoveUnneededTextures(wassinglesided);
-				if(ls.Line.Back != null) ls.Line.Back.RemoveUnneededTextures(wassinglesided);
+				if(ls.Line.Front != null)ls.Line.Front.RemoveUnneededTextures(wassinglesided, false, wassinglesided);
+				if(ls.Line.Back != null) ls.Line.Back.RemoveUnneededTextures(wassinglesided, false, wassinglesided);
 
 				// Apply single/double sided flags if the double-sided-ness changed
 				if( (wassinglesided && ((ls.Line.Front != null) && (ls.Line.Back != null))) ||
@@ -625,10 +695,10 @@ namespace CodeImp.DoomBuilder.Geometry
 						ls.Line.ApplySidedFlags();
 						
 						// We must remove the (now useless) middle texture on the other side
-						if(ls.Line.Back != null) ls.Line.Back.RemoveUnneededTextures(true, true);
+						if(ls.Line.Back != null) ls.Line.Back.RemoveUnneededTextures(true, true, true);
 					}
 					// Added 23-9-08, can we do this or will it break things?
-					else
+					else if(!original.Sector.IsDisposed) //mxd
 					{
 						// Link to the new sector
 						ls.Line.Front.SetSector(original.Sector);
@@ -645,10 +715,10 @@ namespace CodeImp.DoomBuilder.Geometry
 						ls.Line.ApplySidedFlags();
 
 						// We must remove the (now useless) middle texture on the other side
-						if(ls.Line.Front != null) ls.Line.Front.RemoveUnneededTextures(true, true);
+						if(ls.Line.Front != null) ls.Line.Front.RemoveUnneededTextures(true, true, true);
 					}
 					// Added 23-9-08, can we do this or will it break things?
-					else
+					else if(!original.Sector.IsDisposed) //mxd
 					{
 						// Link to the new sector
 						ls.Line.Back.SetSector(original.Sector);
@@ -660,13 +730,59 @@ namespace CodeImp.DoomBuilder.Geometry
 			return original.Sector;
 		}
 
+		//mxd. This merges sectors, which have less than 3 sides, with surrounding sectors.
+		//Most of the logic is taken from MakeSectorsMode.
+		//Vector2D is sector's center BEFORE sides were removed.
+		//See VerticesMode.DeleteItem() for usage example
+		public static void MergeInvalidSectors(Dictionary<Sector, Vector2D> toMerge) 
+		{
+			foreach(KeyValuePair<Sector, Vector2D> group in toMerge) 
+			{
+				if(!group.Key.IsDisposed && group.Key.Sidedefs.Count > 0 && group.Key.Sidedefs.Count < 3) 
+				{
+					group.Key.Dispose();
+
+					List<LinedefSide> sides = Tools.FindPotentialSectorAt(group.Value);
+
+					if(sides != null) 
+					{
+						// Mark the lines we are going to use for this sector
+						General.Map.Map.ClearAllMarks(true);
+						foreach(LinedefSide ls in sides) ls.Line.Marked = false;
+						List<Linedef> oldlines = General.Map.Map.GetMarkedLinedefs(true);
+
+						// Make the sector
+						Sector s = Tools.MakeSector(sides, oldlines, false);
+
+						if(s != null) 
+						{
+							// Now we go for all the lines along the sector to
+							// see if they only have a back side. In that case we want
+							// to flip the linedef to that it only has a front side.
+							foreach(Sidedef sd in s.Sidedefs) 
+							{
+								if((sd.Line.Front == null) && (sd.Line.Back != null)) 
+								{
+									// Flip linedef
+									sd.Line.FlipVertices();
+									sd.Line.FlipSidedefs();
+								}
+							}
+
+							General.Map.Data.UpdateUsedTextures();
+						}
+					}
+				}
+			}
+		}
+
 		// This takes default settings if not taken yet
 		private static void TakeSidedefDefaults(ref SidedefSettings settings)
 		{
 			// Use defaults where no settings could be found
-			if(settings.newtexhigh == null) settings.newtexhigh = General.Settings.DefaultTexture;
-			if(settings.newtexmid == null) settings.newtexmid = General.Settings.DefaultTexture;
-			if(settings.newtexlow == null) settings.newtexlow = General.Settings.DefaultTexture;
+			if(settings.newtexhigh == null) settings.newtexhigh = General.Map.Options.DefaultTopTexture;
+			if(settings.newtexmid == null) settings.newtexmid = General.Map.Options.DefaultWallTexture;
+			if(settings.newtexlow == null) settings.newtexlow = General.Map.Options.DefaultBottomTexture;
 		}
 
 		// This takes sidedef settings if not taken yet
@@ -683,19 +799,17 @@ namespace CodeImp.DoomBuilder.Geometry
 		// This applies defaults to a sidedef
 		private static void ApplyDefaultsToSidedef(Sidedef sd, SidedefSettings defaults)
 		{
-			if(sd.HighRequired() && sd.HighTexture.StartsWith("-")) sd.SetTextureHigh(defaults.newtexhigh);
-			if(sd.MiddleRequired() && sd.MiddleTexture.StartsWith("-")) sd.SetTextureMid(defaults.newtexmid);
-			if(sd.LowRequired() && sd.LowTexture.StartsWith("-")) sd.SetTextureLow(defaults.newtexlow);
+			if(sd.HighRequired() && sd.LongHighTexture == MapSet.EmptyLongName) sd.SetTextureHigh(defaults.newtexhigh); //mxd
+			if(sd.MiddleRequired() && sd.LongMiddleTexture == MapSet.EmptyLongName) sd.SetTextureMid(defaults.newtexmid); //mxd
+			if(sd.LowRequired() && sd.LongLowTexture == MapSet.EmptyLongName) sd.SetTextureLow(defaults.newtexlow); //mxd
 		}
 
-		// This applies defaults to a sector
-		private static void ApplyDefaultsToSector(Sector s)
+		//mxd. This applies overrides to a sidedef
+		private static void ApplyOverridesToSidedef(Sidedef sd) 
 		{
-			s.SetFloorTexture(General.Settings.DefaultFloorTexture);
-			s.SetCeilTexture(General.Settings.DefaultCeilingTexture);
-			s.FloorHeight = General.Settings.DefaultFloorHeight;
-			s.CeilHeight = General.Settings.DefaultCeilingHeight;
-			s.Brightness = General.Settings.DefaultBrightness;
+			if(sd.HighRequired() && General.Map.Options.OverrideTopTexture) sd.SetTextureHigh(General.Map.Options.DefaultTopTexture);
+			if(sd.MiddleRequired() && General.Map.Options.OverrideMiddleTexture) sd.SetTextureMid(General.Map.Options.DefaultWallTexture);
+			if(sd.LowRequired() && General.Map.Options.OverrideBottomTexture) sd.SetTextureLow(General.Map.Options.DefaultBottomTexture);
 		}
 		
 		#endregion
@@ -828,23 +942,33 @@ namespace CodeImp.DoomBuilder.Geometry
 		#endregion
 
 		#region ================== Drawing
+
+		//mxd
+		public static bool DrawLines(IList<DrawnVertex> points) 
+		{
+			return DrawLines(points, false, false);
+		}
 		
 		/// <summary>
 		/// This draws lines with the given points. Note that this tool removes any existing geometry
 		/// marks and marks the new lines and vertices when done. Also marks the sectors that were added.
 		/// Returns false when the drawing failed.
 		/// </summary>
-		public static bool DrawLines(IList<DrawnVertex> points)
+		public static bool DrawLines(IList<DrawnVertex> points, bool useOverrides, bool autoAlignTextureOffsets)
 		{
 			List<Vertex> newverts = new List<Vertex>();
 			List<Vertex> intersectverts = new List<Vertex>();
 			List<Linedef> newlines = new List<Linedef>();
-			List<bool> newlinescw = new List<bool>();
 			List<Linedef> oldlines = new List<Linedef>(General.Map.Map.Linedefs);
 			List<Sidedef> insidesides = new List<Sidedef>();
 			List<Vertex> mergeverts = new List<Vertex>();
 			List<Vertex> nonmergeverts = new List<Vertex>(General.Map.Map.Vertices);
 			MapSet map = General.Map.Map;
+
+			//mxd. Let's use a blockmap...
+			RectangleF area = MapSet.CreateArea(oldlines);
+			BlockMap<BlockEntry> oldlinesmap = new BlockMap<BlockEntry>(area);
+			oldlinesmap.AddLinedefsSet(oldlines);
 
 			General.Map.Map.ClearAllMarks(false);
 			
@@ -881,7 +1005,6 @@ namespace CodeImp.DoomBuilder.Geometry
 					if(ld == null) return false;
 					ld.Marked = true;
 					ld.ApplySidedFlags();
-                    ld.SetFlag("8388608", true);    // villsa 9/11/11 (builder64)
 					ld.UpdateCache();
 					newlines.Add(ld);
 
@@ -891,16 +1014,41 @@ namespace CodeImp.DoomBuilder.Geometry
 						// Check if any other lines intersect this line
 						List<float> intersections = new List<float>();
 						Line2D measureline = ld.Line;
-						foreach(Linedef ld2 in map.Linedefs)
+						HashSet<Linedef> processed = new HashSet<Linedef>(); //mxd
+
+						//mxd
+						foreach(Sector s in map.Sectors) 
 						{
-							// Intersecting?
-							// We only keep the unit length from the start of the line and
-							// do the real splitting later, when all intersections are known
-							float u;
-							if(ld2.Line.GetIntersection(measureline, out u))
+							//line intersects with sector's bounding box?
+							if((MapSet.GetCSFieldBits(measureline.v1, s.BBox) & MapSet.GetCSFieldBits(measureline.v2, s.BBox)) == 0) 
 							{
-								if(!float.IsNaN(u) && (u > 0.0f) && (u < 1.0f) && (ld2 != ld))
-									intersections.Add(u);
+								foreach(Sidedef side in s.Sidedefs) 
+								{
+									if(processed.Contains(side.Line)) continue;
+									if(side.Line == ld) continue;
+
+									float u;
+									if(side.Line.Line.GetIntersection(measureline, out u)) 
+									{
+										if(float.IsNaN(u) || (u <= 0.0f) || (u >= 1.0f)) continue;
+
+										//mxd. Skip intersection if both start and end of one line are closer than given distance from the other line.
+										// This allows to avoid creating "unexpected" splits when drawing on top of non-cardinal lines.
+
+										//mxd. Check if both ends of measureline are too close to side.Line.Line
+										bool valid = (side.Line.Line.GetDistanceToLineSq(measureline.v1, true) > MINIMUM_INTERSECTION_DISTANCE ||
+													  side.Line.Line.GetDistanceToLineSq(measureline.v2, true) > MINIMUM_INTERSECTION_DISTANCE);
+										
+										//mxd. Check if both ends of side.Line.Line are too close to measureline
+										valid = (valid && (measureline.GetDistanceToLineSq(side.Line.Line.v1, true) > MINIMUM_INTERSECTION_DISTANCE ||
+														   measureline.GetDistanceToLineSq(side.Line.Line.v2, true) > MINIMUM_INTERSECTION_DISTANCE));
+
+										// Store inersection
+										if(valid) intersections.Add(u);
+									}
+
+									processed.Add(side.Line);
+								}
 							}
 						}
 
@@ -941,7 +1089,7 @@ namespace CodeImp.DoomBuilder.Geometry
 
 				// Join merge vertices so that overlapping vertices in the draw become one.
 				map.BeginAddRemove();
-				MapSet.JoinVertices(mergeverts, mergeverts, false, MapSet.STITCH_DISTANCE);
+				MapSet.JoinVertices(mergeverts, MapSet.STITCH_DISTANCE); //mxd
 				map.EndAddRemove();
 				
 				/***************************************************\
@@ -950,8 +1098,8 @@ namespace CodeImp.DoomBuilder.Geometry
 
 				// We prefer a closed polygon, because then we can determine the interior properly
 				// Check if the two ends of the polygon are closed
-				bool drawingclosed = false;
 				bool splittingonly = false;
+				bool drawingclosed = false; //mxd
 				if(newlines.Count > 0)
 				{
 					Linedef firstline = newlines[0];
@@ -966,7 +1114,7 @@ namespace CodeImp.DoomBuilder.Geometry
 						foreach(Linedef ld in newlines)
 						{
 							Vector2D ldcp = ld.GetCenterPoint();
-							Linedef nld = MapSet.NearestLinedef(oldlines, ldcp);
+							Linedef nld = MapSet.NearestLinedef(oldlinesmap, ldcp); //mxd. Lines collection -> Blockmap
 							if(nld != null)
 							{
 								float ldside = nld.SideOfLine(ldcp);
@@ -986,10 +1134,10 @@ namespace CodeImp.DoomBuilder.Geometry
 										break;
 									}
 								}
-								else
+								/*else
 								{
 									// We can't tell, so lets ignore this for now.
-								}
+								}*/
 							}
 						}
 
@@ -1003,7 +1151,7 @@ namespace CodeImp.DoomBuilder.Geometry
 								List<LinedefSide> endpoints = new List<LinedefSide>();
 
 								// Find out where the start will stitch and create test points
-								Linedef l1 = MapSet.NearestLinedefRange(oldlines, firstline.Start.Position, MapSet.STITCH_DISTANCE);
+								Linedef l1 = MapSet.NearestLinedefRange(oldlinesmap, firstline.Start.Position, MapSet.STITCH_DISTANCE); //mxd. Lines collection -> Blockmap
 								Vertex vv1 = null;
 								if(l1 != null)
 								{
@@ -1028,7 +1176,7 @@ namespace CodeImp.DoomBuilder.Geometry
 								}
 
 								// Find out where the end will stitch and create test points
-								Linedef l2 = MapSet.NearestLinedefRange(oldlines, lastline.End.Position, MapSet.STITCH_DISTANCE);
+								Linedef l2 = MapSet.NearestLinedefRange(oldlinesmap, lastline.End.Position, MapSet.STITCH_DISTANCE); //mxd. Lines collection -> Blockmap
 								Vertex vv2 = null;
 								if(l2 != null)
 								{
@@ -1085,8 +1233,7 @@ namespace CodeImp.DoomBuilder.Geometry
 										{
 											foreach(LinedefSide endp in endpoints)
 											{
-												List<LinedefSide> p;
-												p = Tools.FindClosestPath(startp.Line, startp.Front, endp.Line, endp.Front, true);
+												List<LinedefSide> p = Tools.FindClosestPath(startp.Line, startp.Front, endp.Line, endp.Front, true);
 												if((p != null) && ((shortestpath == null) || (p.Count < shortestpath.Count))) shortestpath = p;
 												p = Tools.FindClosestPath(endp.Line, endp.Front, startp.Line, startp.Front, true);
 												if((p != null) && ((shortestpath == null) || (p.Count < shortestpath.Count))) shortestpath = p;
@@ -1121,10 +1268,7 @@ namespace CodeImp.DoomBuilder.Geometry
 										*/
 										
 										// Begin at first vertex in path
-										if(pathforward)
-											v1 = firstline.Start;
-										else
-											v1 = lastline.End;
+										v1 = (pathforward ? firstline.Start : lastline.End);
 
 										// Go for all vertices in the path to make additional lines
 										for(int i = 1; i < shortestpath.Count; i++)
@@ -1169,7 +1313,7 @@ namespace CodeImp.DoomBuilder.Geometry
 										drawingclosed = true;
 
 										// Join merge vertices so that overlapping vertices in the draw become one.
-										MapSet.JoinVertices(mergeverts, mergeverts, false, MapSet.STITCH_DISTANCE);
+										MapSet.JoinVertices(mergeverts, MapSet.STITCH_DISTANCE); //mxd
 									}
 								}
 							}
@@ -1303,7 +1447,8 @@ namespace CodeImp.DoomBuilder.Geometry
 							if(!istruenewsector || !splittingonly)
 							{
 								// Make the new sector
-								Sector newsector = Tools.MakeSector(sectorlines, oldlines);
+								//mxd. Apply sector overrides only if a closed drawing is created
+								Sector newsector = Tools.MakeSector(sectorlines, oldlines, (useOverrides && drawingclosed && newlines.Count > 2));
 								if(newsector == null) return false;
 
 								if(istruenewsector) newsector.Marked = true;
@@ -1345,7 +1490,7 @@ namespace CodeImp.DoomBuilder.Geometry
 									joinsidedef = ls.Line.Front;
 									break;
 								}
-								else if(!ls.Front && (ls.Line.Back != null))
+								if(!ls.Front && (ls.Line.Back != null))
 								{
 									joinsidedef = ls.Line.Back;
 									break;
@@ -1399,7 +1544,70 @@ namespace CodeImp.DoomBuilder.Geometry
 					for(int i = newlines.Count - 1; i >= 0; i--)
 					{
 						// Remove the line if it has no sides
-						if((newlines[i].Front == null) && (newlines[i].Back == null)) newlines[i].Dispose();
+						if((newlines[i].Front != null) || (newlines[i].Back != null)) continue; 
+						newlines[i].Dispose();
+					}
+
+					//mxd. Apply texture overrides
+					if(useOverrides) 
+					{
+						// If new sectors are created, apply overrides to the sides of these sectors, otherwise, apply overrides to all new lines
+						if(insidesides.Count > 0) 
+						{
+							foreach(Sidedef side in insidesides) ApplyOverridesToSidedef(side);
+						} 
+						else 
+						{
+							foreach(Linedef l in newlines) 
+							{
+								if(l.IsDisposed) continue;
+								if(!newverts.Contains(l.Start) || !newverts.Contains(l.End)) continue;
+								ApplyOverridesToSidedef(l.Front);
+								if(l.Back != null) ApplyOverridesToSidedef(l.Back);
+							}
+						}
+					}
+
+					//mxd. Auto-align new lines
+					if(autoAlignTextureOffsets && newlines.Count > 1 && !splittingonly) 
+					{
+						List<List<Linedef>> strips = new List<List<Linedef>>();
+						strips.Add(new List<Linedef> { newlines[0] });
+
+						for(int i = 1; i < newlines.Count; i++) 
+						{
+							//skip double-sided line if it doesn't have lower or upper parts or they are not part of newly created sectors
+							if(newlines[i].Back != null
+								&& (((!newlines[i].Front.LowRequired() && !newlines[i].Front.HighRequired()) || !insidesides.Contains(newlines[i].Front))
+								&& ((!newlines[i].Back.LowRequired() && !newlines[i].Back.HighRequired()) || !insidesides.Contains(newlines[i].Back))))
+								continue;
+
+							bool added = false;
+							foreach(List<Linedef> strip in strips) 
+							{
+								if(newlines[i].Start == strip[0].Start || newlines[i].End == strip[0].Start) 
+								{
+									strip.Insert(0, newlines[i]);
+									added = true;
+									break;
+								}
+
+								if(newlines[i].Start == strip[strip.Count - 1].End || newlines[i].End == strip[strip.Count - 1].End) 
+								{
+									strip.Add(newlines[i]);
+									added = true;
+									break;
+								}
+							}
+
+							if(!added) strips.Add(new List<Linedef> { newlines[i] });
+						}
+
+						foreach(List<Linedef> strip in strips) 
+						{
+							if(strip.Count < 2) continue;
+							AutoAlignLinedefStrip(strip);
+						}
 					}
 				}
 
@@ -1412,6 +1620,126 @@ namespace CodeImp.DoomBuilder.Geometry
 
 			return true;
 		}
+
+		//mxd
+		private static void AutoAlignLinedefStrip(List<Linedef> strip) 
+		{
+			if(strip.Count < 2) return;
+
+			float totalLength = 0f;
+			foreach(Linedef l in strip) totalLength += l.Length;
+
+			if(General.Map.UDMF && General.Map.Config.UseLocalSidedefTextureOffsets)
+				AutoAlignTexturesOnSidesUdmf(strip, totalLength, (strip[0].End != strip[1].Start));
+			else
+				AutoAlignTexturesOnSides(strip, totalLength, (strip[0].End != strip[1].Start));	
+		}
+
+		//mxd
+		private static void AutoAlignTexturesOnSides(List<Linedef> lines, float totalLength, bool reversed) 
+		{
+			float curLength = 0f;
+			
+			foreach(Linedef l in lines) 
+			{
+				if(l.Front != null) 
+				{
+					ImageData texture = null;
+
+					if(l.Front.MiddleRequired() && l.Front.LongMiddleTexture != MapSet.EmptyLongName && General.Map.Data.GetTextureExists(l.Front.LongMiddleTexture))
+						texture = General.Map.Data.GetTextureImage(l.Front.LongMiddleTexture);
+					else if(l.Front.HighRequired() && l.Front.LongHighTexture != MapSet.EmptyLongName && General.Map.Data.GetTextureExists(l.Front.LongHighTexture))
+						texture = General.Map.Data.GetTextureImage(l.Front.LongHighTexture);
+					else if(l.Front.LowRequired() && l.Front.LongLowTexture != MapSet.EmptyLongName && General.Map.Data.GetTextureExists(l.Front.LongLowTexture))
+						texture = General.Map.Data.GetTextureImage(l.Front.LongLowTexture);
+
+					if(texture != null && texture.IsImageLoaded)
+						l.Front.OffsetX = (int)Math.Round((reversed ? totalLength - curLength - l.Length : curLength)) % texture.Width;
+				}
+
+				if(l.Back != null) 
+				{
+					ImageData texture = null;
+
+					if(l.Back.MiddleRequired() && l.Back.LongMiddleTexture != MapSet.EmptyLongName && General.Map.Data.GetTextureExists(l.Back.LongMiddleTexture))
+						texture = General.Map.Data.GetTextureImage(l.Back.LongMiddleTexture);
+					else if(l.Back.HighRequired() && l.Back.LongHighTexture != MapSet.EmptyLongName && General.Map.Data.GetTextureExists(l.Back.LongHighTexture))
+						texture = General.Map.Data.GetTextureImage(l.Back.LongHighTexture);
+					else if(l.Back.LowRequired() && l.Back.LongLowTexture != MapSet.EmptyLongName && General.Map.Data.GetTextureExists(l.Back.LongLowTexture))
+						texture = General.Map.Data.GetTextureImage(l.Back.LongLowTexture);
+
+					if(texture != null && texture.IsImageLoaded)
+						l.Back.OffsetX = (int)Math.Round((reversed ? totalLength - curLength - l.Length : curLength)) % texture.Width;
+				}
+
+				curLength += l.Length;
+			}
+		}
+
+		//mxd
+		private static void AutoAlignTexturesOnSidesUdmf(List<Linedef> lines, float totalLength, bool reversed) 
+		{
+			float curLength = 0f;
+
+			foreach(Linedef l in lines) 
+			{
+				if(l.Front != null) 
+				{
+					if(l.Front.MiddleRequired() && l.Front.LongMiddleTexture != MapSet.EmptyLongName && General.Map.Data.GetTextureExists(l.Front.LongMiddleTexture)) 
+					{
+						ImageData texture = General.Map.Data.GetTextureImage(l.Front.LongMiddleTexture);
+						float offset = (int)Math.Round((reversed ? totalLength - curLength - l.Length : curLength));
+						if(texture.IsImageLoaded) offset %= texture.Width;
+						if(offset > 0) UniFields.SetFloat(l.Front.Fields, "offsetx_mid", offset);
+					}
+
+					if(l.Front.HighRequired() && l.Front.LongHighTexture != MapSet.EmptyLongName && General.Map.Data.GetTextureExists(l.Front.LongHighTexture)) 
+					{
+						ImageData texture = General.Map.Data.GetTextureImage(l.Front.LongHighTexture);
+						float offset = (int)Math.Round((reversed ? totalLength - curLength - l.Length : curLength));
+						if(texture.IsImageLoaded) offset %= texture.Width;
+						if(offset > 0) UniFields.SetFloat(l.Front.Fields, "offsetx_top", offset);
+					}
+
+					if(l.Front.LowRequired() && l.Front.LongLowTexture != MapSet.EmptyLongName && General.Map.Data.GetTextureExists(l.Front.LongLowTexture)) 
+					{
+						ImageData texture = General.Map.Data.GetTextureImage(l.Front.LongLowTexture);
+						float offset = (int)Math.Round((reversed ? totalLength - curLength - l.Length : curLength));
+						if(texture.IsImageLoaded) offset %= texture.Width;
+						if(offset > 0) UniFields.SetFloat(l.Front.Fields, "offsetx_bottom", offset);
+					}
+				}
+
+				if(l.Back != null) 
+				{
+					if(l.Back.MiddleRequired() && l.Back.LongMiddleTexture != MapSet.EmptyLongName && General.Map.Data.GetTextureExists(l.Back.LongMiddleTexture)) 
+					{
+						ImageData texture = General.Map.Data.GetTextureImage(l.Back.LongMiddleTexture);
+						float offset = (int)Math.Round((reversed ? totalLength - curLength - l.Length : curLength));
+						if(texture.IsImageLoaded) offset %= texture.Width;
+						if(offset > 0) UniFields.SetFloat(l.Back.Fields, "offsetx_mid", offset);
+					}
+
+					if(l.Back.HighRequired() && l.Back.LongHighTexture != MapSet.EmptyLongName && General.Map.Data.GetTextureExists(l.Back.LongHighTexture)) 
+					{
+						ImageData texture = General.Map.Data.GetTextureImage(l.Back.LongHighTexture);
+						float offset = (int)Math.Round((reversed ? totalLength - curLength - l.Length : curLength));
+						if(texture.IsImageLoaded) offset %= texture.Width;
+						if(offset > 0) UniFields.SetFloat(l.Back.Fields, "offsetx_top", offset);
+					}
+
+					if(l.Back.LowRequired() && l.Back.LongLowTexture != MapSet.EmptyLongName && General.Map.Data.GetTextureExists(l.Back.LongLowTexture)) 
+					{
+						ImageData texture = General.Map.Data.GetTextureImage(l.Back.LongLowTexture);
+						float offset = (int)Math.Round((reversed ? totalLength - curLength - l.Length : curLength));
+						if(texture.IsImageLoaded) offset %= texture.Width;
+						if(offset > 0) UniFields.SetFloat(l.Back.Fields, "offsetx_bottom", offset);
+					}
+				}
+
+				curLength += l.Length;
+			}
+		}
 		
 		#endregion
 
@@ -1422,7 +1750,7 @@ namespace CodeImp.DoomBuilder.Geometry
 		// When resetsectormarks is set to true, all sectors will first be marked false (not aligned).
 		// Setting resetsectormarks to false is usefull to fill only within a specific selection
 		// (set the marked property to true for the sectors outside the selection)
-		public static void FloodfillFlats(Sector start, bool fillceilings, long originalflat, ImageData fillflat, bool resetsectormarks)
+		public static void FloodfillFlats(Sector start, bool fillceilings, HashSet<long> originalflats, string fillflat, bool resetsectormarks)
 		{
 			Stack<Sector> todo = new Stack<Sector>(50);
 
@@ -1430,8 +1758,8 @@ namespace CodeImp.DoomBuilder.Geometry
 			if(resetsectormarks) General.Map.Map.ClearMarkedSectors(false);
 			
 			// Begin with first sector
-			if(((start.LongFloorTexture == originalflat) && !fillceilings) ||
-			   ((start.LongCeilTexture == originalflat) && fillceilings))
+			if((originalflats.Contains(start.LongFloorTexture) && !fillceilings) ||
+			   (originalflats.Contains(start.LongCeilTexture) && fillceilings))
 			{
 				todo.Push(start);
 			}
@@ -1443,10 +1771,8 @@ namespace CodeImp.DoomBuilder.Geometry
 				Sector s = todo.Pop();
 				
 				// Apply new flat
-				if(fillceilings)
-					s.SetCeilTexture(fillflat.Name);
-				else
-					s.SetFloorTexture(fillflat.Name);
+				if(fillceilings) s.SetCeilTexture(fillflat);
+				else s.SetFloorTexture(fillflat);
 				s.Marked = true;
 				
 				// Go for all sidedefs to add neighbouring sectors
@@ -1458,8 +1784,8 @@ namespace CodeImp.DoomBuilder.Geometry
 						Sector os = sd.Other.Sector;
 						
 						// Check if texture matches
-						if(((os.LongFloorTexture == originalflat) && !fillceilings) ||
-						   ((os.LongCeilTexture == originalflat) && fillceilings))
+						if((originalflats.Contains(os.LongFloorTexture) && !fillceilings) ||
+						   (originalflats.Contains(os.LongCeilTexture) && fillceilings))
 						{
 							todo.Push(os);
 						}
@@ -1477,7 +1803,7 @@ namespace CodeImp.DoomBuilder.Geometry
 		// When resetsidemarks is set to true, all sidedefs will first be marked false (not aligned).
 		// Setting resetsidemarks to false is usefull to fill only within a specific selection
 		// (set the marked property to true for the sidedefs outside the selection)
-		public static void FloodfillTextures(Sidedef start, long originaltexture, ImageData filltexture, bool resetsidemarks)
+		public static void FloodfillTextures(Sidedef start, HashSet<long> originaltextures, string filltexture, bool resetsidemarks)
 		{
 			Stack<SidedefFillJob> todo = new Stack<SidedefFillJob>(50);
 
@@ -1485,7 +1811,7 @@ namespace CodeImp.DoomBuilder.Geometry
 			if(resetsidemarks) General.Map.Map.ClearMarkedSidedefs(false);
 			
 			// Begin with first sidedef
-			if(SidedefTextureMatch(start, originaltexture))
+			if(SidedefTextureMatch(start, originaltextures))
 			{
 				SidedefFillJob first = new SidedefFillJob();
 				first.sidedef = start;
@@ -1500,49 +1826,52 @@ namespace CodeImp.DoomBuilder.Geometry
 				SidedefFillJob j = todo.Pop();
 
 				// Apply texturing
-				if(j.sidedef.LongHighTexture == originaltexture) j.sidedef.SetTextureHigh(filltexture.Name);
-				if((((j.sidedef.MiddleTexture.Length > 0) && (j.sidedef.MiddleTexture[0] != '-')) || j.sidedef.MiddleRequired()) &&
-				   (j.sidedef.LongMiddleTexture == originaltexture)) j.sidedef.SetTextureMid(filltexture.Name);
-				if(j.sidedef.LongLowTexture == originaltexture) j.sidedef.SetTextureLow(filltexture.Name);
+				if(j.sidedef.HighRequired() && originaltextures.Contains(j.sidedef.LongHighTexture)) j.sidedef.SetTextureHigh(filltexture);
+				if((j.sidedef.LongMiddleTexture != MapSet.EmptyLongName || j.sidedef.MiddleRequired()) &&
+				   originaltextures.Contains(j.sidedef.LongMiddleTexture)) j.sidedef.SetTextureMid(filltexture);
+				if(j.sidedef.LowRequired() && originaltextures.Contains(j.sidedef.LongLowTexture)) j.sidedef.SetTextureLow(filltexture);
+				
 				j.sidedef.Marked = true;
 				
 				if(j.forward)
 				{
-					Vertex v;
-
 					// Add sidedefs forward (connected to the right vertex)
-					v = j.sidedef.IsFront ? j.sidedef.Line.End : j.sidedef.Line.Start;
-					AddSidedefsForFloodfill(todo, v, true, originaltexture);
+					Vertex v = j.sidedef.IsFront ? j.sidedef.Line.End : j.sidedef.Line.Start;
+					AddSidedefsForFloodfill(todo, v, true, originaltextures);
 
 					// Add sidedefs backward (connected to the left vertex)
 					v = j.sidedef.IsFront ? j.sidedef.Line.Start : j.sidedef.Line.End;
-					AddSidedefsForFloodfill(todo, v, false, originaltexture);
+					AddSidedefsForFloodfill(todo, v, false, originaltextures);
 				}
 				else
 				{
-					Vertex v;
-
 					// Add sidedefs backward (connected to the left vertex)
-					v = j.sidedef.IsFront ? j.sidedef.Line.Start : j.sidedef.Line.End;
-					AddSidedefsForFloodfill(todo, v, false, originaltexture);
+					Vertex v = j.sidedef.IsFront ? j.sidedef.Line.Start : j.sidedef.Line.End;
+					AddSidedefsForFloodfill(todo, v, false, originaltextures);
 
 					// Add sidedefs forward (connected to the right vertex)
 					v = j.sidedef.IsFront ? j.sidedef.Line.End : j.sidedef.Line.Start;
-					AddSidedefsForFloodfill(todo, v, true, originaltexture);
+					AddSidedefsForFloodfill(todo, v, true, originaltextures);
 				}
 			}
 		}
 
 		// This adds the matching, unmarked sidedefs from a vertex for texture alignment
-		private static void AddSidedefsForFloodfill(Stack<SidedefFillJob> stack, Vertex v, bool forward, long texturelongname)
+		private static void AddSidedefsForFloodfill(Stack<SidedefFillJob> stack, Vertex v, bool forward, HashSet<long> texturelongnames)
 		{
 			foreach(Linedef ld in v.Linedefs)
 			{
 				Sidedef side1 = forward ? ld.Front : ld.Back;
 				Sidedef side2 = forward ? ld.Back : ld.Front;
+
+                // [ZZ] don't iterate the same linedef twice.
+                //      
+                if ((side1 != null && side1.Marked) ||
+                    (side2 != null && side2.Marked)) continue;
+
 				if((ld.Start == v) && (side1 != null) && !side1.Marked)
 				{
-					if(SidedefTextureMatch(side1, texturelongname))
+					if(SidedefTextureMatch(side1, texturelongnames))
 					{
 						SidedefFillJob nj = new SidedefFillJob();
 						nj.forward = forward;
@@ -1552,7 +1881,7 @@ namespace CodeImp.DoomBuilder.Geometry
 				}
 				else if((ld.End == v) && (side2 != null) && !side2.Marked)
 				{
-					if(SidedefTextureMatch(side2, texturelongname))
+					if(SidedefTextureMatch(side2, texturelongnames))
 					{
 						SidedefFillJob nj = new SidedefFillJob();
 						nj.forward = forward;
@@ -1566,136 +1895,113 @@ namespace CodeImp.DoomBuilder.Geometry
 		#endregion
 
 		#region ================== Texture Alignment
-
-		// This performs texture alignment along all walls that match with the same texture
-		// NOTE: This method uses the sidedefs marking to indicate which sides have been aligned
-		// When resetsidemarks is set to true, all sidedefs will first be marked false (not aligned).
-		// Setting resetsidemarks to false is usefull to align only within a specific selection
-		// (set the marked property to true for the sidedefs outside the selection)
-		public static void AutoAlignTextures(Sidedef start, ImageData texture, bool alignx, bool aligny, bool resetsidemarks)
-		{
-			Stack<SidedefAlignJob> todo = new Stack<SidedefAlignJob>(50);
-			float scalex = (General.Map.Config.ScaledTextureOffsets && !texture.WorldPanning) ? texture.Scale.x : 1.0f;
-			float scaley = (General.Map.Config.ScaledTextureOffsets && !texture.WorldPanning) ? texture.Scale.y : 1.0f;
-			
-			// Mark all sidedefs false (they will be marked true when the texture is aligned)
-			if(resetsidemarks) General.Map.Map.ClearMarkedSidedefs(false);
-			
-			// Begin with first sidedef
-			SidedefAlignJob first = new SidedefAlignJob();
-			first.sidedef = start;
-			first.offsetx = start.OffsetX;
-
-			first.forward = true;
-			todo.Push(first);
-			
-			// Continue until nothing more to align
-			while(todo.Count > 0)
-			{
-				// Get the align job to do
-				SidedefAlignJob j = todo.Pop();
-				
-				if(j.forward)
-				{
-					Vertex v;
-					int forwardoffset;
-					int backwardoffset;
-					
-					// Apply alignment
-					if (alignx) j.sidedef.OffsetX = j.offsetx;
-					if (aligny) j.sidedef.OffsetY = (int)Math.Round((start.Sector.CeilHeight - j.sidedef.Sector.CeilHeight) / scaley) + start.OffsetY;
-					forwardoffset = j.offsetx + (int)Math.Round(j.sidedef.Line.Length / scalex);
-					backwardoffset = j.offsetx;
-					
-					j.sidedef.Marked = true;
-					
-					// Wrap the value within the width of the texture (to prevent ridiculous values)
-					// NOTE: We don't use ScaledWidth here because the texture offset is in pixels, not mappixels
-					if (texture.IsImageLoaded)
-					{
-						if (alignx) j.sidedef.OffsetX %= texture.Width;
-						if (aligny) j.sidedef.OffsetY %= texture.Height;
-					}
-					
-					// Add sidedefs forward (connected to the right vertex)
-					v = j.sidedef.IsFront ? j.sidedef.Line.End : j.sidedef.Line.Start;
-					AddSidedefsForAlignment(todo, v, true, forwardoffset, texture.LongName);
-
-					// Add sidedefs backward (connected to the left vertex)
-					v = j.sidedef.IsFront ? j.sidedef.Line.Start : j.sidedef.Line.End;
-					AddSidedefsForAlignment(todo, v, false, backwardoffset, texture.LongName);
-				}
-				else
-				{
-					Vertex v;
-					int forwardoffset;
-					int backwardoffset;
-
-					// Apply alignment
-					if (alignx) j.sidedef.OffsetX = j.offsetx - (int)Math.Round(j.sidedef.Line.Length / scalex);
-					if (aligny) j.sidedef.OffsetY = (int)Math.Round((start.Sector.CeilHeight - j.sidedef.Sector.CeilHeight) / scaley) + start.OffsetY;
-					forwardoffset = j.offsetx;
-					backwardoffset = j.offsetx - (int)Math.Round(j.sidedef.Line.Length / scalex);
-					
-					j.sidedef.Marked = true;
-
-					// Wrap the value within the width of the texture (to prevent ridiculous values)
-					// NOTE: We don't use ScaledWidth here because the texture offset is in pixels, not mappixels
-					if(texture.IsImageLoaded)
-					{
-						if(alignx) j.sidedef.OffsetX %= texture.Width;
-						if(aligny) j.sidedef.OffsetY %= texture.Height;
-					}
-
-					// Add sidedefs backward (connected to the left vertex)
-					v = j.sidedef.IsFront ? j.sidedef.Line.Start : j.sidedef.Line.End;
-					AddSidedefsForAlignment(todo, v, false, backwardoffset, texture.LongName);
-
-					// Add sidedefs forward (connected to the right vertex)
-					v = j.sidedef.IsFront ? j.sidedef.Line.End : j.sidedef.Line.Start;
-					AddSidedefsForAlignment(todo, v, true, forwardoffset, texture.LongName);
-				}
-			}
-		}
-
-		// This adds the matching, unmarked sidedefs from a vertex for texture alignment
-		private static void AddSidedefsForAlignment(Stack<SidedefAlignJob> stack, Vertex v, bool forward, int offsetx, long texturelongname)
-		{
-			foreach(Linedef ld in v.Linedefs)
-			{
-				Sidedef side1 = forward ? ld.Front : ld.Back;
-				Sidedef side2 = forward ? ld.Back : ld.Front;
-				if((ld.Start == v) && (side1 != null) && !side1.Marked)
-				{
-					if(SidedefTextureMatch(side1, texturelongname))
-					{
-						SidedefAlignJob nj = new SidedefAlignJob();
-						nj.forward = forward;
-						nj.offsetx = offsetx;
-						nj.sidedef = side1;
-						stack.Push(nj);
-					}
-				}
-				else if((ld.End == v) && (side2 != null) && !side2.Marked)
-				{
-					if(SidedefTextureMatch(side2, texturelongname))
-					{
-						SidedefAlignJob nj = new SidedefAlignJob();
-						nj.forward = forward;
-						nj.offsetx = offsetx;
-						nj.sidedef = side2;
-						stack.Push(nj);
-					}
-				}
-			}
-		}
 		
 		// This checks if any of the sidedef texture match the given texture
-		private static bool SidedefTextureMatch(Sidedef sd, long texturelongname)
+		/*public static bool SidedefTextureMatch(Sidedef sd, long texturelongname)
 		{
 			return ((sd.LongHighTexture == texturelongname) && sd.HighRequired()) ||
 				   ((sd.LongLowTexture == texturelongname) && sd.LowRequired()) ||
-				   ((sd.LongMiddleTexture == texturelongname) && (sd.MiddleRequired() || ((sd.MiddleTexture.Length > 0) && (sd.MiddleTexture[0] != '-')))) ;
+				   ((sd.LongMiddleTexture == texturelongname) && (sd.MiddleRequired() || sd.LongMiddleTexture != MapSet.EmptyLongName)) ;
+		}*/
+
+		//mxd. This checks if any of the sidedef texture match the given textures
+		public static bool SidedefTextureMatch(Sidedef sd, HashSet<long> texturelongnames)
+		{
+			return (texturelongnames.Contains(sd.LongHighTexture) && sd.HighRequired()) ||
+				   (texturelongnames.Contains(sd.LongLowTexture) && sd.LowRequired()) ||
+				   (texturelongnames.Contains(sd.LongMiddleTexture) && (sd.MiddleRequired() || sd.LongMiddleTexture != MapSet.EmptyLongName));
+		}
+
+		//mxd. This converts offsetY from/to "normalized" offset for given wall part
+		public static float GetSidedefOffsetY(Sidedef side, VisualGeometryType part, float offset, float scaleY, bool fromNormalized)
+		{
+			switch(part)
+			{
+				case VisualGeometryType.WALL_UPPER:
+					return GetSidedefTopOffsetY(side, offset, scaleY, fromNormalized);
+				
+				case VisualGeometryType.WALL_MIDDLE:
+				case VisualGeometryType.WALL_MIDDLE_3D:
+					return GetSidedefMiddleOffsetY(side, offset, scaleY, fromNormalized);
+
+				case VisualGeometryType.WALL_LOWER:
+					return GetSidedefBottomOffsetY(side, offset, scaleY, fromNormalized);
+
+				default:
+					throw new NotSupportedException("Tools.GetSidedefOffsetY: \"" + part + "\" geometry type is not supported!");
+			}
+		}
+
+		//mxd. This converts offsetY from/to "normalized" offset for given upper wall
+		public static float GetSidedefTopOffsetY(Sidedef side, float offset, float scaleY, bool fromNormalized) 
+		{
+			if(side.Line.IsFlagSet(General.Map.Config.UpperUnpeggedFlag) || side.Other == null || side.Other.Sector == null)
+				return offset;
+
+			//if we don't have UpperUnpegged flag, normalize offset
+			float surfaceHeight = side.GetHighHeight() * scaleY;
+			return (float)Math.Round((fromNormalized ? offset + surfaceHeight : offset - surfaceHeight), General.Map.FormatInterface.VertexDecimals);
+		}
+
+		//mxd. This converts offsetY from/to "normalized" offset for given middle wall
+		public static float GetSidedefMiddleOffsetY(Sidedef side, float offset, float scaleY, bool fromNormalized) 
+		{
+			if(side.Sector == null) return offset;
+
+			// Normalize offset
+			float surfaceHeight;
+			if(side.Other != null && side.Other.Sector != null)
+			{
+				if(side.Line.IsFlagSet(General.Map.Config.LowerUnpeggedFlag)) 
+				{
+					// Double-sided with LowerUnpeggedFlag set
+					surfaceHeight = (side.Sector.CeilHeight - Math.Max(side.Sector.FloorHeight, side.Other.Sector.FloorHeight)) * scaleY;
+				} 
+				else 
+				{
+					// Double-sided without LowerUnpeggedFlag
+					surfaceHeight = Math.Abs(side.Sector.CeilHeight - side.Other.Sector.CeilHeight) * scaleY;
+				}
+			}
+			else
+			{
+				if(side.Line.IsFlagSet(General.Map.Config.LowerUnpeggedFlag))
+				{
+					// Single-sided with LowerUnpeggedFlag set
+					// Absolute value is used because ceiling height of vavoom-type 3d floors 
+					// is lower than floor height
+					surfaceHeight = (Math.Abs(side.Sector.CeilHeight - side.Sector.FloorHeight)) * scaleY;
+				}
+				else
+				{
+					// Single-sided without LowerUnpeggedFlag
+					return offset;
+				}
+			}
+
+			return (float)Math.Round((fromNormalized ? offset + surfaceHeight : offset - surfaceHeight), General.Map.FormatInterface.VertexDecimals);
+		}
+
+		//mxd. This converts offsetY from/to "normalized" offset for given lower wall
+		public static float GetSidedefBottomOffsetY(Sidedef side, float offset, float scaleY, bool fromNormalized) 
+		{
+			float surfaceHeight;
+			if(side.Line.IsFlagSet(General.Map.Config.LowerUnpeggedFlag)) 
+			{
+				if(side.Other == null || side.Other.Sector == null || side.Sector.CeilTexture != General.Map.Config.SkyFlatName ||
+					side.Other.Sector.CeilTexture != General.Map.Config.SkyFlatName)
+					return offset;
+
+				//normalize offset the way Doom does it when front and back sector's ceiling is sky
+				surfaceHeight = (side.Sector.CeilHeight - side.Other.Sector.CeilHeight) * scaleY;
+			} 
+			else 
+			{
+				//normalize offset
+				surfaceHeight = (side.Sector.CeilHeight - side.Other.Sector.FloorHeight) * scaleY;
+			}
+
+			return (float)Math.Round((fromNormalized ? offset + surfaceHeight : offset - surfaceHeight), General.Map.FormatInterface.VertexDecimals);
 		}
 		
 		#endregion
@@ -1779,7 +2085,375 @@ namespace CodeImp.DoomBuilder.Geometry
 		}
 		
 		#endregion
-		
+
+		#region ================== Things (mxd)
+
+		public static bool TryAlignThingToLine(Thing t, Linedef l) 
+		{
+			if(l.Back == null) 
+			{
+				if(CanAlignThingTo(t, l.Front.Sector))
+				{
+					AlignThingToLine(t, l, true);
+					return true;
+				}
+				return false;
+			}
+
+			if(l.Front == null ) 
+			{
+				if(CanAlignThingTo(t, l.Back.Sector)) 
+				{
+					AlignThingToLine(t, l, false);
+					return true;
+				}
+				return false;
+			}
+
+			float side = l.SideOfLine(t.Position);
+
+			//already on line
+			if(side == 0) 
+			{ 
+				t.Rotate(General.ClampAngle(180 + l.AngleDeg));
+				return true;
+			}
+
+			//thing is on front side of the line
+			if(side < 0) 
+			{ 
+				//got any walls to align to?
+				if((l.Front.LongMiddleTexture != MapSet.EmptyLongName && CanAlignThingTo(t, l.Front.Sector)) 
+					|| CanAlignThingTo(t, l.Front.Sector, l.Back.Sector)) 
+				{
+					AlignThingToLine(t, l, true);
+					return true;
+				}
+
+				return false;
+			}
+
+			//thing is on back side of the line
+			//got any walls to align to?
+			if((l.Back.LongMiddleTexture != MapSet.EmptyLongName && CanAlignThingTo(t, l.Back.Sector)) 
+				|| CanAlignThingTo(t, l.Back.Sector, l.Front.Sector)) 
+			{
+				AlignThingToLine(t, l, false);
+				return true;
+			}
+
+			return false;
+		}
+
+		// Checks if there's a wall at appropriate height to align thing to
+		private static bool CanAlignThingTo(Thing t, Sector front, Sector back) 
+		{
+			ThingTypeInfo ti = General.Map.Data.GetThingInfo(t.Type);
+			int absz = GetThingAbsoluteZ(t, ti);
+			int height = ti.Height == 0 ? 1 : (int)ti.Height;
+			Rectangle thing =  new Rectangle(0, ti.Hangs ? absz - height : absz, 1, height);
+
+			if(front.FloorHeight < back.FloorHeight) 
+			{
+				Rectangle lower = new Rectangle(0, front.FloorHeight, 1, back.FloorHeight - front.FloorHeight);
+				if(thing.IntersectsWith(lower)) return true;
+			}
+
+			if(front.CeilHeight > back.CeilHeight) 
+			{
+				Rectangle upper = new Rectangle(0, back.CeilHeight, 1, front.CeilHeight - back.CeilHeight);
+				if(thing.IntersectsWith(upper)) return true;
+			}
+
+			return false;
+		}
+
+		// Checks if there's a wall at appropriate height to align thing to
+		private static bool CanAlignThingTo(Thing t, Sector sector) 
+		{
+			ThingTypeInfo ti = General.Map.Data.GetThingInfo(t.Type);
+			int absz = GetThingAbsoluteZ(t, ti);
+			Rectangle thing = new Rectangle(0, absz, 1, ti.Height == 0 ? 1 : (int)ti.Height);
+
+			Rectangle middle = new Rectangle(0, sector.FloorHeight, 1, sector.CeilHeight - sector.FloorHeight);
+			return thing.IntersectsWith(middle);
+		}
+
+		private static void AlignThingToLine(Thing t, Linedef l, bool front) 
+		{
+			//get aligned position
+			Vector2D pos = l.NearestOnLine(t.Position);
+			Sector initialSector = t.Sector;
+
+			//add a small offset so we don't end up moving thing into void
+			if(front)
+				t.Move(new Vector2D(pos.x - (float)Math.Cos(l.Angle), pos.y - (float)Math.Sin(l.Angle)));
+			else
+				t.Move(new Vector2D(pos.x + (float)Math.Cos(l.Angle), pos.y + (float)Math.Sin(l.Angle)));
+
+			//apply new settings
+			t.SnapToAccuracy();
+			t.DetermineSector();
+			t.Rotate(General.ClampAngle(front ? 180 + l.AngleDeg : l.AngleDeg));
+
+			//keep thing height constant
+			if(initialSector != t.Sector && General.Map.FormatInterface.HasThingHeight) 
+			{
+				ThingTypeInfo ti = General.Map.Data.GetThingInfo(t.Type);
+				if(ti.AbsoluteZ) return;
+
+				if(ti.Hangs && initialSector.CeilHeight != t.Sector.CeilHeight) 
+				{
+					t.Move(t.Position.x, t.Position.y, t.Position.z - (initialSector.CeilHeight - t.Sector.CeilHeight));
+					return;
+				}
+
+				if(initialSector.FloorHeight != t.Sector.FloorHeight)
+					t.Move(t.Position.x, t.Position.y, t.Position.z + (initialSector.FloorHeight - t.Sector.FloorHeight));
+			}
+		}
+
+		public static int GetThingAbsoluteZ(Thing t, ThingTypeInfo ti) 
+		{
+			// Determine z info
+			if(ti.AbsoluteZ) return (int)t.Position.z;
+
+			if(t.Sector != null) 
+			{
+				// Hangs from ceiling?
+				if(ti.Hangs) return (int)(t.Sector.CeilHeight - t.Position.z - ti.Height);
+				
+				return (int)(t.Sector.FloorHeight + t.Position.z);
+			}
+			return (int)t.Position.z;
+		}
+
+		#endregion
+
+		#region ================== Sectors (mxd)
+
+		public static void SplitOuterSectors(IEnumerable<Linedef> drawnlines)
+		{
+			Dictionary<Sector, HashSet<Sidedef>> sectorsidesref = new Dictionary<Sector, HashSet<Sidedef>>();
+			HashSet<Sidedef> drawnsides = new HashSet<Sidedef>();
+
+			// Create drawn lines per sector collection
+			foreach(Linedef l in drawnlines)
+			{
+				if(l.Front != null && (l.Front.Sector != null && !SectorWasInvalid(l.Front.Sector)))
+				{
+					// Add only multipart sectors
+					if(l.Front.Sector.Triangles.IslandVertices.Count > 1)
+					{
+						if(!sectorsidesref.ContainsKey(l.Front.Sector)) sectorsidesref[l.Front.Sector] = new HashSet<Sidedef>();
+						sectorsidesref[l.Front.Sector].Add(l.Front);
+					}
+					drawnsides.Add(l.Front);
+				}
+
+				if(l.Back != null && (l.Back.Sector != null && !SectorWasInvalid(l.Back.Sector)))
+				{
+					// Add only multipart sectors
+					if(l.Back.Sector.Triangles.IslandVertices.Count > 1)
+					{
+						if(!sectorsidesref.ContainsKey(l.Back.Sector)) sectorsidesref[l.Back.Sector] = new HashSet<Sidedef>();
+						sectorsidesref[l.Back.Sector].Add(l.Back);
+					}
+					drawnsides.Add(l.Back);
+				}
+			}
+
+			// Split sectors
+			foreach(KeyValuePair<Sector, HashSet<Sidedef>> group in sectorsidesref)
+			{
+				// Sector has all sides selected?
+				if(group.Key.Sidedefs.Count == group.Value.Count)
+				{
+					group.Key.Marked = true; // Sometimes those are not marked...
+					continue;
+				}
+
+				// Process all sides
+				foreach(Sidedef side in group.Value)
+				{
+					// Sector was already split?
+					if(side.Sector != group.Key) continue;
+
+					// Find drawing interior
+					List<LinedefSide> linedefsides = FindPotentialSectorAt(side.Line, side.IsFront);
+
+					// Number of potential sides fewer than the sector has?
+					if(linedefsides != null && linedefsides.Count > 0 && linedefsides.Count < group.Key.Sidedefs.Count)
+					{
+						// Collect sidedefs from new sector shape...
+						HashSet<Sidedef> newsectorsides = new HashSet<Sidedef>();
+						foreach(LinedefSide ls in linedefsides)
+						{
+							Sidedef s = (ls.Front ? ls.Line.Front : ls.Line.Back);
+							if(s != null) newsectorsides.Add(s);
+						}
+
+						// Make new sector only if one of the remaining sector sides was also drawn...
+						foreach(Sidedef s in group.Key.Sidedefs)
+						{
+							if(newsectorsides.Contains(s)) continue;
+							if(drawnsides.Contains(s))
+							{
+								Sector newsector = MakeSector(linedefsides, null, false);
+								if(newsector != null)
+								{
+									newsector.UpdateCache();
+									group.Key.UpdateCache();
+								}
+
+								// Existing sector may've become invalid
+								SectorWasInvalid(group.Key);
+
+								break;
+							}
+						}
+					}
+				}
+			}
+		}
+
+		private static bool SectorWasInvalid(Sector s)
+		{
+			if(s.Sidedefs == null || s.Sidedefs.Count < 3 || s.FlatVertices.Length < 3)
+			{
+				// Collect changed lines
+				HashSet<Linedef> changedlines = new HashSet<Linedef>();
+				if(s.Sidedefs != null)
+				{
+					foreach(Sidedef side in s.Sidedefs) changedlines.Add(side.Line);
+				}
+
+				// Delete sector
+				s.Dispose();
+
+				// Correct lines
+				foreach(Linedef l in changedlines)
+				{
+					l.ApplySidedFlags();
+					if(l.Front == null)
+					{
+						l.FlipVertices();
+						l.FlipSidedefs();
+					}
+				}
+
+				return true;
+			}
+
+			return false;
+		}
+
+		#endregion
+
+		#region ================== Linedefs (mxd)
+
+		/// <summary>Flips sector linedefs so they all face either inward or outward.</summary>
+		public static void FlipSectorLinedefs(ICollection<Sector> sectors, bool selectedlinesonly) 
+		{
+			HashSet<Linedef> processed = new HashSet<Linedef>();
+			
+			foreach(Sector s in sectors) 
+			{
+				List<Linedef> frontlines = new List<Linedef>();
+				List<Linedef> backlines = new List<Linedef>();
+				int unselectedfrontlines = 0;
+				int unselectedbacklines = 0;
+
+				//sort lines
+				foreach(Sidedef side in s.Sidedefs) 
+				{
+					if(processed.Contains(side.Line)) continue;
+					if(selectedlinesonly && !side.Line.Selected)
+					{
+						if(side == side.Line.Front) unselectedfrontlines++;
+						else unselectedbacklines++;
+						continue;
+					}
+					
+					if(side == side.Line.Front) 
+						frontlines.Add(side.Line);
+					else
+						backlines.Add(side.Line);
+
+					processed.Add(side.Line);
+				}
+
+				//flip lines
+				if(frontlines.Count == 0 || (frontlines.Count + unselectedfrontlines > backlines.Count + unselectedbacklines && backlines.Count > 0)) 
+				{
+					foreach(Linedef l in backlines) 
+					{
+						l.FlipVertices();
+						l.FlipSidedefs();
+					}
+				} 
+				else 
+				{
+					foreach(Linedef l in frontlines) 
+					{
+						// Skip single-sided lines with only front side
+						if(l.Back != null)
+						{
+							l.FlipVertices();
+							l.FlipSidedefs();
+						}
+					}
+				}
+			}
+		}
+
+		#endregion
+
+		#region ================== Sidedefs (mxd)
+
+		/// <summary>Updates the 'lightfog' UDMF flag to display sidedef brightness on fogged walls. Returns 1 if flag was added, -1 if it was removed, 0 if flag wasn't changed</summary>
+		public static int UpdateLightFogFlag(Sidedef side) 
+		{
+			//Side requires the flag?
+			if(side.Sector == null) return 0;
+			if(!side.Fields.ContainsKey("light")) 
+			{
+				//Unset the flag
+				if(side.IsFlagSet("lightfog")) 
+				{
+					side.SetFlag("lightfog", false);
+					return -1;
+				}
+				return 0;
+			}
+
+			//Update the flag
+			if(General.Map.Data.MapInfo.HasFadeColor ||
+			   (General.Map.Data.MapInfo.HasOutsideFogColor && side.Sector.CeilTexture == General.Map.Config.SkyFlatName) ||
+			   side.Sector.Fields.ContainsKey("fadecolor")) 
+			{
+				//Set the flag
+				if(!side.IsFlagSet("lightfog")) 
+				{
+					side.SetFlag("lightfog", true);
+					return 1;
+				}
+			} 
+			else 
+			{
+				//Unset the flag
+				if(side.IsFlagSet("lightfog")) 
+				{
+					side.SetFlag("lightfog", false);
+					return -1;
+				}
+			}
+
+			return 0;
+		}
+
+		#endregion
+
 		#region ================== Misc Exported Functions
 
 		/// <summary>
@@ -1798,6 +2472,28 @@ namespace CodeImp.DoomBuilder.Geometry
 		public static Vector3D HermiteSpline(Vector3D p1, Vector3D t1, Vector3D p2, Vector3D t2, float u)
 		{
 			return D3DDevice.V3D(Vector3.Hermite(D3DDevice.V3(p1), D3DDevice.V3(t1), D3DDevice.V3(p2), D3DDevice.V3(t2), u));
+		}
+
+		//mxd
+		public static int GetDropDownWidth(ComboBox cb) 
+		{
+			int maxwidth = 0;
+			foreach(var obj in cb.Items)
+			{
+				int temp = TextRenderer.MeasureText(obj.ToString(), cb.Font).Width;
+				if(temp > maxwidth) maxwidth = temp;
+			}
+			return maxwidth > 0 ? maxwidth + 6 : 1;
+		}
+
+		//mxd
+		public static PixelColor GetSectorFadeColor(Sector s)
+		{
+			if(s.Fields.ContainsKey("fadecolor")) return PixelColor.FromInt(s.Fields.GetValue("fadecolor", 0));
+			if(General.Map.Data.MapInfo.HasOutsideFogColor && s.CeilTexture == General.Map.Config.SkyFlatName)
+				return PixelColor.FromColor(General.Map.Data.MapInfo.OutsideFogColor.ToColor());
+
+			return PixelColor.FromColor(General.Map.Data.MapInfo.HasFadeColor ? General.Map.Data.MapInfo.FadeColor.ToColor() : Color.Black);
 		}
 
 		#endregion

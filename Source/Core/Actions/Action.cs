@@ -16,11 +16,7 @@
 
 #region ================== Namespaces
 
-using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Text;
 using System.Windows.Forms;
 using CodeImp.DoomBuilder.IO;
 
@@ -33,28 +29,29 @@ namespace CodeImp.DoomBuilder.Actions
 		#region ================== Variables
 
 		// Description
-		private string name;
-		private string shortname;
-		private string title;
-		private string description;
-		private string category;
+		private readonly string name;
+		private readonly string shortname;
+		private readonly string title;
+		private readonly string description;
+		private readonly string category;
 
 		// Shortcut key
 		private int key;
-		private int keymask;
-		private int defaultkey;
+		private readonly int keymask;
+		private readonly int defaultkey;
 		
 		// Shortcut options
-		private bool allowkeys;
-		private bool allowmouse;
-		private bool allowscroll;
-		private bool disregardshift;
-		private bool disregardcontrol;
-		private bool repeat;
+		private readonly bool allowkeys;
+		private readonly bool allowmouse;
+		private readonly bool allowscroll;
+		private readonly bool disregardshift;
+		private readonly bool disregardcontrol;
+		private readonly bool disregardalt; //mxd
+		private readonly bool repeat;
 		
 		// Delegate
-		private List<ActionDelegate> begindelegates;
-		private List<ActionDelegate> enddelegates;
+		private readonly List<ActionDelegate> begindelegates;
+		private readonly List<ActionDelegate> enddelegates;
 		
 		#endregion
 
@@ -73,6 +70,7 @@ namespace CodeImp.DoomBuilder.Actions
 		public bool AllowScroll { get { return allowscroll; } }
 		public bool DisregardShift { get { return disregardshift; } }
 		public bool DisregardControl { get { return disregardcontrol; } }
+		public bool DisregardAlt { get { return disregardalt; } } //mxd
 		public bool Repeat { get { return repeat; } }
 		public bool BeginBound { get { return (begindelegates.Count > 0); } }
 		public bool EndBound { get { return (enddelegates.Count > 0); } }
@@ -95,18 +93,15 @@ namespace CodeImp.DoomBuilder.Actions
 			this.allowscroll = cfg.ReadSetting(shortname + ".allowscroll", false);
 			this.disregardshift = cfg.ReadSetting(shortname + ".disregardshift", false);
 			this.disregardcontrol = cfg.ReadSetting(shortname + ".disregardcontrol", false);
+			this.disregardalt = cfg.ReadSetting(shortname + ".disregardalt", false); //mxd
 			this.repeat = cfg.ReadSetting(shortname + ".repeat", false);
 			this.defaultkey = cfg.ReadSetting(shortname + ".default", 0);
 			this.begindelegates = new List<ActionDelegate>();
 			this.enddelegates = new List<ActionDelegate>();
-				
-			if(disregardshift)
-				keymask = (int)Keys.Shift;
-			else
-				keymask = 0;
 
-			if(disregardcontrol)
-				keymask |= (int)Keys.Control;
+			keymask = disregardshift ? (int)Keys.Shift : 0;
+			if(disregardcontrol) keymask |= (int)Keys.Control;
+			if(disregardalt) keymask |= (int)Keys.Alt; //mxd
 			
 			keymask = ~keymask;
 
@@ -119,12 +114,6 @@ namespace CodeImp.DoomBuilder.Actions
 				this.key = key & keymask;
 			}
 		}
-
-		// Destructor
-		~Action()
-		{
-			// Moo.
-		}
 		
 		#endregion
 
@@ -134,26 +123,29 @@ namespace CodeImp.DoomBuilder.Actions
 		public static string GetShortcutKeyDesc(int key)
 		{
 			KeysConverter conv = new KeysConverter();
-			int ctrl, button;
 			string ctrlprefix = "";
 			
 			// When key is 0, then return an empty string
 			if(key == 0) return "";
 
 			// Split the key in Control and Button
-			ctrl = key & ((int)Keys.Control | (int)Keys.Shift | (int)Keys.Alt);
-			button = key & ~((int)Keys.Control | (int)Keys.Shift | (int)Keys.Alt);
+			int ctrl = key & ((int)Keys.Control | (int)Keys.Shift | (int)Keys.Alt);
+			int button = key & ~((int)Keys.Control | (int)Keys.Shift | (int)Keys.Alt);
 
 			// When the button is a control key, then remove the control itsself
-			if((button == (int)Keys.ControlKey) ||
-			   (button == (int)Keys.ShiftKey))
+			if((button == (int)Keys.ControlKey) || (button == (int)Keys.ShiftKey) || (button == (int)Keys.Alt))
 			{
 				ctrl = 0;
 				key = key & ~((int)Keys.Control | (int)Keys.Shift | (int)Keys.Alt);
 			}
 			
-			// Determine control prefix
-			if(ctrl != 0) ctrlprefix = conv.ConvertToString(key);
+			//mxd. Determine control prefix
+			if(ctrl != 0)
+			{
+				if((key & (int)Keys.Control) != 0) ctrlprefix += "Ctrl+";
+				if((key & (int)Keys.Alt) != 0) ctrlprefix += "Alt+";
+				if((key & (int)Keys.Shift) != 0) ctrlprefix += "Shift+";
+			}
 			
 			// Check if button is special
 			switch(button)
@@ -195,6 +187,14 @@ namespace CodeImp.DoomBuilder.Actions
 					// Use standard key-string conversion
 					return conv.ConvertToString(key);
 			}
+		}
+
+		//mxd. This returns the shortcut key description for an action name
+		public static string GetShortcutKeyDesc(string actionName) 
+		{
+			Action a = General.Actions.GetActionByName(actionName);
+			if(a.ShortcutKey == 0) return a.Title + " (not bound to a key)";
+			return GetShortcutKeyDesc(a.ShortcutKey);
 		}
 
 		#endregion
@@ -242,15 +242,13 @@ namespace CodeImp.DoomBuilder.Actions
 		// This raises events for this action
 		internal void Begin()
 		{
-			List<ActionDelegate> delegateslist;
-
 			General.Plugins.OnActionBegin(this);
 
 			// Method bound?
 			if(begindelegates.Count > 0)
 			{
 				// Copy delegates list
-				delegateslist = new List<ActionDelegate>(begindelegates);
+				List<ActionDelegate> delegateslist = new List<ActionDelegate>(begindelegates);
 				
 				// Invoke all the delegates
 				General.Actions.Current = this;
@@ -264,13 +262,11 @@ namespace CodeImp.DoomBuilder.Actions
 		// This raises events for this action
 		internal void End()
 		{
-			List<ActionDelegate> delegateslist;
-
 			// Method bound?
 			if(enddelegates.Count > 0)
 			{
 				// Copy delegates list
-				delegateslist = new List<ActionDelegate>(enddelegates);
+				List<ActionDelegate> delegateslist = new List<ActionDelegate>(enddelegates);
 
 				// Invoke all the delegates
 				General.Actions.Current = this;

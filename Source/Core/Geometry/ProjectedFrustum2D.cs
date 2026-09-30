@@ -17,11 +17,6 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.VisualModes;
 
 #endregion
 
@@ -32,19 +27,19 @@ namespace CodeImp.DoomBuilder.Geometry
 		#region ================== Variables
 		
 		// Frustum settings
-		private float near;
-		private float far;
-		private float fov;
-		private Vector2D pos;
-		private float xyangle;
-		private float zangle;
+		private readonly float near;
+		private readonly float far;
+		private readonly float fov;
+		private readonly Vector2D pos;
+		private readonly float xyangle;
+		private readonly float zangle;
 		
 		// Frustum lines
-		private Line2D[] lines;
+		private readonly Line2D[] lines;
 
 		// Circle
-		private Vector2D center;
-		private float radius;
+		private readonly Vector2D center;
+		private readonly float radius;
 		
 		#endregion
 

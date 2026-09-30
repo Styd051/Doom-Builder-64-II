@@ -3,7 +3,7 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProductVersion>9.0.21022</ProductVersion>
+    <ProductVersion>9.0.30729</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{818B3D10-F791-4C3F-9AF5-BB2D0079B63C}</ProjectGuid>
     <OutputType>WinExe</OutputType>
@@ -11,16 +11,17 @@
     <RootNamespace>CodeImp.DoomBuilder</RootNamespace>
     <AssemblyName>Builder</AssemblyName>
     <StartupObject>CodeImp.DoomBuilder.General</StartupObject>
-    <ApplicationIcon>Resources\DB2.ico</ApplicationIcon>
+    <ApplicationIcon>icon128x128.ico</ApplicationIcon>
     <Win32Resource>
     </Win32Resource>
-    <RunPostBuildEvent>Always</RunPostBuildEvent>
+    <RunPostBuildEvent>OnBuildSuccess</RunPostBuildEvent>
     <FileUpgradeFlags>
     </FileUpgradeFlags>
     <OldToolsVersion>3.5</OldToolsVersion>
     <UpgradeBackupLocation>
     </UpgradeBackupLocation>
     <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <PublishUrl>publish\</PublishUrl>
     <Install>true</Install>
     <InstallFrom>Disk</InstallFrom>
@@ -47,17 +48,47 @@
     <UseVSHostingProcess>false</UseVSHostingProcess>
     <ErrorReport>prompt</ErrorReport>
     <DocumentationFile>..\..\Build\Builder.xml</DocumentationFile>
+    <WarningLevel>3</WarningLevel>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
     <OutputPath>..\..\Build\</OutputPath>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Optimize>true</Optimize>
-    <DebugType>none</DebugType>
+    <DebugType>pdbonly</DebugType>
     <PlatformTarget>x86</PlatformTarget>
     <UseVSHostingProcess>false</UseVSHostingProcess>
     <ErrorReport>prompt</ErrorReport>
     <DocumentationFile>..\..\Build\Builder.xml</DocumentationFile>
+    <DefineConstants>
+    </DefineConstants>
+    <WarningLevel>4</WarningLevel>
+    <DebugSymbols>true</DebugSymbols>
+    <NoWarn>1591</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug + Profiler|x86' ">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>..\..\Build\</OutputPath>
+    <DefineConstants>DEBUG;TRACE;PROFILE</DefineConstants>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DocumentationFile>..\..\Build\Builder.xml</DocumentationFile>
     <WarningLevel>3</WarningLevel>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+    <ErrorReport>prompt</ErrorReport>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release + Profiler|x86' ">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>..\..\Build\</OutputPath>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DocumentationFile>..\..\Build\Builder.xml</DocumentationFile>
+    <Optimize>true</Optimize>
+    <WarningLevel>3</WarningLevel>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+    <ErrorReport>prompt</ErrorReport>
+    <DefineConstants>TRACE;PROFILE</DefineConstants>
   </PropertyGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
@@ -106,41 +137,29 @@
     <Compile Include="Controls\ArgumentBox.Designer.cs">
       <DependentUpon>ArgumentBox.cs</DependentUpon>
     </Compile>
-    <Compile Include="Controls\ColorControlSector.cs">
-      <SubType>UserControl</SubType>
-    </Compile>
-    <Compile Include="Controls\ColorControlSector.Designer.cs">
-      <DependentUpon>ColorControlSector.cs</DependentUpon>
-    </Compile>
-    <Compile Include="Controls\ScriptEditorControl.cs">
-      <SubType>UserControl</SubType>
-    </Compile>
-    <Compile Include="Controls\ScriptEditorControl.Designer.cs">
-      <DependentUpon>ScriptEditorControl.cs</DependentUpon>
-    </Compile>
-    <Compile Include="Controls\ScriptDocumentTab.cs">
+    <Compile Include="Controls\TransparentTrackBar.cs">
       <SubType>Component</SubType>
     </Compile>
-    <Compile Include="Controls\ScintillaConstants.cs" />
-    <Compile Include="Controls\ScintillaControl.cs">
+    <Compile Include="Controls\Scripting\ScriptDocumentTab.cs">
       <SubType>Component</SubType>
     </Compile>
-    <Compile Include="Controls\ScriptEditorPanel.cs">
+    <Compile Include="Controls\Scripting\ScriptEditorPanel.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="Controls\ScriptEditorPanel.Designer.cs">
+    <Compile Include="Controls\Scripting\ScriptEditorPanel.Designer.cs">
       <DependentUpon>ScriptEditorPanel.cs</DependentUpon>
     </Compile>
-    <Compile Include="Controls\ScriptFileDocumentTab.cs">
+    <Compile Include="Controls\Scripting\ScriptFileDocumentTab.cs">
       <SubType>Component</SubType>
     </Compile>
-    <Compile Include="Controls\ScriptLumpDocumentTab.cs">
+    <Compile Include="Controls\Scripting\ScriptLumpDocumentTab.cs">
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="Data\DirectoryReader.cs" />
     <Compile Include="Data\FileImage.cs" />
     <Compile Include="Data\FlatImage.cs" />
     <Compile Include="Data\ImageLoadState.cs" />
+    <Compile Include="Data\Scripting\ZScriptScriptHandler.cs" />
     <Compile Include="Data\UnknownImage.cs" />
     <Compile Include="Data\PatchNames.cs" />
     <Compile Include="Data\PK3Reader.cs" />
@@ -165,6 +184,18 @@
     <Compile Include="Actions\ActionManager.cs" />
     <Compile Include="Config\CompilerInfo.cs" />
     <Compile Include="Config\ConfigurationInfo.cs" />
+    <Compile Include="Controls\PairedFloatControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\PairedFloatControl.Designer.cs">
+      <DependentUpon>PairedFloatControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\ThingStatisticsForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Windows\ThingStatisticsForm.Designer.cs">
+      <DependentUpon>ThingStatisticsForm.cs</DependentUpon>
+    </Compile>
     <Compile Include="VisualModes\VisualBlockMap.cs" />
     <Compile Include="VisualModes\VisualMode.cs" />
     <Compile Include="General\Clock.cs" />
@@ -296,11 +327,8 @@
     <Compile Include="Controls\FieldsEditorControl.Designer.cs">
       <DependentUpon>FieldsEditorControl.cs</DependentUpon>
     </Compile>
-    <Compile Include="Windows\FlatBrowserForm.cs">
+    <Compile Include="Windows\DelayedForm.cs">
       <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Windows\FlatBrowserForm.Designer.cs">
-      <DependentUpon>FlatBrowserForm.cs</DependentUpon>
     </Compile>
     <Compile Include="Controls\FlatSelectorControl.cs">
       <SubType>UserControl</SubType>
@@ -502,7 +530,6 @@
     <Compile Include="Rendering\TextLabel.cs" />
     <Compile Include="VisualModes\VisualGeometry.cs" />
     <Compile Include="Rendering\PixelColor.cs" />
-    <Compile Include="Rendering\PixelColorBlock.cs" />
     <Compile Include="Rendering\Plotter.cs" />
     <Compile Include="Rendering\Renderer.cs" />
     <Compile Include="Rendering\Renderer2D.cs" />
@@ -512,13 +539,27 @@
     <Compile Include="VisualModes\VisualSector.cs" />
     <Compile Include="Rendering\World3DShader.cs" />
     <Compile Include="Rendering\WorldVertex.cs" />
+    <Compile Include="ZDoom\DecorateActorStructure.cs" />
+    <Compile Include="ZDoom\DecorateStateGoto.cs" />
+    <Compile Include="ZDoom\DecorateStateStructure.cs" />
+    <Compile Include="ZDoom\Scripting\ZScriptParserSE.cs" />
+    <Compile Include="ZDoom\ZScriptActorStructure.cs" />
+    <Compile Include="ZDoom\ZScriptParser.cs" />
+    <Compile Include="ZDoom\ZScriptStateGoto.cs" />
+    <Compile Include="ZDoom\ZScriptStateStructure.cs" />
+    <Compile Include="ZDoom\ZScriptTokenizer.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="Sharpzip, Version=0.85.2.329, Culture=neutral, processorArchitecture=MSIL">
+    <Reference Include="JetBrains.Profiler.Core.Api, Version=1.3.1661.20096, Culture=neutral, PublicKeyToken=1010a0d8d6380325" Condition=" '$(Configuration)|$(Platform)' == 'Debug + Profiler|x86' Or '$(Configuration)|$(Platform)' == 'Release + Profiler|x86' ">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\Build\Sharpzip.dll</HintPath>
     </Reference>
-    <Reference Include="SlimDX, Version=2.0.12.43, Culture=neutral, PublicKeyToken=b1b0c32fd1ffe4f9, processorArchitecture=x86" />
+    <Reference Include="ScintillaNET.3.5, Version=3.5.8.0, Culture=neutral, processorArchitecture=x86">
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="SharpCompress.3.5, Version=0.11.5.0, Culture=neutral, processorArchitecture=x86">
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="SlimDX, Version=2.0.13.43, Culture=neutral, PublicKeyToken=b1b0c32fd1ffe4f9, processorArchitecture=x86" />
     <Reference Include="System" />
     <Reference Include="System.Core">
       <RequiredTargetFramework>3.5</RequiredTargetFramework>
@@ -526,14 +567,19 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Design" />
     <Reference Include="System.Drawing" />
+    <Reference Include="System.Management" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
-    <Reference Include="Trackbar, Version=1.0.2486.37933, Culture=neutral, PublicKeyToken=503bf28f63ad27b4" />
+    <Reference Include="TabControlEX, Version=0.0.3271.41578, Culture=neutral, PublicKeyToken=1db242dc828e4b4e">
+      <Private>False</Private>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Controls\ColorControlSector.resx">
-      <DependentUpon>ColorControlSector.cs</DependentUpon>
-      <SubType>Designer</SubType>
+    <EmbeddedResource Include="Controls\PairedFloatControl.resx">
+      <DependentUpon>PairedFloatControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Windows\ThingStatisticsForm.resx">
+      <DependentUpon>ThingStatisticsForm.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Windows\AboutForm.resx">
       <SubType>Designer</SubType>
@@ -614,9 +660,9 @@
       <SubType>Designer</SubType>
       <DependentUpon>FieldsEditorControl.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="Windows\FlatBrowserForm.resx">
-      <DependentUpon>FlatBrowserForm.cs</DependentUpon>
+    <EmbeddedResource Include="Windows\DelayedForm.resx">
       <SubType>Designer</SubType>
+      <DependentUpon>DelayedForm.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Windows\GridSetupForm.resx">
       <SubType>Designer</SubType>
@@ -668,24 +714,103 @@
     </EmbeddedResource>
     <EmbeddedResource Include="Resources\Actions.cfg" />
     <EmbeddedResource Include="Resources\display2d.fx" />
-    <EmbeddedResource Include="Resources\Thing2D_1.png" />
+    <EmbeddedResource Include="Resources\ThingTexture2D.png" />
     <EmbeddedResource Include="Resources\things2d.fx" />
     <EmbeddedResource Include="Resources\world3d.fx" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resources\MissingTexture3D.png" />
-    <EmbeddedResource Include="Resources\Thing2D_0.png" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="app.manifest" />
+    <EmbeddedResource Include="Controls\Scripting\FindUsagesControl.resx">
+      <DependentUpon>FindUsagesControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Controls\Scripting\ScriptEditorControl.resx">
+      <DependentUpon>ScriptEditorControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Controls\Scripting\ScriptEditorPreviewControl.resx">
+      <DependentUpon>ScriptEditorPreviewControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Controls\Scripting\ScriptResourcesControl.resx">
+      <DependentUpon>ScriptResourcesControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\SkySphere.md3" />
+    <None Include="Resources\ThingStatistics.png" />
     <None Include="Resources\Copy.png" />
     <None Include="Resources\Cut.png" />
     <None Include="Resources\Close.png" />
-    <Compile Include="Compilers\MacroCompiler.cs" />
+    <Compile Include="Actions\HintsManager.cs" />
     <Compile Include="Config\AllTexturesSet.cs" />
-    <Compile Include="Config\TextureIndexInfo.cs" />
     <Compile Include="Config\FlagTranslation.cs" />
+    <Compile Include="Controls\ImageBrowserCategoryItem.cs" />
+    <Compile Include="Controls\ImageSelectorPanel.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Controls\Scripting\FindUsagesControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\Scripting\FindUsagesControl.Designer.cs">
+      <DependentUpon>FindUsagesControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\TransparentLabel.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Data\Scripting\FindUsagesResult.cs" />
+    <Compile Include="Controls\Scripting\ScriptIconsManager.cs" />
+    <Compile Include="Controls\Scripting\ScriptResourceDocumentTab.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Controls\Scripting\ScriptResourcesControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\Scripting\ScriptResourcesControl.designer.cs">
+      <DependentUpon>ScriptResourcesControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\VisualStudioTabControl.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Data\Scripting\ScriptResource.cs" />
+    <Compile Include="General\AssemblyHash.cs" />
+    <Compile Include="Rendering\RenderModeEnums.cs" />
     <Compile Include="Config\PasteOptions.cs" />
+    <Compile Include="Config\ScriptDocumentSettings.cs" />
+    <Compile Include="Config\SectorEffectData.cs" />
+    <Compile Include="Config\ThingsFlagsCompare.cs" />
+    <Compile Include="Controls\ActionSpecialHelpButton.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\ActionSpecialHelpButton.Designer.cs">
+      <DependentUpon>ActionSpecialHelpButton.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\ArgumentsControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\ArgumentsControl.Designer.cs">
+      <DependentUpon>ArgumentsControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\BufferedTreeView.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="Controls\ButtonsNumericTextboxDesigner.cs" />
+    <Compile Include="Controls\CollapsibleSplitContainer.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Controls\ColoredComboBox.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Controls\CommentEditor.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\CommentEditor.Designer.cs">
+      <DependentUpon>CommentEditor.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\DebugConsole.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\DebugConsole.designer.cs">
+      <DependentUpon>DebugConsole.cs</DependentUpon>
+    </Compile>
     <Compile Include="Controls\Docker.cs" />
     <Compile Include="Controls\DockersControl.cs">
       <SubType>UserControl</SubType>
@@ -696,11 +821,44 @@
     <Compile Include="Controls\DockersTabsControl.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Controls\ConfigurablePictureBox.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Controls\HintsPanel.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\HintsPanel.Designer.cs">
+      <DependentUpon>HintsPanel.cs</DependentUpon>
+    </Compile>
     <Compile Include="Controls\PasteOptionsControl.cs">
       <SubType>UserControl</SubType>
     </Compile>
     <Compile Include="Controls\PasteOptionsControl.Designer.cs">
       <DependentUpon>PasteOptionsControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\Scripting\ScriptEditorControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\Scripting\ScriptEditorControl.designer.cs">
+      <DependentUpon>ScriptEditorControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\Scripting\ScriptEditorPreviewControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\Scripting\ScriptEditorPreviewControl.Designer.cs">
+      <DependentUpon>ScriptEditorPreviewControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\SectorSlopeControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\SectorSlopeControl.Designer.cs">
+      <DependentUpon>SectorSlopeControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\StatisticsControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\StatisticsControl.Designer.cs">
+      <DependentUpon>StatisticsControl.cs</DependentUpon>
     </Compile>
     <Compile Include="Controls\ThingBrowserControl.cs">
       <SubType>UserControl</SubType>
@@ -708,35 +866,179 @@
     <Compile Include="Controls\ThingBrowserControl.Designer.cs">
       <DependentUpon>ThingBrowserControl.cs</DependentUpon>
     </Compile>
+    <Compile Include="Controls\ToolStripCheckBox.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Controls\ToolStripNumericUpDown.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Controls\TransparentListView.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="Controls\TransparentPanel.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Data\BitmapImage.cs" />
+    <Compile Include="Data\CameraTextureImage.cs" />
     <Compile Include="Data\ColorImage.cs" />
     <Compile Include="Data\ColormapImage.cs" />
-    <Compile Include="Data\HighResImage.cs" />
+    <Compile Include="Data\CvarsCollection.cs" />
+    <Compile Include="Data\HiResImage.cs" />
+    <Compile Include="Data\Scripting\AccScriptHandler.cs" />
+    <Compile Include="Data\Scripting\DecorateScriptHandler.cs" />
+    <Compile Include="Data\Scripting\ModeldefScriptHandler.cs" />
+    <Compile Include="Data\Scripting\ScriptHandler.cs" />
+    <Compile Include="Data\TEXTURESImage.cs" />
     <Compile Include="Data\PK3FileImage.cs" />
     <Compile Include="Data\PK3StructuredReader.cs" />
+    <Compile Include="Data\DynamicBitmapImage.cs" />
+    <Compile Include="Data\VoxelImage.cs" />
     <Compile Include="Editing\CustomThingsFilter.cs" />
     <Compile Include="General\CRC.cs" />
     <Compile Include="General\ErrorItem.cs" />
     <Compile Include="General\ErrorLogger.cs" />
+    <Compile Include="General\FileLockChecker.cs" />
+    <Compile Include="General\MD5Hash.cs" />
+    <Compile Include="General\MurmurHash2.cs" />
     <Compile Include="General\SavePurpose.cs" />
-    <Compile Include="IO\Doom64MapSetIO.cs" />
+    <Compile Include="General\UpdateChecker.cs" />
+    <Compile Include="Geometry\CurveTools.cs" />
+    <Compile Include="Geometry\InterpolationTools.cs" />
+    <Compile Include="Controls\AngleControlEx.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\AngleControlEx.Designer.cs">
+      <DependentUpon>AngleControlEx.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\ColorFieldsControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\ColorFieldsControl.Designer.cs">
+      <DependentUpon>ColorFieldsControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\TagsSelector.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\TagsSelector.Designer.cs">
+      <DependentUpon>TagsSelector.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\CheckedColoredListBox.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Controls\MultiSelectTreeview.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Controls\PairedFieldsControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\PairedFieldsControl.Designer.cs">
+      <DependentUpon>PairedFieldsControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\PairedIntControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\PairedIntControl.Designer.cs">
+      <DependentUpon>PairedIntControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\TagSelector.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\TagSelector.Designer.cs">
+      <DependentUpon>TagSelector.cs</DependentUpon>
+    </Compile>
+    <Compile Include="GZBuilder\Data\BoundingBox.cs" />
+    <Compile Include="GZBuilder\Data\EngineInfo.cs" />
+    <Compile Include="Config\GameType.cs" />
+    <Compile Include="GZBuilder\Data\DynamicLight.cs" />
+    <Compile Include="GZBuilder\Data\GlowingFlatData.cs" />
+    <Compile Include="GZBuilder\Data\LinedefColorPreset.cs" />
+    <Compile Include="GZBuilder\Data\LinksCollector.cs" />
+    <Compile Include="GZBuilder\Data\MapInfo.cs" />
+    <Compile Include="GZBuilder\Data\ModelData.cs" />
+    <Compile Include="GZBuilder\Data\ModelLoadState.cs" />
+    <Compile Include="GZBuilder\Data\ScriptItem.cs" />
+    <Compile Include="GZBuilder\Data\SharpCompressHelper.cs" />
+    <Compile Include="GZBuilder\Data\SkyboxInfo.cs" />
+    <Compile Include="GZBuilder\Data\ThingCopyData.cs" />
+    <Compile Include="Map\MergeGeometryMode.cs" />
+    <Compile Include="Map\SectorBuilder.cs" />
+    <Compile Include="Rendering\VisualVertexHandle.cs" />
+    <Compile Include="Geometry\Line3D.cs" />
+    <Compile Include="Data\Scripting\ScriptHandlerAttribute.cs" />
+    <Compile Include="Windows\ScriptGoToLineForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Windows\ScriptGoToLineForm.Designer.cs">
+      <DependentUpon>ScriptGoToLineForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="ZDoom\AmbientSoundInfo.cs" />
+    <Compile Include="ZDoom\DecorateCategoryInfo.cs" />
+    <Compile Include="ZDoom\LockDefsParser.cs" />
+    <Compile Include="ZDoom\Scripting\DecorateParserSE.cs" />
+    <Compile Include="ZDoom\GldefsParser.cs" />
+    <Compile Include="ZDoom\MapinfoParser.cs" />
+    <Compile Include="ZDoom\ModeldefParser.cs" />
+    <Compile Include="ZDoom\Scripting\ModeldefParserSE.cs" />
+    <Compile Include="ZDoom\ModeldefStructure.cs" />
+    <Compile Include="ZDoom\Scripting\ScriptTypeParserSE.cs" />
+    <Compile Include="GZBuilder\GZGeneral.cs" />
+    <Compile Include="GZBuilder\md3\GZModel.cs" />
+    <Compile Include="GZBuilder\md3\ModelReader.cs" />
+    <Compile Include="ZDoom\Scripting\AcsParserSE.cs" />
+    <Compile Include="Windows\ExceptionDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Windows\ExceptionDialog.designer.cs">
+      <DependentUpon>ExceptionDialog.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\TagStatisticsForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Windows\TagStatisticsForm.Designer.cs">
+      <DependentUpon>TagStatisticsForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="IO\ClipboardStreamReader.cs" />
     <Compile Include="IO\DoomColormapReader.cs" />
-    <Compile Include="Map\Lights.cs" />
-    <Compile Include="Map\Macro.cs" />
-    <Compile Include="Map\MacroData.cs" />
+    <Compile Include="IO\ClipboardStreamWriter.cs" />
+    <Compile Include="Map\GroupInfo.cs" />
+    <Compile Include="Map\ITaggedMapElement.cs" />
     <Compile Include="Map\SelectionType.cs" />
     <Compile Include="Map\MapElementCollection.cs" />
+    <Compile Include="Map\SplitLineBehavior.cs" />
+    <Compile Include="Rendering\CommentType.cs" />
+    <Compile Include="Rendering\CustomTextLabel.cs" />
     <Compile Include="Rendering\SurfaceBufferSet.cs" />
     <Compile Include="Rendering\SurfaceEntry.cs" />
-	<Compile Include="Rendering\SurfaceEntryCollection.cs" />
+    <Compile Include="Rendering\SurfaceEntryCollection.cs" />
     <Compile Include="Rendering\SurfaceManager.cs" />
-	<Compile Include="Rendering\SurfaceUpdate.cs" />
+    <Compile Include="Rendering\SurfaceUpdate.cs" />
+    <Compile Include="Types\AngleByteHandler.cs" />
+    <Compile Include="Types\EnumOptionAndBitsHandler.cs" />
+    <Compile Include="Types\PolyobjectNumberHandler.cs" />
+    <Compile Include="Types\RandomFloatHandler.cs" />
+    <Compile Include="Types\RandomIntegerHandler.cs" />
     <Compile Include="Types\ThingClassHandler.cs" />
+    <Compile Include="Types\ThingHeightHandler.cs" />
+    <Compile Include="Types\ThingRadiusHandler.cs" />
     <Compile Include="Types\ThingTypeHandler.cs" />
-    <Compile Include="Windows\DelayedForm.cs">
+    <Compile Include="VisualModes\VisualVertex.cs" />
+    <Compile Include="Windows\BitFlagsAndOptionsForm.cs">
       <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Windows\BitFlagsAndOptionsForm.Designer.cs">
+      <DependentUpon>BitFlagsAndOptionsForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\CenterOnCoordinatesForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Windows\CenterOnCoordinatesForm.Designer.cs">
+      <DependentUpon>CenterOnCoordinatesForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\ChangeMapForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Windows\ChangeMapForm.Designer.cs">
+      <DependentUpon>ChangeMapForm.cs</DependentUpon>
     </Compile>
     <Compile Include="Windows\ErrorsForm.cs">
       <SubType>Form</SubType>
@@ -745,19 +1047,43 @@
       <DependentUpon>ErrorsForm.cs</DependentUpon>
     </Compile>
     <Compile Include="Windows\FindReplaceOptions.cs" />
-	<Compile Include="Windows\MenuSection.cs" />
+    <Compile Include="Windows\FlagsForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Windows\FlagsForm.Designer.cs">
+      <DependentUpon>FlagsForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\LinedefColorPresetsForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Windows\LinedefColorPresetsForm.Designer.cs">
+      <DependentUpon>LinedefColorPresetsForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\LinedefEditFormUDMF.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Windows\LinedefEditFormUDMF.designer.cs">
+      <DependentUpon>LinedefEditFormUDMF.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\MenuSection.cs" />
     <Compile Include="Windows\PasteOptionsForm.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Windows\PasteOptionsForm.Designer.cs">
       <DependentUpon>PasteOptionsForm.cs</DependentUpon>
     </Compile>
-	<Compile Include="Windows\PluginToolbarButton.cs" />
+    <Compile Include="Windows\PluginToolbarButton.cs" />
     <Compile Include="Windows\ScriptFindReplaceForm.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Windows\ScriptFindReplaceForm.Designer.cs">
       <DependentUpon>ScriptFindReplaceForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\SectorEditFormUDMF.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Windows\SectorEditFormUDMF.Designer.cs">
+      <DependentUpon>SectorEditFormUDMF.cs</DependentUpon>
     </Compile>
     <Compile Include="Windows\StatusInfo.cs" />
     <Compile Include="Windows\TanColorTable.cs" />
@@ -767,7 +1093,19 @@
     <Compile Include="Windows\ThingBrowserForm.Designer.cs">
       <DependentUpon>ThingBrowserForm.cs</DependentUpon>
     </Compile>
-	<Compile Include="Windows\ToolbarSection.cs" />
+    <Compile Include="Windows\ThingEditFormUDMF.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Windows\ThingEditFormUDMF.Designer.cs">
+      <DependentUpon>ThingEditFormUDMF.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Windows\ToolbarSection.cs" />
+    <Compile Include="Windows\UpdateForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Windows\UpdateForm.Designer.cs">
+      <DependentUpon>UpdateForm.cs</DependentUpon>
+    </Compile>
     <Compile Include="Windows\VertexEditForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -775,25 +1113,81 @@
       <DependentUpon>VertexEditForm.cs</DependentUpon>
     </Compile>
     <Compile Include="ZDoom\ActorStructure.cs" />
+    <Compile Include="ZDoom\AnimdefsParser.cs" />
+    <Compile Include="ZDoom\CvarInfoParser.cs" />
     <Compile Include="ZDoom\PatchStructure.cs" />
+    <Compile Include="ZDoom\ReverbsParser.cs" />
+    <Compile Include="ZDoom\SndInfoParser.cs" />
+    <Compile Include="ZDoom\SndSeqParser.cs" />
+    <Compile Include="ZDoom\SoundInfo.cs" />
     <Compile Include="ZDoom\StateGoto.cs" />
+    <Compile Include="ZDoom\TerrainParser.cs" />
     <Compile Include="ZDoom\TexturesParser.cs" />
     <Compile Include="ZDoom\TextureStructure.cs" />
+    <Compile Include="ZDoom\VoxeldefParser.cs" />
+    <Compile Include="ZDoom\X11R6RGBParser.cs" />
     <Compile Include="ZDoom\ZDTextParser.cs" />
     <Compile Include="ZDoom\DecorateParser.cs" />
     <Compile Include="ZDoom\StateStructure.cs" />
     <Compile Include="Editing\EditingManager.cs" />
+    <EmbeddedResource Include="Controls\ActionSpecialHelpButton.resx">
+      <DependentUpon>ActionSpecialHelpButton.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Controls\ArgumentsControl.resx">
+      <DependentUpon>ArgumentsControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Controls\CommentEditor.resx">
+      <DependentUpon>CommentEditor.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Controls\DebugConsole.resx">
+      <DependentUpon>DebugConsole.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Controls\DockersControl.resx">
       <DependentUpon>DockersControl.cs</DependentUpon>
-      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Controls\HintsPanel.resx">
+      <DependentUpon>HintsPanel.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Controls\PasteOptionsControl.resx">
       <SubType>Designer</SubType>
       <DependentUpon>PasteOptionsControl.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="Controls\SectorSlopeControl.resx">
+      <DependentUpon>SectorSlopeControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Controls\StatisticsControl.resx">
+      <DependentUpon>StatisticsControl.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Controls\ThingBrowserControl.resx">
       <SubType>Designer</SubType>
       <DependentUpon>ThingBrowserControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Controls\AngleControlEx.resx">
+      <DependentUpon>AngleControlEx.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Controls\ColorFieldsControl.resx">
+      <DependentUpon>ColorFieldsControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Controls\TagsSelector.resx">
+      <DependentUpon>TagsSelector.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Controls\PairedFieldsControl.resx">
+      <DependentUpon>PairedFieldsControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Controls\PairedIntControl.resx">
+      <DependentUpon>PairedIntControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Controls\TagSelector.resx">
+      <DependentUpon>TagSelector.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Windows\ExceptionDialog.resx">
+      <DependentUpon>ExceptionDialog.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Windows\ScriptGoToLineForm.resx">
+      <DependentUpon>ScriptGoToLineForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Windows\TagStatisticsForm.resx">
+      <DependentUpon>TagStatisticsForm.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Resources\Crosshair.png" />
     <EmbeddedResource Include="Resources\CrosshairBusy.png" />
@@ -801,15 +1195,114 @@
     <None Include="Resources\Builder16.png" />
     <None Include="Resources\CLogo.png" />
     <None Include="Resources\Angle.png" />
+    <None Include="Resources\Add.png" />
+    <None Include="Resources\ArrowDown.png" />
+    <None Include="Resources\ArrowUp.png" />
+    <None Include="Resources\Check.png" />
+    <None Include="Resources\ClearTextures.png" />
+    <None Include="Resources\Cursor.png" />
+    <None Include="Resources\Brightness.png" />
+    <None Include="Resources\Clear.png" />
+    <None Include="Resources\Collapse.png" />
+    <EmbeddedResource Include="Resources\CommentInfo.png" />
+    <EmbeddedResource Include="Resources\CommentProblem.png" />
+    <EmbeddedResource Include="Resources\CommentQuestion.png" />
+    <EmbeddedResource Include="Resources\CommentRegular.png" />
+    <EmbeddedResource Include="Resources\CommentSmile.png" />
+    <None Include="Resources\Comment.png" />
+    <None Include="Resources\About.png" />
+    <None Include="Resources\Configuration.png" />
+    <EmbeddedResource Include="Resources\Black.png" />
+    <None Include="Resources\Angle1.png" />
+    <None Include="Resources\Angle2.png" />
+    <None Include="Resources\Angle3.png" />
+    <None Include="Resources\Angle4.png" />
+    <None Include="Resources\Angle5.png" />
+    <None Include="Resources\Angle6.png" />
+    <None Include="Resources\Angle7.png" />
+    <Content Include="icon128x128.ico" />
     <Content Include="Resources\DB2.ico" />
+    <None Include="Resources\GZDB2.ico" />
+    <None Include="Resources\fog.png" />
+    <None Include="Resources\GZDB_Logo_small.png" />
+    <None Include="Resources\InfoLine.png" />
+    <None Include="Resources\Keyboard.png" />
+    <None Include="Resources\ImageStack.png" />
+    <None Include="Resources\FolderExplore.png" />
+    <None Include="Resources\Expand.png" />
+    <None Include="Resources\DockerCollapse.png" />
+    <None Include="Resources\DockerExpand.png" />
+    <None Include="Resources\InfoPanelCollapse.png" />
+    <None Include="Resources\InfoPanelExpand.png" />
+    <None Include="Resources\GridDynamic.png" />
+    <None Include="Resources\Group.png" />
+    <None Include="Resources\GroupAdd.png" />
+    <None Include="Resources\GroupRemove.png" />
+    <None Include="Resources\GridDecrease.png" />
+    <None Include="Resources\GridIncrease.png" />
+    <None Include="Resources\FixedThingsScale.png" />
+    <None Include="Resources\ErrorLargeMapObject.png" />
+    <None Include="Resources\ErrorLargeText.png" />
+    <EmbeddedResource Include="Resources\Folder96.png" />
+    <EmbeddedResource Include="Resources\Folder96Up.png" />
+    <None Include="Resources\Github.png" />
+    <Content Include="Resources\Light.png" />
+    <None Include="Resources\Lightbulb.png" />
+    <None Include="Resources\LightDisabled.png" />
+    <Content Include="Resources\Light_animate.png" />
+    <None Include="Resources\MLogo.png" />
+    <None Include="Resources\Marine.png" />
+    <None Include="Resources\Link.png" />
+    <EmbeddedResource Include="Resources\MissingThing.png" />
+    <None Include="Resources\MCrash.png" />
+    <None Include="Resources\MixedThings.png" />
+    <None Include="Resources\LinedefColorPresets.png" />
+    <EmbeddedResource Include="Resources\MissingSky3D.png" />
+    <None Include="Resources\MergeGeo.png" />
+    <None Include="Resources\MergeGeoClassic.png" />
+    <None Include="Resources\MergeGeoRemoveLines.png" />
+    <Content Include="Resources\Model.png" />
+    <None Include="Resources\ModelDisabled.png" />
+    <None Include="Resources\ModelFiltered.png" />
+    <Content Include="Resources\Model_selected.png" />
+    <None Include="Resources\WarningLargeText.png" />
+    <None Include="Resources\WarningLargeMapObject.png" />
+    <None Include="Resources\Script.png" />
+    <None Include="Resources\SplitSectors.png" />
+    <None Include="Resources\ScriptProperty.png" />
+    <None Include="Resources\TextWhitespace.png" />
+    <None Include="Resources\TextIndent.png" />
+    <None Include="Resources\TextUnindent.png" />
+    <None Include="Resources\ScriptSnippet.png" />
+    <None Include="Resources\ScriptKeyword.png" />
+    <None Include="Resources\ScriptError.png" />
+    <None Include="Resources\ScriptConstant.png" />
+    <None Include="Resources\Sky.png" />
+    <None Include="Resources\Update.png" />
+    <None Include="Resources\Reload.png" />
+    <None Include="Resources\Preferences.png" />
+    <None Include="Resources\Replace.png" />
+    <None Include="Resources\SearchPrev.png" />
+    <None Include="Resources\SearchNext.png" />
+    <None Include="Resources\SearchMatchCase.png" />
+    <None Include="Resources\SearchMatch.png" />
+    <None Include="Resources\WordWrap.png" />
+    <None Include="Resources\ScreenshotActiveWindow.png" />
+    <None Include="Resources\Screenshot.png" />
+    <None Include="Resources\PuzzlePiece.png" />
+    <None Include="Resources\Search.png" />
+    <None Include="Resources\SnapVerts.png" />
+    <EmbeddedResource Include="Resources\UDMF_UI.cfg" />
+    <None Include="Resources\Unlink.png" />
+    <None Include="Resources\Unpin.png" />
+    <None Include="Resources\Pin.png" />
+    <None Include="Resources\Reset.png" />
+    <None Include="Resources\TagStatistics.png" />
+    <None Include="Resources\VisualVertices.png" />
+    <None Include="Resources\SearchClear.png" />
     <None Include="Resources\Text.png" />
     <None Include="Resources\List_Images.png" />
     <None Include="Resources\List.png" />
-    <EmbeddedResource Include="Resources\ThingTrigger.png" />
-    <EmbeddedResource Include="Resources\ThingCamera.png" />
-    <None Include="Resources\ViewColorFloor.png" />
-    <None Include="Resources\ViewColorCeiling.png" />
-    <None Include="Resources\ViewColorThing.png" />
     <None Include="Resources\PasteSpecial.png" />
     <None Include="Resources\ScriptHelp.png" />
     <None Include="Resources\ErrorLarge.png" />
@@ -824,7 +1317,6 @@
     <None Include="Resources\Monster2.png" />
     <None Include="Resources\Prefab2.png" />
     <None Include="Resources\Prefab.png" />
-    <EmbeddedResource Include="Resources\ThingBox.png" />
     <EmbeddedResource Include="Resources\Nothing.png" />
     <EmbeddedResource Include="Resources\UnknownThing.png" />
     <Compile Include="IO\DirectoryFileEntry.cs" />
@@ -856,17 +1348,13 @@
       <DependentUpon>AngleForm.cs</DependentUpon>
     </Compile>
     <Compile Include="Windows\PreferencesController.cs" />
-    <None Include="Resources\Script2.png" />
     <None Include="Resources\ScriptCompile.png" />
-    <None Include="Resources\ScriptConstant.xpm" />
-    <None Include="Resources\ScriptError.xpm" />
-    <None Include="Resources\ScriptKeyword.xpm" />
     <None Include="Resources\ScriptPalette.png" />
     <None Include="Resources\SaveAll.png" />
     <None Include="Resources\SaveScript.png" />
     <None Include="Resources\OpenScript.png" />
     <None Include="Resources\NewScript.png" />
-    <EmbeddedResource Include="Controls\ScriptEditorPanel.resx">
+    <EmbeddedResource Include="Controls\Scripting\ScriptEditorPanel.resx">
       <SubType>Designer</SubType>
       <DependentUpon>ScriptEditorPanel.cs</DependentUpon>
     </EmbeddedResource>
@@ -876,10 +1364,6 @@
     <None Include="Resources\ViewTextureFloor.png" />
     <None Include="Resources\ViewNormal.png" />
     <None Include="Resources\KnownTextureSet.png" />
-    <EmbeddedResource Include="Controls\ScriptEditorControl.resx">
-      <SubType>Designer</SubType>
-      <DependentUpon>ScriptEditorControl.cs</DependentUpon>
-    </EmbeddedResource>
     <EmbeddedResource Include="Resources\Hourglass3D.png" />
     <None Include="Resources\Failed.png" />
     <None Include="Resources\Grid2_arrowup.png" />
@@ -888,7 +1372,6 @@
     <None Include="Resources\Test.png" />
     <None Include="Resources\Warning.png" />
     <None Include="Resources\WarningOff.png" />
-    <None Include="Resources\SlimDX_small.png" />
     <None Include="Resources\Splash3_trans.png" />
     <None Include="Resources\Splash3_small.png" />
     <EmbeddedResource Include="Resources\UDMF.cfg" />
@@ -908,25 +1391,38 @@
       <SubType>Designer</SubType>
       <DependentUpon>AngleForm.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="Windows\BitFlagsAndOptionsForm.resx">
+      <DependentUpon>BitFlagsAndOptionsForm.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Windows\BitFlagsForm.resx">
       <SubType>Designer</SubType>
       <DependentUpon>BitFlagsForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Windows\CenterOnCoordinatesForm.resx">
+      <DependentUpon>CenterOnCoordinatesForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Windows\ChangeMapForm.resx">
+      <DependentUpon>ChangeMapForm.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Windows\CustomFieldsForm.resx">
       <SubType>Designer</SubType>
       <DependentUpon>CustomFieldsForm.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="Windows\DelayedForm.resx">
-      <DependentUpon>DelayedForm.cs</DependentUpon>
-      <SubType>Designer</SubType>
-    </EmbeddedResource>
     <EmbeddedResource Include="Windows\ErrorsForm.resx">
       <SubType>Designer</SubType>
       <DependentUpon>ErrorsForm.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="Windows\FlagsForm.resx">
+      <DependentUpon>FlagsForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Windows\LinedefColorPresetsForm.resx">
+      <DependentUpon>LinedefColorPresetsForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Windows\LinedefEditFormUDMF.resx">
+      <DependentUpon>LinedefEditFormUDMF.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Windows\PasteOptionsForm.resx">
       <DependentUpon>PasteOptionsForm.cs</DependentUpon>
-      <SubType>Designer</SubType>
     </EmbeddedResource>
     <EmbeddedResource Include="Windows\ScriptEditorForm.resx">
       <SubType>Designer</SubType>
@@ -935,6 +1431,9 @@
     <EmbeddedResource Include="Windows\ScriptFindReplaceForm.resx">
       <SubType>Designer</SubType>
       <DependentUpon>ScriptFindReplaceForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Windows\SectorEditFormUDMF.resx">
+      <DependentUpon>SectorEditFormUDMF.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Windows\TextEditForm.resx">
       <SubType>Designer</SubType>
@@ -952,15 +1451,17 @@
       <SubType>Designer</SubType>
       <DependentUpon>ThingEditForm.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="Windows\ThingEditFormUDMF.resx">
+      <DependentUpon>ThingEditFormUDMF.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Windows\ThingsFiltersForm.resx">
       <SubType>Designer</SubType>
       <DependentUpon>ThingsFiltersForm.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="Resources\Font.png" />
-    <EmbeddedResource Include="Resources\Thing2D_3.png" />
-    <EmbeddedResource Include="Resources\Thing2D_2.png" />
     <EmbeddedResource Include="Resources\White.png" />
-    <EmbeddedResource Include="Resources\Font.cfg" />
+    <EmbeddedResource Include="Windows\UpdateForm.resx">
+      <DependentUpon>UpdateForm.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Windows\VertexEditForm.resx">
       <SubType>Designer</SubType>
       <DependentUpon>VertexEditForm.cs</DependentUpon>
@@ -976,7 +1477,33 @@
   <PropertyGroup>
     <PreBuildEvent>
     </PreBuildEvent>
-    <PostBuildEvent>
-    </PostBuildEvent>
+    <PostBuildEvent>if exist "%25VS140COMNTOOLS%25" goto tools140 
+if exist "%25VS120COMNTOOLS%25" goto tools120 
+if exist "%25VS110COMNTOOLS%25" goto tools110 
+if exist "%25VS100COMNTOOLS%25" goto tools100
+if exist "%25VS90COMNTOOLS%25" goto tools90 
+
+:tools140
+call "%25VS140COMNTOOLS%25vsvars32.bat"
+goto end
+
+:tools120
+call "%25VS120COMNTOOLS%25vsvars32.bat"
+goto end
+
+:tools110
+call "%25VS110COMNTOOLS%25vsvars32.bat"
+goto end
+
+:tools100
+call "%25VS100COMNTOOLS%25vsvars32.bat"
+goto end
+
+:tools90
+call "%25VS90COMNTOOLS%25vsvars32.bat"
+goto end
+
+:end
+editbin.exe /NOLOGO /LARGEADDRESSAWARE "$(TargetPath)"</PostBuildEvent>
   </PropertyGroup>
 </Project>

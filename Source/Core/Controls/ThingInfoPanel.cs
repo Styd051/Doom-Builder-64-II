@@ -17,19 +17,16 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
-using System.Text;
+using System.Globalization;
 using System.Windows.Forms;
-using CodeImp.DoomBuilder.Geometry;
-using Microsoft.Win32;
-using System.Diagnostics;
 using CodeImp.DoomBuilder.Data;
+using CodeImp.DoomBuilder.GZBuilder.Data;
 using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Config;
 using CodeImp.DoomBuilder.Types;
-using CodeImp.DoomBuilder.IO;
+using CodeImp.DoomBuilder.GZBuilder; //mxd
+using System.Collections.Generic;
 
 #endregion
 
@@ -37,8 +34,8 @@ namespace CodeImp.DoomBuilder.Controls
 {
 	internal partial class ThingInfoPanel : UserControl
 	{
-		private int hexenformatwidth;
-		private int doomformatwidth;
+		private readonly int hexenformatwidth;
+		private readonly int doomformatwidth;
 
 		// Constructor
 		public ThingInfoPanel()
@@ -54,181 +51,204 @@ namespace CodeImp.DoomBuilder.Controls
 		// This shows the info
 		public void ShowInfo(Thing t)
 		{
-			ThingTypeInfo ti;
-			LinedefActionInfo act = null;
-			TypeHandler th;
-			string actioninfo = "";
-			string zinfo;
-			float zvalue;
-
 			// Show/hide stuff depending on format
-			if(!General.Map.FormatInterface.HasActionArgs)
-			{
-				arglbl1.Visible = false;
-				arglbl2.Visible = false;
-				arglbl3.Visible = false;
-				arglbl4.Visible = false;
-				arglbl5.Visible = false;
-				arg1.Visible = false;
-				arg2.Visible = false;
-				arg3.Visible = false;
-				arg4.Visible = false;
-				arg5.Visible = false;
-				infopanel.Width = doomformatwidth;
-			}
-			else
-			{
-				arglbl1.Visible = true;
-				arglbl2.Visible = true;
-				arglbl3.Visible = true;
-				arglbl4.Visible = true;
-				arglbl5.Visible = true;
-				arg1.Visible = true;
-				arg2.Visible = true;
-				arg3.Visible = true;
-				arg4.Visible = true;
-				arg5.Visible = true;
-				infopanel.Width = hexenformatwidth;
-			}
+			bool hasArgs = General.Map.FormatInterface.HasActionArgs;
+			arglbl1.Visible = hasArgs;
+			arglbl2.Visible = hasArgs;
+			arglbl3.Visible = hasArgs;
+			arglbl4.Visible = hasArgs;
+			arglbl5.Visible = hasArgs;
+			arg1.Visible = hasArgs;
+			arg2.Visible = hasArgs;
+			arg3.Visible = hasArgs;
+			arg4.Visible = hasArgs;
+			arg5.Visible = hasArgs;
+			infopanel.Width = (hasArgs ? hexenformatwidth : doomformatwidth);
+
+			//mxd
+			action.Visible = General.Map.FormatInterface.HasThingAction;
+			labelaction.Visible = General.Map.FormatInterface.HasThingAction;
 
 			// Move panel
 			spritepanel.Left = infopanel.Left + infopanel.Width + infopanel.Margin.Right + spritepanel.Margin.Left;
+			flagsPanel.Left = spritepanel.Left + spritepanel.Width + spritepanel.Margin.Right + flagsPanel.Margin.Left; //mxd
 			
 			// Lookup thing info
-			ti = General.Map.Data.GetThingInfo(t.Type);
+			ThingTypeInfo ti = General.Map.Data.GetThingInfo(t.Type);
 
 			// Get thing action information
-			if(General.Map.Config.LinedefActions.ContainsKey(t.Action))
-			{
-				act = General.Map.Config.LinedefActions[t.Action];
-				actioninfo = act.ToString();
-			}
-			else if(t.Action == 0)
-				actioninfo = t.Action.ToString() + " - None";
-			else
-				actioninfo = t.Action.ToString() + " - Unknown";
+			LinedefActionInfo act;
+			if(General.Map.Config.LinedefActions.ContainsKey(t.Action)) act = General.Map.Config.LinedefActions[t.Action];
+			else if(t.Action == 0) act = new LinedefActionInfo(0, "None", true, false);
+			else act = new LinedefActionInfo(t.Action, "Unknown", false, false);
+			string actioninfo = act.ToString();
 			
 			// Determine z info to show
 			t.DetermineSector();
-			if(ti.AbsoluteZ)
+			string zinfo;
+			if(ti.AbsoluteZ || t.Sector == null)
 			{
-				zvalue = t.Position.z;
-				zinfo = zvalue.ToString();
+				zinfo = t.Position.z.ToString(CultureInfo.InvariantCulture) + " (abs.)"; //mxd
 			}
 			else
 			{
-				if(t.Sector != null)
-				{
-					// Hangs from ceiling?
-					if(ti.Hangs)
-					{
-						zvalue = (float)t.Sector.CeilHeight + t.Position.z;
-						zinfo = zvalue.ToString();
-					}
-					else
-					{
-						zvalue = (float)t.Sector.FloorHeight + t.Position.z;
-						zinfo = zvalue.ToString();
-					}
-				}
+				// Hangs from ceiling?
+				if(ti.Hangs)
+					zinfo = t.Position.z + " (" + ((float)Math.Round(Sector.GetCeilingPlane(t.Sector).GetZ(t.Position) - t.Position.z - ti.Height, General.Map.FormatInterface.VertexDecimals)).ToString(CultureInfo.InvariantCulture) + ")"; //mxd
 				else
-				{
-					zvalue = t.Position.z;
-					if(zvalue >= 0.0f) zinfo = "+" + zvalue.ToString(); else zinfo = zvalue.ToString();
-				}
+					zinfo = t.Position.z + " (" + ((float)Math.Round(Sector.GetFloorPlane(t.Sector).GetZ(t.Position) + t.Position.z, General.Map.FormatInterface.VertexDecimals)).ToString(CultureInfo.InvariantCulture) + ")"; //mxd
 			}
 
 			// Thing info
 			infopanel.Text = " Thing " + t.Index + " ";
 			type.Text = t.Type + " - " + ti.Title;
+			if(ti.IsObsolete) type.Text += " - OBSOLETE"; //mxd
 			action.Text = actioninfo;
-			position.Text = t.Position.x.ToString() + ", " + t.Position.y.ToString() + ", " + zinfo;
-			tag.Text = t.Tag.ToString();
-			angle.Text = Angle2D.RealToDoom(t.Angle).ToString() + "\u00B0";
+			bool displayclassname = !string.IsNullOrEmpty(ti.ClassName) && !ti.ClassName.StartsWith("$"); //mxd
+			labelclass.Enabled = displayclassname; //mxd
+			classname.Enabled = displayclassname; //mxd
+			classname.Text = (displayclassname ? ti.ClassName : "--"); //mxd
+			position.Text = t.Position.x.ToString(CultureInfo.InvariantCulture) + ", " + t.Position.y.ToString(CultureInfo.InvariantCulture) + ", " + zinfo;
+			tag.Text = t.Tag + (General.Map.Options.TagLabels.ContainsKey(t.Tag) ? " - " + General.Map.Options.TagLabels[t.Tag] : string.Empty);
+			angle.Text = t.AngleDoom + "\u00B0";
+			anglecontrol.Angle = t.AngleDoom;
+			anglecontrol.Left = angle.Right + 1;
 			
 			// Sprite
-            if (ti.Title == "Camera") // villsa
-            {
-                General.DisplayZoomedImage(spritetex, General.Map.Data.ThingCamera.GetBitmap());
-                spritename.Text = "";
-            }
-            else if (ti.Title == "Trigger") // villsa 9/11/11
-            {
-                General.DisplayZoomedImage(spritetex, General.Map.Data.ThingTrigger.GetBitmap());
-                spritename.Text = "";
-            }
-            else if (ti.Sprite.ToLowerInvariant().StartsWith(DataManager.INTERNAL_PREFIX) && (ti.Sprite.Length > DataManager.INTERNAL_PREFIX.Length))
-            {
-                spritename.Text = "";
-                General.DisplayZoomedImage(spritetex, General.Map.Data.GetSpriteImage(ti.Sprite).GetBitmap());
-            }
-            else if ((ti.Sprite.Length <= 8) && (ti.Sprite.Length > 0))
-            {
-                spritename.Text = ti.Sprite;
-                General.DisplayZoomedImage(spritetex, General.Map.Data.GetSpriteImage(ti.Sprite, ti.PalIndex).GetPreview());
-            }
-            else
-            {
-                spritename.Text = "";
-                spritetex.BackgroundImage = null;
-            }
-			
-			// Arguments
-			if(act != null)
+			if(ti.Sprite.ToLowerInvariant().StartsWith(DataManager.INTERNAL_PREFIX) && (ti.Sprite.Length > DataManager.INTERNAL_PREFIX.Length))
 			{
-				arglbl1.Text = act.Args[0].Title + ":";
-				arglbl2.Text = act.Args[1].Title + ":";
-				arglbl3.Text = act.Args[2].Title + ":";
-				arglbl4.Text = act.Args[3].Title + ":";
-				arglbl5.Text = act.Args[4].Title + ":";
-				arglbl1.Enabled = act.Args[0].Used;
-				arglbl2.Enabled = act.Args[1].Used;
-				arglbl3.Enabled = act.Args[2].Used;
-				arglbl4.Enabled = act.Args[3].Used;
-				arglbl5.Enabled = act.Args[4].Used;
-				arg1.Enabled = act.Args[0].Used;
-				arg2.Enabled = act.Args[1].Used;
-				arg3.Enabled = act.Args[2].Used;
-				arg4.Enabled = act.Args[3].Used;
-				arg5.Enabled = act.Args[4].Used;
-				th = General.Types.GetArgumentHandler(act.Args[0]);
-				th.SetValue(t.Args[0]); arg1.Text = th.GetStringValue();
-				th = General.Types.GetArgumentHandler(act.Args[1]);
-				th.SetValue(t.Args[1]); arg2.Text = th.GetStringValue();
-				th = General.Types.GetArgumentHandler(act.Args[2]);
-				th.SetValue(t.Args[2]); arg3.Text = th.GetStringValue();
-				th = General.Types.GetArgumentHandler(act.Args[3]);
-				th.SetValue(t.Args[3]); arg4.Text = th.GetStringValue();
-				th = General.Types.GetArgumentHandler(act.Args[4]);
-				th.SetValue(t.Args[4]); arg5.Text = th.GetStringValue();
+				spritename.Text = "";
+				spritetex.Image = General.Map.Data.GetSpriteImage(ti.Sprite).GetBitmap();
+			}
+			else if((ti.Sprite.Length <= 8) && (ti.Sprite.Length > 0))
+			{
+				spritename.Text = ti.Sprite;
+				spritetex.Image = General.Map.Data.GetSpriteImage(ti.Sprite).GetPreview();
 			}
 			else
 			{
-				arglbl1.Text = "Argument 1:";
-				arglbl2.Text = "Argument 2:";
-				arglbl3.Text = "Argument 3:";
-				arglbl4.Text = "Argument 4:";
-				arglbl5.Text = "Argument 5:";
-				arglbl1.Enabled = false;
-				arglbl2.Enabled = false;
-				arglbl3.Enabled = false;
-				arglbl4.Enabled = false;
-				arglbl5.Enabled = false;
-				arg1.Enabled = false;
-				arg2.Enabled = false;
-				arg3.Enabled = false;
-				arg4.Enabled = false;
-				arg5.Enabled = false;
-				arg1.Text = "-";
-				arg2.Text = "-";
-				arg3.Text = "-";
-				arg4.Text = "-";
-				arg5.Text = "-";
+				spritename.Text = "";
+				spritetex.Image = null;
+			}
+
+			// Arguments
+			ArgumentInfo[] arginfo = ((t.Action == 0 && ti.Args[0] != null) ? ti.Args : act.Args); //mxd
+
+			//mxd. ACS script argument names
+			bool isacsscript = (Array.IndexOf(GZGeneral.ACS_SPECIALS, t.Action) != -1);
+			bool isnamedacsscript = (isacsscript && General.Map.UDMF && t.Fields.ContainsKey("arg0str"));
+			string scriptname = (isnamedacsscript ? t.Fields.GetValue("arg0str", string.Empty) : string.Empty);
+			ScriptItem scriptitem = null;
+
+			//mxd. Set default label colors
+			arg1.ForeColor = SystemColors.ControlText;
+			arglbl1.ForeColor = SystemColors.ControlText;
+
+			// Named script?
+			if(isnamedacsscript && General.Map.NamedScripts.ContainsKey(scriptname.ToLowerInvariant()))
+			{
+				scriptitem = General.Map.NamedScripts[scriptname.ToLowerInvariant()];
+			}
+			// Script number?
+			else if(isacsscript && General.Map.NumberedScripts.ContainsKey(t.Args[0]))
+			{
+				scriptitem = General.Map.NumberedScripts[t.Args[0]];
+				scriptname = (scriptitem.HasCustomName ? scriptitem.Name : scriptitem.Index.ToString());
+			}
+
+			// Apply script args?
+			Label[] arglabels = { arglbl1, arglbl2, arglbl3, arglbl4, arglbl5 };
+			Label[] args = { arg1, arg2, arg3, arg4, arg5 };
+
+			if(scriptitem != null)
+			{
+				string[] argnames = scriptitem.GetArgumentsDescriptions(t.Action);
+				for(int i = 0; i < argnames.Length; i++)
+				{
+					if(!string.IsNullOrEmpty(argnames[i]))
+					{
+						arglabels[i].Text = argnames[i] + ":";
+						arglabels[i].Enabled = true;
+						args[i].Enabled = true;
+					}
+					else
+					{
+						arglabels[i].Text = arginfo[i].Title + ":";
+						arglabels[i].Enabled = arginfo[i].Used;
+						args[i].Enabled = arginfo[i].Used;
+					}
+				}
+			}
+			else
+			{
+				for(int i = 0; i < arginfo.Length; i++)
+				{
+					arglabels[i].Text = arginfo[i].Title + ":";
+					arglabels[i].Enabled = arginfo[i].Used;
+					args[i].Enabled = arginfo[i].Used;
+				}
+
+				// Special cases: unknown script name/index
+				if(isacsscript || isnamedacsscript)
+				{
+					arglbl1.Text = "Unknown script " + (isnamedacsscript ? "name" : "number") + ":";
+					arg1.ForeColor = Color.DarkRed;
+					arglbl1.ForeColor = Color.DarkRed;
+				}
+			}
+
+			//mxd. Set argument value and label
+			if(!string.IsNullOrEmpty(scriptname)) arg1.Text = scriptname;
+			else SetArgumentText(arginfo[0], arg1, t.Args[0]);
+			SetArgumentText(arginfo[1], arg2, t.Args[1]);
+			SetArgumentText(arginfo[2], arg3, t.Args[2]);
+			SetArgumentText(arginfo[3], arg4, t.Args[3]);
+			SetArgumentText(arginfo[4], arg5, t.Args[4]);
+
+			//mxd. Flags
+			flags.Items.Clear();
+			Dictionary<string, string> flagsrename = ti.FlagsRename;
+			foreach(KeyValuePair<string, string> group in General.Map.Config.ThingFlags)
+			{
+				if(t.Flags.ContainsKey(group.Key) && t.Flags[group.Key])
+				{
+					ListViewItem lvi = (flagsrename != null && flagsrename.ContainsKey(group.Key)) 
+						? new ListViewItem(flagsrename[group.Key]) { ForeColor = SystemColors.HotTrack } 
+						: new ListViewItem(group.Value);
+					lvi.Checked = true;
+					flags.Items.Add(lvi);
+				}
+			}
+
+			//mxd. Flags panel visibility and size
+			flagsPanel.Visible = (flags.Items.Count > 0);
+			if(flags.Items.Count > 0)
+			{
+				Rectangle rect = flags.GetItemRect(0);
+				int itemspercolumn = 1;
+				
+				// Check how many items per column we have...
+				for(int i = 1; i < flags.Items.Count; i++)
+				{
+					if(flags.GetItemRect(i).X != rect.X) break;
+					itemspercolumn++;
+				}
+
+				flags.Width = rect.Width * (int)Math.Ceiling(flags.Items.Count / (float)itemspercolumn);
+				flagsPanel.Width = flags.Width + flags.Left * 2;
 			}
 
 			// Show the whole thing
 			this.Show();
-			this.Update();
+			//this.Update(); // ano - don't think this is needed, and is slow
+		}
+
+		//mxd
+		private static void SetArgumentText(ArgumentInfo info, Label label, int value) 
+		{
+			TypeHandler th = General.Types.GetArgumentHandler(info);
+			th.SetValue(value);
+			label.Text = th.GetStringValue();
 		}
 
 		// When visible changed
@@ -237,7 +257,7 @@ namespace CodeImp.DoomBuilder.Controls
 			// Hiding panels
 			if(!this.Visible)
 			{
-				spritetex.BackgroundImage = null;
+				spritetex.Image = null;
 			}
 
 			// Call base

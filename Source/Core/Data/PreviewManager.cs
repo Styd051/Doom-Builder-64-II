@@ -17,15 +17,9 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using System.Drawing;
 using System.Drawing.Imaging;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.IO;
-using System.IO;
 using System.Drawing.Drawing2D;
 
 #endregion
@@ -40,32 +34,25 @@ namespace CodeImp.DoomBuilder.Data
 		private const PixelFormat IMAGE_FORMAT = PixelFormat.Format32bppArgb;
 
 		// Dimensions of a single preview image
-		public static readonly int[] PREVIEW_SIZES = new int[] { 48, 64, 80, 96, 112, 128 };
+		public const int MAX_PREVIEW_SIZE = 256; //mxd
 
 		#endregion
 
 		#region ================== Variables
-		
-		// Dimensions of a single preview image
-		private int maxpreviewwidth = 64;
-		private int maxpreviewheight = 64;
 		
 		// Images
 		private List<Bitmap> images;
 		
 		// Processing
 		private Queue<ImageData> imageque;
-		
+		private static object syncroot = new object(); //mxd
+
 		// Disposing
-		private bool isdisposed = false;
+		private bool isdisposed;
 
 		#endregion
 
 		#region ================== Properties
-
-		// Constants
-		public int MaxImageWidth { get { return maxpreviewwidth; } }
-		public int MaxImageHeight { get { return maxpreviewheight; } }
 		
 		// Disposing
 		internal bool IsDisposed { get { return isdisposed; } }
@@ -89,8 +76,6 @@ namespace CodeImp.DoomBuilder.Data
 			// Initialize
 			images = new List<Bitmap>();
 			imageque = new Queue<ImageData>();
-			maxpreviewwidth = PREVIEW_SIZES[General.Settings.PreviewImageSize];
-			maxpreviewheight = PREVIEW_SIZES[General.Settings.PreviewImageSize];
 			
 			// We have no destructor
 			GC.SuppressFinalize(this);
@@ -118,15 +103,12 @@ namespace CodeImp.DoomBuilder.Data
 		// This makes a preview for the given image and updates the image settings
 		private void MakeImagePreview(ImageData img)
 		{
-			int previewwidth, previewheight;
-			int imagewidth, imageheight;
-			Bitmap preview;
-			Graphics g;
-			
 			lock(img)
 			{
 				// Load image if needed
 				if(!img.IsImageLoaded) img.LoadImage();
+				int imagewidth, imageheight;
+				Bitmap image = img.GetBitmap(); //mxd
 				if(!img.LoadFailed)
 				{
 					imagewidth = img.Width;
@@ -134,44 +116,54 @@ namespace CodeImp.DoomBuilder.Data
 				}
 				else
 				{
-					imagewidth = img.GetBitmap().Size.Width;
-					imageheight = img.GetBitmap().Size.Height;
+					Size size = image.Size; //mxd
+					imagewidth = size.Width;
+					imageheight = size.Height;
 				}
 				
 				// Determine preview size
-				float scalex = (img.Width > maxpreviewwidth) ? ((float)maxpreviewwidth / (float)imagewidth) : 1.0f;
-				float scaley = (img.Height > maxpreviewheight) ? ((float)maxpreviewheight / (float)imageheight) : 1.0f;
+				float scalex = (img.Width > MAX_PREVIEW_SIZE) ? (MAX_PREVIEW_SIZE / (float)imagewidth) : 1.0f;
+				float scaley = (img.Height > MAX_PREVIEW_SIZE) ? (MAX_PREVIEW_SIZE / (float)imageheight) : 1.0f;
 				float scale = Math.Min(scalex, scaley);
-				previewwidth = (int)((float)imagewidth * scale);
-				previewheight = (int)((float)imageheight * scale);
+				int previewwidth = (int)(imagewidth * scale);
+				int previewheight = (int)(imageheight * scale);
 				if(previewwidth < 1) previewwidth = 1;
 				if(previewheight < 1) previewheight = 1;
 
-				// Make new image
-				preview = new Bitmap(previewwidth, previewheight, IMAGE_FORMAT);
-				g = Graphics.FromImage(preview);
-				g.PageUnit = GraphicsUnit.Pixel;
-				g.CompositingQuality = CompositingQuality.HighQuality;
-				g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-				g.SmoothingMode = SmoothingMode.HighQuality;
-				g.PixelOffsetMode = PixelOffsetMode.None;
-				g.Clear(Color.Transparent);
-				
-				// Draw image onto atlas
-				Rectangle atlasrect = new Rectangle(0, 0, previewwidth, previewheight);
-				RectangleF imgrect = General.MakeZoomedRect(new Size(imagewidth, imageheight), atlasrect);
-				if(imgrect.Width < 1.0f)
+				//mxd. Expected and actual image sizes and format match?
+				Bitmap preview;
+				if(previewwidth == imagewidth && previewheight == imageheight && image.PixelFormat == IMAGE_FORMAT)
 				{
-					imgrect.X -= 0.5f - imgrect.Width * 0.5f;
-					imgrect.Width = 1.0f;
+					preview = new Bitmap(image);
 				}
-				if(imgrect.Height < 1.0f)
+				else
 				{
-					imgrect.Y -= 0.5f - imgrect.Height * 0.5f;
-					imgrect.Height = 1.0f;
+					// Make new image
+					preview = new Bitmap(previewwidth, previewheight, IMAGE_FORMAT);
+					Graphics g = Graphics.FromImage(preview);
+					g.PageUnit = GraphicsUnit.Pixel;
+					//g.CompositingQuality = CompositingQuality.HighQuality; //mxd
+					g.InterpolationMode = InterpolationMode.NearestNeighbor;
+					//g.SmoothingMode = SmoothingMode.HighQuality; //mxd
+					g.PixelOffsetMode = PixelOffsetMode.None;
+					//g.Clear(Color.Transparent); //mxd
+
+					// Draw image onto atlas
+					Rectangle atlasrect = new Rectangle(0, 0, previewwidth, previewheight);
+					RectangleF imgrect = General.MakeZoomedRect(new Size(imagewidth, imageheight), atlasrect);
+					if(imgrect.Width < 1.0f)
+					{
+						imgrect.X -= 0.5f - imgrect.Width * 0.5f;
+						imgrect.Width = 1.0f;
+					}
+					if(imgrect.Height < 1.0f)
+					{
+						imgrect.Y -= 0.5f - imgrect.Height * 0.5f;
+						imgrect.Height = 1.0f;
+					}
+					g.DrawImage(image, imgrect);
+					g.Dispose();
 				}
-				g.DrawImage(img.GetBitmap(), imgrect);
-				g.Dispose();
 				
 				// Unload image if no longer needed
 				if(!img.IsReferenced) img.UnloadImage();
@@ -201,11 +193,11 @@ namespace CodeImp.DoomBuilder.Data
 			lock(images) { image = images[previewindex]; }
 
 			// Adjust offset for the size of the preview image
-			targetpos.X += (maxpreviewwidth - image.Width) >> 1;
-			targetpos.Y += (maxpreviewheight - image.Height) >> 1;
+			targetpos.X += (MAX_PREVIEW_SIZE - image.Width) >> 1;
+			targetpos.Y += (MAX_PREVIEW_SIZE - image.Height) >> 1;
 			
 			// Draw from atlas to target
-			lock(image)
+			lock(syncroot)
 			{
 				target.DrawImageUnscaled(image, targetpos.X, targetpos.Y);
 			}
@@ -220,7 +212,7 @@ namespace CodeImp.DoomBuilder.Data
 			lock(images) { image = images[previewindex]; }
 
 			// Make a copy
-			lock(image)
+			lock(syncroot)
 			{
 				return new Bitmap(image);
 			}
@@ -262,7 +254,7 @@ namespace CodeImp.DoomBuilder.Data
 
 
 		#if DEBUG
-		internal void DumpAtlases()
+		/*internal void DumpAtlases()
 		{
 			lock(images)
 			{
@@ -276,7 +268,7 @@ namespace CodeImp.DoomBuilder.Data
 					}
 				}
 			}
-		}
+		}*/
 		#endif
 		
 		#endregion

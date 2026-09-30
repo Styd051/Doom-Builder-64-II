@@ -18,18 +18,13 @@
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
-using System.Text;
-using System.Windows.Forms;
-using Microsoft.Win32;
-using System.Diagnostics;
-using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.Config;
 using System.IO;
-using CodeImp.DoomBuilder.Controls;
+using System.Windows.Forms;
+using CodeImp.DoomBuilder.Config;
+using CodeImp.DoomBuilder.Data;
 using CodeImp.DoomBuilder.Editing;
+using CodeImp.DoomBuilder.GZBuilder.Data;
 
 #endregion
 
@@ -41,8 +36,11 @@ namespace CodeImp.DoomBuilder.Windows
 		private GameConfiguration gameconfig;
 		private ConfigurationInfo configinfo;
 		private List<DefinedTextureSet> copiedsets;
-		private bool preventchanges = false;
-		private bool reloadresources = false;
+		private bool preventchanges;
+		private bool reloadresources;
+
+		//mxd. "Copy/Paste" stuff
+		private ConfigurationInfo configinfocopy;
 
 		// Properties
 		public bool ReloadResources { get { return reloadresources; } }
@@ -64,6 +62,8 @@ namespace CodeImp.DoomBuilder.Windows
 				// Add a copy
 				lvi = listconfigs.Items.Add(ci.Name);
 				lvi.Tag = ci.Clone();
+				lvi.Checked = ci.Enabled; //mxd
+				lvi.ForeColor = (ci.Enabled ? SystemColors.WindowText : SystemColors.InactiveCaptionText); //mxd
 
 				// This is the current configuration?
 				if((General.Map != null) && (General.Map.ConfigSettings.Filename == ci.Filename))
@@ -90,8 +90,16 @@ namespace CodeImp.DoomBuilder.Windows
 					lvi = listmodes.Items.Add(emi.Attributes.DisplayName);
 					lvi.Tag = emi;
 					lvi.SubItems.Add(emi.Plugin.Plug.Name);
+					lvi.UseItemStyleForSubItems = true; //mxd
 				}
 			}
+
+			//mxd
+			listconfigs.ItemChecked += listconfigs_ItemChecked;
+			listconfigs.SelectedIndexChanged += listconfigs_SelectedIndexChanged;
+
+			//mxd. Trigger change to update the right panel...
+			listconfigs_MouseUp(this, new MouseEventArgs(MouseButtons.None, 0, 0, 0, 0));
 		}
 		
 		// This shows a specific page
@@ -103,8 +111,6 @@ namespace CodeImp.DoomBuilder.Windows
 		// Configuration item selected
 		private void listconfigs_SelectedIndexChanged(object sender, EventArgs e)
 		{
-			NodebuilderInfo ni;
-			
 			// Item selected?
 			if(listconfigs.SelectedItems.Count > 0)
 			{
@@ -112,12 +118,16 @@ namespace CodeImp.DoomBuilder.Windows
 				tabs.Enabled = true;
 
 				preventchanges = true;
+
+				//mxd. Store current engine name
+				if(configinfo != null && !String.IsNullOrEmpty(cbEngineSelector.Text))
+					configinfo.TestProgramName = cbEngineSelector.Text;
 				
 				// Get config info of selected item
 				configinfo = listconfigs.SelectedItems[0].Tag as ConfigurationInfo;
 				
-				// Load the game configuration
-				gameconfig = new GameConfiguration(General.LoadGameConfiguration(configinfo.Filename));
+				//mxd. Load the game configuration
+				gameconfig = new GameConfiguration(configinfo.Configuration);
 
 				// Set defaults
 				configinfo.ApplyDefaults(gameconfig);
@@ -130,10 +140,10 @@ namespace CodeImp.DoomBuilder.Windows
 				for(int i = 0; i < nodebuildersave.Items.Count; i++)
 				{
 					// Get item
-					ni = nodebuildersave.Items[i] as NodebuilderInfo;
+					NodebuilderInfo ni = nodebuildersave.Items[i] as NodebuilderInfo;
 					
 					// Item matches configuration setting?
-					if(string.Compare(ni.Name, configinfo.NodebuilderSave, false) == 0)
+					if(String.CompareOrdinal(ni.Name, configinfo.NodebuilderSave) == 0)
 					{
 						// Select this item
 						nodebuildersave.SelectedIndex = i;
@@ -146,10 +156,10 @@ namespace CodeImp.DoomBuilder.Windows
 				for(int i = 0; i < nodebuildertest.Items.Count; i++)
 				{
 					// Get item
-					ni = nodebuildertest.Items[i] as NodebuilderInfo;
+					NodebuilderInfo ni = nodebuildertest.Items[i] as NodebuilderInfo;
 					
 					// Item matches configuration setting?
-					if(string.Compare(ni.Name, configinfo.NodebuilderTest, false) == 0)
+					if(String.CompareOrdinal(ni.Name, configinfo.NodebuilderTest) == 0)
 					{
 						// Select this item
 						nodebuildertest.SelectedIndex = i;
@@ -160,20 +170,14 @@ namespace CodeImp.DoomBuilder.Windows
 				// Fill skills list
 				skill.ClearInfo();
 				skill.AddInfo(gameconfig.Skills.ToArray());
-				
-				// Set test application and parameters
-				if(!configinfo.CustomParameters)
-				{
-					configinfo.TestParameters = gameconfig.TestParameters;
-					configinfo.TestShortPaths = gameconfig.TestShortPaths;
-				}
-				testapplication.Text = configinfo.TestProgram;
-				testparameters.Text = configinfo.TestParameters;
-				shortpaths.Checked = configinfo.TestShortPaths;
-				int skilllevel = configinfo.TestSkill;
-				skill.Value = skilllevel - 1;
-				skill.Value = skilllevel;
-				customparameters.Checked = configinfo.CustomParameters;
+
+				//mxd. Fill engines list
+				cbEngineSelector.Items.Clear();
+				foreach(EngineInfo info in configinfo.TestEngines)
+					cbEngineSelector.Items.Add(info.TestProgramName);
+
+				cbEngineSelector.SelectedIndex = configinfo.CurrentEngineIndex;
+				btnRemoveEngine.Enabled = configinfo.TestEngines.Count > 1;
 				
 				// Fill texture sets list
 				listtextures.Items.Clear();
@@ -189,8 +193,27 @@ namespace CodeImp.DoomBuilder.Windows
 				foreach(ListViewItem lvi in listmodes.Items)
 				{
 					EditModeInfo emi = (lvi.Tag as EditModeInfo);
-					lvi.Checked = (configinfo.EditModes.ContainsKey(emi.Type.FullName) && configinfo.EditModes[emi.Type.FullName]);
+
+					//mxd. Disable item if the mode does not support current map format
+					if(emi.Attributes.SupportedMapFormats != null &&
+					    Array.IndexOf(emi.Attributes.SupportedMapFormats, gameconfig.FormatInterface) == -1) 
+					{
+						lvi.Text = emi.Attributes.DisplayName + " (map format not supported)";
+						lvi.ForeColor = SystemColors.GrayText;
+						lvi.BackColor = SystemColors.InactiveBorder;
+						lvi.Checked = false;
+					} 
+					else 
+					{
+						lvi.Text = emi.Attributes.DisplayName;
+						lvi.ForeColor = SystemColors.WindowText;
+						lvi.BackColor = SystemColors.Window;
+						lvi.Checked = (configinfo.EditModes.ContainsKey(emi.Type.FullName) && configinfo.EditModes[emi.Type.FullName]);
+					}
 				}
+
+				// Update listmodes columns width (mxd)
+				listmodes.AutoResizeColumns(ColumnHeaderAutoResizeStyle.ColumnContent);
 				
 				// Fill start modes
 				RefillStartModes();
@@ -229,6 +252,12 @@ namespace CodeImp.DoomBuilder.Windows
 		{
 			listconfigs_KeyUp(sender, new KeyEventArgs(Keys.None));
 		}
+
+		//mxd
+		private void listconfigs_ItemChecked(object sender, ItemCheckedEventArgs e) 
+		{
+			e.Item.ForeColor = (e.Item.Checked ? SystemColors.WindowText : SystemColors.InactiveCaptionText);
+		}
 		
 		// Resource locations changed
 		private void resourcelocations_OnContentChanged()
@@ -245,44 +274,72 @@ namespace CodeImp.DoomBuilder.Windows
 		// Nodebuilder selection changed
 		private void nodebuildersave_SelectedIndexChanged(object sender, EventArgs e)
 		{
-			// Leave when no configuration selected
-			if(configinfo == null) return;
+			// Leave during setup or when no configuration selected
+			if(preventchanges || configinfo == null || nodebuildersave.SelectedItem == null) return;
 			
 			// Apply to selected configuration
-			if(nodebuildersave.SelectedItem != null)
-				configinfo.NodebuilderSave = (nodebuildersave.SelectedItem as NodebuilderInfo).Name;
+			configinfo.NodebuilderSave = (nodebuildersave.SelectedItem as NodebuilderInfo).Name;
+			configinfo.Changed = true; //mxd
 		}
 
 		// Nodebuilder selection changed
 		private void nodebuildertest_SelectedIndexChanged(object sender, EventArgs e)
 		{
-			// Leave when no configuration selected
-			if(configinfo == null) return;
+			// Leave during setup or when no configuration selected
+			if(preventchanges || configinfo == null || nodebuildertest.SelectedItem == null) return;
 
 			// Apply to selected configuration
-			if(nodebuildertest.SelectedItem != null)
-				configinfo.NodebuilderTest = (nodebuildertest.SelectedItem as NodebuilderInfo).Name;
+			configinfo.NodebuilderTest = (nodebuildertest.SelectedItem as NodebuilderInfo).Name;
+			configinfo.Changed = true; //mxd
 		}
 		
 		// Test application changed
 		private void testapplication_TextChanged(object sender, EventArgs e)
 		{
-			// Leave when no configuration selected
-			if(configinfo == null) return;
+			// Leave during setup or when no configuration is selected
+			if(preventchanges || configinfo == null) return;
 
 			// Apply to selected configuration
 			configinfo.TestProgram = testapplication.Text;
+			
+			//mxd. User entered engine name before picking the engine?
+			if(cbEngineSelector.SelectedIndex == -1 || string.IsNullOrEmpty(configinfo.TestProgram))
+			{
+				ApplyTestEngineNameChange();
+			}
+			// Update engine name
+			else
+			{
+				// Use engine directory name?
+				string enginename = Path.GetDirectoryName(configinfo.TestProgram);
+				if(!string.IsNullOrEmpty(enginename))
+				{
+					int pos = enginename.LastIndexOf(Path.DirectorySeparatorChar);
+					if(pos != -1) enginename = enginename.Substring(pos + 1);
+				}
+				// Use engine filename
+				else
+				{
+					enginename = Path.GetFileNameWithoutExtension(configinfo.TestProgram);
+				}
+				
+				configinfo.TestProgramName = enginename;
+				cbEngineSelector.Items[cbEngineSelector.SelectedIndex] = enginename;
+			}
+
+			configinfo.Changed = true; //mxd
 		}
 
 		// Test parameters changed
 		private void testparameters_TextChanged(object sender, EventArgs e)
 		{
 			// Leave when no configuration selected
-			if(configinfo == null) return;
+			if(preventchanges || configinfo == null) return;
 
 			// Apply to selected configuration
 			configinfo = listconfigs.SelectedItems[0].Tag as ConfigurationInfo;
 			configinfo.TestParameters = testparameters.Text;
+			configinfo.Changed = true; //mxd
 
 			// Show example result
 			CreateParametersExample();
@@ -298,24 +355,53 @@ namespace CodeImp.DoomBuilder.Windows
 				testresult.Text = General.Map.Launcher.ConvertParameters(testparameters.Text, skill.Value, shortpaths.Checked);
 			}
 		}
+
+		//mxd
+		private void ApplyTestEngineNameChange() 
+		{
+			int index = (int)cbEngineSelector.Tag;
+			if(index != -1 && cbEngineSelector.Text != cbEngineSelector.Items[index].ToString()) 
+			{
+				cbEngineSelector.Items[index] = cbEngineSelector.Text;
+				configinfo.TestProgramName = cbEngineSelector.Text;
+				configinfo.Changed = true; //mxd
+			}
+		}
 		
 		// OK clicked
 		private void apply_Click(object sender, EventArgs e)
 		{
 			ConfigurationInfo ci;
-			
-			// Apply configuration items
-			foreach(ListViewItem lvi in listconfigs.Items)
+
+			//mxd. Check resources
+			for(int i = 0; i < listconfigs.Items.Count; i++)
 			{
 				// Get configuration item
-				ci = lvi.Tag as ConfigurationInfo;
-				
-				// Find same configuration info in originals
-				foreach(ConfigurationInfo oci in General.Configs)
+				ci = listconfigs.Items[i].Tag as ConfigurationInfo;
+				if(!ci.Resources.IsValid())
 				{
-					// Apply settings when they match
-					if(string.Compare(ci.Filename, oci.Filename) == 0) oci.Apply(ci);
+					MessageBox.Show(this, "At least one resource doesn't exist in \"" + ci.Name + "\" game configuration!", Application.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+					tabs.SelectedTab = tabresources;
+					listconfigs.Focus();
+					listconfigs.Items[i].Selected = true;
+					return;
 				}
+			}
+
+			//mxd. Apply changes of current test engine name, if there are any
+			//TODO: move engine selector stuff into separate component!
+			if(configinfo != null) ApplyTestEngineNameChange();
+
+			//mxd. Apply configuration items. They should be in the same order, riiiight?
+			for(int i = 0; i < listconfigs.Items.Count; i++) 
+			{
+				// Get configuration item
+				ci = listconfigs.Items[i].Tag as ConfigurationInfo;
+				ci.Enabled = listconfigs.Items[i].Checked;
+
+				// Apply settings
+				General.Configs[i].Enabled = ci.Enabled;
+				if(ci.Changed) General.Configs[i].Apply(ci);
 			}
 			
 			// Close
@@ -357,6 +443,7 @@ namespace CodeImp.DoomBuilder.Windows
 
 			// Apply to selected configuration
 			configinfo.CustomParameters = customparameters.Checked;
+			configinfo.Changed = true; //mxd
 
 			// Update interface
 			labelparameters.Visible = customparameters.Checked;
@@ -388,6 +475,7 @@ namespace CodeImp.DoomBuilder.Windows
 			
 			// Apply to selected configuration
 			configinfo.TestShortPaths = shortpaths.Checked;
+			configinfo.Changed = true; //mxd
 			
 			CreateParametersExample();
 		}
@@ -400,6 +488,7 @@ namespace CodeImp.DoomBuilder.Windows
 			
 			// Apply to selected configuration
 			configinfo.TestSkill = skill.Value;
+			configinfo.Changed = true; //mxd
 			
 			CreateParametersExample();
 		}
@@ -414,6 +503,7 @@ namespace CodeImp.DoomBuilder.Windows
 			{
 				// Add to texture sets
 				configinfo.TextureSets.Add(s);
+				configinfo.Changed = true; //mxd
 				ListViewItem item = listtextures.Items.Add(s.Name);
 				item.Tag = s;
 				item.ImageIndex = 0;
@@ -447,6 +537,7 @@ namespace CodeImp.DoomBuilder.Windows
 				// Remove from config info and list
 				DefinedTextureSet s = (listtextures.SelectedItems[0].Tag as DefinedTextureSet);
 				configinfo.TextureSets.Remove(s);
+				configinfo.Changed = true; //mxd
 				listtextures.SelectedItems[0].Remove();
 				reloadresources = true;
 			}
@@ -497,6 +588,7 @@ namespace CodeImp.DoomBuilder.Windows
 				}
 				listtextures.Sort();
 				reloadresources = true;
+				configinfo.Changed = true; //mxd
 			}
 		}
 		
@@ -518,14 +610,20 @@ namespace CodeImp.DoomBuilder.Windows
 				}
 				listtextures.Sort();
 				reloadresources = true;
+				configinfo.Changed = true; //mxd
 			}
 		}
 		
 		// This is called when an editing mode item is checked or unchecked
 		private void listmodes_ItemChecked(object sender, ItemCheckedEventArgs e)
 		{
+			if(preventchanges) return; //mxd
+
 			// Leave when no configuration selected
 			if(configinfo == null) return;
+
+			// mxd. Not the best way to detect a disabled item, but we will go with that...
+			if(e.Item.ForeColor == SystemColors.GrayText) e.Item.Checked = false;
 			
 			// Apply changes
 			EditModeInfo emi = (e.Item.Tag as EditModeInfo);
@@ -534,11 +632,13 @@ namespace CodeImp.DoomBuilder.Windows
 			{
 				// Add
 				configinfo.EditModes[emi.Type.FullName] = true;
+				configinfo.Changed = true; //mxd
 			}
 			else if(!e.Item.Checked && currentstate)
 			{
 				// Remove
 				configinfo.EditModes[emi.Type.FullName] = false;
+				configinfo.Changed = true; //mxd
 			}
 			
 			preventchanges = true;
@@ -577,6 +677,7 @@ namespace CodeImp.DoomBuilder.Windows
 				startmode.SelectedIndex = 0;
 				EditModeInfo emi = (startmode.SelectedItem as EditModeInfo);
 				configinfo.StartMode = emi.Type.Name;
+				configinfo.Changed = true; //mxd
 			}
 		}
 		
@@ -590,7 +691,214 @@ namespace CodeImp.DoomBuilder.Windows
 			{
 				EditModeInfo emi = (startmode.SelectedItem as EditModeInfo);
 				configinfo.StartMode = emi.Type.Name;
+				configinfo.Changed = true; //mxd
 			}
 		}
+
+		//mxd
+		private void btnNewEngine_Click(object sender, EventArgs e) 
+		{
+			// Set initial directory?
+			if(testapplication.Text.Length > 0)
+			{
+				try { testprogramdialog.InitialDirectory = Path.GetDirectoryName(testapplication.Text); }
+				catch(Exception) { }
+			}
+
+			// Browse for test program
+			if(testprogramdialog.ShowDialog() == DialogResult.OK)
+			{
+				preventchanges = true;
+
+				// Remove EngineInfos without program path
+				configinfo.TestEngines.RemoveAll(info => string.IsNullOrEmpty(info.TestProgram));
+
+				// Add new EngineInfo
+				EngineInfo newInfo = new EngineInfo();
+				newInfo.TestSkill = (int)Math.Ceiling(gameconfig.Skills.Count / 2f); // Set Medium skill level
+				configinfo.TestEngines.Add(newInfo);
+				configinfo.Changed = true;
+
+				// Refresh engines list
+				cbEngineSelector.Items.Clear();
+				foreach(EngineInfo info in configinfo.TestEngines)
+					cbEngineSelector.Items.Add(info.TestProgramName);
+
+				cbEngineSelector.SelectedIndex = configinfo.TestEngines.Count - 1;
+				btnRemoveEngine.Enabled = (configinfo.TestEngines.Count > 1);
+
+				preventchanges = false;
+
+				// Set engine path (will also update current engine name)
+				testapplication.Text = testprogramdialog.FileName;
+			}
+		}
+
+		//mxd
+		private void btnRemoveEngine_Click(object sender, EventArgs e) 
+		{
+			preventchanges = true;
+			
+			//remove params
+			int index = cbEngineSelector.SelectedIndex;
+			cbEngineSelector.SelectedIndex = -1;
+			configinfo.TestEngines.RemoveAt(index);
+			configinfo.Changed = true; //mxd
+			
+			//refresh engines list
+			cbEngineSelector.Items.Clear();
+			foreach(EngineInfo info in configinfo.TestEngines)
+				cbEngineSelector.Items.Add(info.TestProgramName);
+
+			if(index >= configinfo.TestEngines.Count)
+				index = configinfo.TestEngines.Count - 1;
+
+			cbEngineSelector.SelectedIndex = index;
+
+			if(configinfo.TestEngines.Count < 2)
+				btnRemoveEngine.Enabled = false;
+
+			preventchanges = false;
+		}
+
+		//mxd
+		private void cbEngineSelector_SelectedIndexChanged(object sender, EventArgs e) 
+		{
+			if(cbEngineSelector.SelectedIndex == -1) return;
+
+			preventchanges = true;
+			
+			//set new values
+			configinfo.CurrentEngineIndex = cbEngineSelector.SelectedIndex;
+			configinfo.Changed = true; //mxd
+			cbEngineSelector.Tag = cbEngineSelector.SelectedIndex; //store for later use
+
+			// Set test application and parameters
+			if(!configinfo.CustomParameters)
+			{
+				configinfo.TestParameters = gameconfig.TestParameters;
+				configinfo.TestShortPaths = gameconfig.TestShortPaths;
+			}
+
+			configinfo.TestProgramName = cbEngineSelector.Text;
+			testapplication.Text = configinfo.TestProgram;
+			testparameters.Text = configinfo.TestParameters;
+			shortpaths.Checked = configinfo.TestShortPaths;
+			
+			int skilllevel = configinfo.TestSkill;
+			skill.Value = skilllevel - 1; //mxd. WHY???
+			skill.Value = skilllevel;
+			customparameters.Checked = configinfo.CustomParameters;
+
+			preventchanges = false;
+		}
+
+		//mxd
+		private void cbEngineSelector_DropDown(object sender, EventArgs e) 
+		{
+			ApplyTestEngineNameChange();
+		}
+
+		//mxd
+		private void ConfigForm_Shown(object sender, EventArgs e) 
+		{
+			if(listconfigs.SelectedItems.Count > 0) listconfigs.SelectedItems[0].EnsureVisible();
+		}
+
+		#region ============= Copy/Paste context menu (mxd)
+
+		private void copypastemenu_Opening(object sender, System.ComponentModel.CancelEventArgs e) 
+		{
+			if(listconfigs.SelectedIndices.Count < 1) 
+			{
+				e.Cancel = true;
+				return;
+			}
+
+			ConfigurationInfo current = listconfigs.SelectedItems[0].Tag as ConfigurationInfo;
+			bool havecopiedconfig = configinfocopy != null;
+			bool formatinterfacesmatch = havecopiedconfig && current.FormatInterface == configinfocopy.FormatInterface;
+
+			pasteall.Enabled = formatinterfacesmatch;
+			pasteengines.Enabled = (havecopiedconfig && configinfocopy.TestEngines.Count > 0);
+			pasteresources.Enabled = (havecopiedconfig && configinfocopy.Resources.Count > 0);
+			pastecolorpresets.Enabled = (formatinterfacesmatch && configinfocopy.LinedefColorPresets.Length > 0);
+		}
+
+		private void copyall_Click(object sender, EventArgs e) 
+		{
+			if(listconfigs.SelectedIndices.Count < 1) return;
+			ConfigurationInfo current = listconfigs.SelectedItems[0].Tag as ConfigurationInfo;
+			configinfocopy = current.Clone();
+
+			//display info
+			General.Interface.DisplayStatus(StatusType.Info, "Copied \"" + configinfocopy.Name + "\" game configuration");
+		}
+
+		private void pasteall_Click(object sender, EventArgs e) 
+		{
+			if(listconfigs.SelectedIndices.Count < 1) return;
+
+			// Get current configinfo
+			ConfigurationInfo current = listconfigs.SelectedItems[0].Tag as ConfigurationInfo;
+			current.PasteFrom(configinfocopy);
+
+			// Update display
+			cbEngineSelector.Text = string.Empty; // Otherwise current text from cbEngineSelector will override the pasted one
+			listconfigs_SelectedIndexChanged(listconfigs, EventArgs.Empty);
+			
+			// Resources need reloading?
+			if(General.Map != null && General.Map.ConfigSettings.Name == current.Name)
+				reloadresources = true;
+			
+			General.Interface.DisplayStatus(StatusType.Info, "Pasted game configuration from \"" + configinfocopy.Name + "\"");
+		}
+
+		private void pasteresources_Click(object sender, EventArgs e) 
+		{
+			if(listconfigs.SelectedIndices.Count < 1) return;
+
+			// Get current configinfo
+			ConfigurationInfo current = listconfigs.SelectedItems[0].Tag as ConfigurationInfo;
+			current.PasteResourcesFrom(configinfocopy);
+
+			// Update display
+			listconfigs_SelectedIndexChanged(listconfigs, EventArgs.Empty);
+
+			// Resources need reloading?
+			if(General.Map != null && General.Map.ConfigSettings.Name == current.Name)
+				reloadresources = true;
+			
+			General.Interface.DisplayStatus(StatusType.Info, "Pasted resources from \"" + configinfocopy.Name + "\"");
+		}
+
+		private void pasteengines_Click(object sender, EventArgs e) 
+		{
+			if(listconfigs.SelectedIndices.Count < 1) return;
+
+			// Get current configinfo
+			ConfigurationInfo current = listconfigs.SelectedItems[0].Tag as ConfigurationInfo;
+			current.PasteTestEnginesFrom(configinfocopy);
+
+			// Update display
+			cbEngineSelector.Text = string.Empty; // Otherwise current text from cbEngineSelector will override the pasted one
+			listconfigs_SelectedIndexChanged(listconfigs, EventArgs.Empty);
+			General.Interface.DisplayStatus(StatusType.Info, "Pasted engines list from \"" + configinfocopy.Name + "\"");
+		}
+
+		private void pastecolorpresets_Click(object sender, EventArgs e) 
+		{
+			if(listconfigs.SelectedIndices.Count < 1) return;
+
+			// Get current configinfo
+			ConfigurationInfo current = listconfigs.SelectedItems[0].Tag as ConfigurationInfo;
+			current.PasteColorPresetsFrom(configinfocopy);
+
+			// Update display
+			listconfigs_SelectedIndexChanged(listconfigs, EventArgs.Empty);
+			General.Interface.DisplayStatus(StatusType.Info, "Pasted color presets from \"" + configinfocopy.Name + "\"");
+		}
+
+		#endregion
 	}
 }

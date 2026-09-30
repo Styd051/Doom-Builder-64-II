@@ -17,26 +17,25 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Windows.Forms;
+using System.Drawing;
 using System.IO;
 using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Geometry;
-using System.Drawing;
-using CodeImp.DoomBuilder.Editing;
-using CodeImp.DoomBuilder.Plugins;
-using CodeImp.DoomBuilder.Types;
+using System.Runtime.InteropServices;
+using System.Windows.Forms;
+using CodeImp.DoomBuilder.Actions;
+using CodeImp.DoomBuilder.BuilderModes.Interface;
+using CodeImp.DoomBuilder.BuilderModes.IO;
 using CodeImp.DoomBuilder.Config;
-using CodeImp.DoomBuilder.Data;
 using CodeImp.DoomBuilder.Controls;
+using CodeImp.DoomBuilder.Data;
+using CodeImp.DoomBuilder.Editing;
+using CodeImp.DoomBuilder.Geometry;
+using CodeImp.DoomBuilder.Map;
+using CodeImp.DoomBuilder.Plugins;
+using CodeImp.DoomBuilder.Rendering;
+using CodeImp.DoomBuilder.Types;
+using CodeImp.DoomBuilder.Windows;
 
 #endregion
 
@@ -59,6 +58,26 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		
 		#endregion
 
+		#region ================== Structs (mxd)
+
+		public struct MakeDoorSettings
+		{
+			public readonly string DoorTexture;
+			public readonly string TrackTexture;
+			public readonly string CeilingTexture;
+			public readonly bool ResetOffsets;
+
+			public MakeDoorSettings(string doortexture, string tracktexture, string ceilingtexture, bool resetoffsets)
+			{
+				DoorTexture = doortexture;
+				TrackTexture = tracktexture;
+				CeilingTexture = ceilingtexture;
+				ResetOffsets = resetoffsets;
+			}
+		}
+
+		#endregion
+
 		#region ================== Variables
 
 		// Static instance
@@ -66,7 +85,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		
 		// Main objects
 		private MenusForm menusform;
-		private CurveLinedefsForm curvelinedefsform;
 		private FindReplaceForm findreplaceform;
 		private ErrorCheckForm errorcheckform;
 		private PreferencesForm preferencesform;
@@ -74,6 +92,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// Dockers
 		private UndoRedoPanel undoredopanel;
 		private Docker undoredodocker;
+		private SectorDrawingOptionsPanel drawingOverridesPanel; //mxd
+		private Docker drawingOverridesDocker; //mxd
 		
 		// Settings
 		private int showvisualthings;			// 0 = none, 1 = sprite only, 2 = sprite caged
@@ -93,32 +113,37 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		private LinedefProperties copiedlinedefprops;
 		private ThingProperties copiedthingprops;
 		private bool viewselectionnumbers;
+		private bool viewselectioneffects; //mxd
 		private float stitchrange;
 		private float highlightrange;
 		private float highlightthingsrange;
 		private float splitlinedefsrange;
-		private bool usehighlight;
 		private bool autodragonpaste;
-
-        // villsa
-        private Lights[] sectorlights;
+		private bool autoAlignTextureOffsetsOnCreate;//mxd
+		private bool dontMoveGeometryOutsideMapBoundary;//mxd
+		private bool autoDrawOnEdit; //mxd
+		private bool marqueSelectTouching; //mxd. Select elements partially/fully inside of marque selection?
+		private bool syncSelection; //mxd. Sync selection between Visual and Classic modes.
+		private bool lockSectorTextureOffsetsWhileDragging; //mxd
+		private bool syncthingedit; //mxd
+		private bool alphabasedtexturehighlighting; //mxd
+		private bool showlightradii; //mxd
+		private bool showsoundradii; //mxd
 		
 		#endregion
 
 		#region ================== Properties
 		
-		public override string Name { get { return "Doom Builder"; } }
+		public override string Name { get { return "GZDoom Builder"; } } //mxd
 		public static BuilderPlug Me { get { return me; } }
 
-		// It is only safe to do this dynamically because we compile and distribute both
-		// the core and this plugin together with the same revision number! In third party
-		// plugins this should just contain a fixed number.
+		//mxd. BuilderModes.dll revision should always match the main module revision
+		public override bool StrictRevisionMatching { get { return true; } }
 		public override int MinimumRevision { get { return Assembly.GetExecutingAssembly().GetName().Version.Revision; } }
 		
 		public MenusForm MenusForm { get { return menusform; } }
-		public CurveLinedefsForm CurveLinedefsForm { get { return curvelinedefsform; } }
-		public FindReplaceForm FindReplaceForm { get { return findreplaceform; } }
-		public ErrorCheckForm ErrorCheckForm { get { return errorcheckform; } }
+		public FindReplaceForm FindReplaceForm { get { return findreplaceform ?? (findreplaceform = new FindReplaceForm()); } }
+		public ErrorCheckForm ErrorCheckForm { get { return errorcheckform ?? (errorcheckform = new ErrorCheckForm()); } }
 		public PreferencesForm PreferencesForm { get { return preferencesform; } }
 
 		// Settings
@@ -139,15 +164,26 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		public LinedefProperties CopiedLinedefProps { get { return copiedlinedefprops; } set { copiedlinedefprops = value; } }
 		public ThingProperties CopiedThingProps { get { return copiedthingprops; } set { copiedthingprops = value; } }
 		public bool ViewSelectionNumbers { get { return viewselectionnumbers; } set { viewselectionnumbers = value; } }
-		public float StitchRange { get { return stitchrange; } }
+		public bool ViewSelectionEffects { get { return viewselectioneffects; } set { viewselectioneffects = value; } } //mxd
+		public float StitchRange { get { return stitchrange; } internal set { stitchrange = value; } }
 		public float HighlightRange { get { return highlightrange; } }
 		public float HighlightThingsRange { get { return highlightthingsrange; } }
 		public float SplitLinedefsRange { get { return splitlinedefsrange; } }
-		public bool UseHighlight { get { return usehighlight; } set { usehighlight = value; } }
 		public bool AutoDragOnPaste { get { return autodragonpaste; } set { autodragonpaste = value; } }
-        //villsa
-        public Lights[] CopiedLights { get { return sectorlights; } set { sectorlights = value; } }
-		
+		public bool AutoDrawOnEdit { get { return autoDrawOnEdit; } set { autoDrawOnEdit = value; } } //mxd
+		public bool AutoAlignTextureOffsetsOnCreate { get { return autoAlignTextureOffsetsOnCreate; } set { autoAlignTextureOffsetsOnCreate = value; } } //mxd
+		public bool DontMoveGeometryOutsideMapBoundary { get { return dontMoveGeometryOutsideMapBoundary; } set { DontMoveGeometryOutsideMapBoundary = value; } } //mxd
+		public bool MarqueSelectTouching { get { return marqueSelectTouching; } set { marqueSelectTouching = value; } } //mxd
+		public bool SyncSelection { get { return syncSelection; } set { syncSelection = value; } } //mxd
+		public bool LockSectorTextureOffsetsWhileDragging { get { return lockSectorTextureOffsetsWhileDragging; } internal set { lockSectorTextureOffsetsWhileDragging = value; } } //mxd
+		public bool SyncronizeThingEdit { get { return syncthingedit; } internal set { syncthingedit = value; } } //mxd
+		public bool AlphaBasedTextureHighlighting { get { return alphabasedtexturehighlighting; } internal set { alphabasedtexturehighlighting = value; } } //mxd
+		public bool ShowLightRadii { get { return showlightradii; } internal set { showlightradii = value; } } //mxd
+		public bool ShowSoundRadii { get { return showsoundradii; } internal set { showsoundradii = value; } } //mxd
+
+		//mxd. "Make Door" action persistent settings
+		internal MakeDoorSettings MakeDoor;
+
 		#endregion
 
 		#region ================== Initialize / Dispose
@@ -161,29 +197,32 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			// Settings
 			showvisualthings = 2;
 			usegravity = false;
-			usehighlight = true;
 			LoadSettings();
+			LoadUISettings(); //mxd
 			
 			// Load menus form and register it
 			menusform = new MenusForm();
 			menusform.Register();
-			
-			// Load curve linedefs form
-			curvelinedefsform = new CurveLinedefsForm();
-			
-			// Load find/replace form
-			findreplaceform = new FindReplaceForm();
-			
-			// Load error checking form
-			errorcheckform = new ErrorCheckForm();
-
-            // villsa
-            sectorlights = new Lights[5];
+			menusform.TextureOffsetLock.Checked = lockSectorTextureOffsetsWhileDragging; //mxd
+			menusform.SyncronizeThingEditButton.Checked = syncthingedit; //mxd
+			menusform.SyncronizeThingEditSectorsItem.Checked = syncthingedit; //mxd
+			menusform.SyncronizeThingEditLinedefsItem.Checked = syncthingedit; //mxd
+			menusform.ItemLightRadii.Checked = showlightradii;
+			menusform.ButtonLightRadii.Checked = showlightradii;
+			menusform.ItemSoundRadii.Checked = showsoundradii;
+			menusform.ButtonSoundRadii.Checked = showsoundradii;
 			
 			// Load Undo\Redo docker
 			undoredopanel = new UndoRedoPanel();
 			undoredodocker = new Docker("undoredo", "Undo / Redo", undoredopanel);
 			General.Interface.AddDocker(undoredodocker);
+
+			//mxd. Create Overrides docker
+			drawingOverridesPanel = new SectorDrawingOptionsPanel();
+			drawingOverridesDocker = new Docker("drawingoverrides", "Draw Settings", drawingOverridesPanel);
+
+			//mxd
+			General.Actions.BindMethods(this);
 		}
 		
 		// Disposer
@@ -194,16 +233,24 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			{
 				// Clean up
 				General.Interface.RemoveDocker(undoredodocker);
+
 				undoredopanel.Dispose();
+				drawingOverridesPanel.Dispose(); //mxd
 				menusform.Unregister();
 				menusform.Dispose();
 				menusform = null;
-				curvelinedefsform.Dispose();
-				curvelinedefsform = null;
-				findreplaceform.Dispose();
-				findreplaceform = null;
-				errorcheckform.Dispose();
-				errorcheckform = null;
+
+				//mxd. These are created on demand, so they may be nulls.
+				if(findreplaceform != null)
+				{
+					findreplaceform.Dispose();
+					findreplaceform = null;
+				}
+				if(errorcheckform != null)
+				{
+					errorcheckform.Dispose();
+					errorcheckform = null;
+				}
 				
 				// Done
 				me = null;
@@ -224,12 +271,49 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			additiveselect = General.Settings.ReadPluginSetting("additiveselect", false);
 			autoclearselection = General.Settings.ReadPluginSetting("autoclearselection", false);
 			visualmodeclearselection = General.Settings.ReadPluginSetting("visualmodeclearselection", false);
-			viewselectionnumbers = General.Settings.ReadPluginSetting("viewselectionnumbers", true);
-			stitchrange = (float)General.Settings.ReadPluginSetting("stitchrange", 20);
-			highlightrange = (float)General.Settings.ReadPluginSetting("highlightrange", 20);
-			highlightthingsrange = (float)General.Settings.ReadPluginSetting("highlightthingsrange", 10);
-			splitlinedefsrange = (float)General.Settings.ReadPluginSetting("splitlinedefsrange", 10);
+			stitchrange = General.Settings.ReadPluginSetting("stitchrange", 20);
+			highlightrange = General.Settings.ReadPluginSetting("highlightrange", 20);
+			highlightthingsrange = General.Settings.ReadPluginSetting("highlightthingsrange", 10);
+			splitlinedefsrange = General.Settings.ReadPluginSetting("splitlinedefsrange", 10);
 			autodragonpaste = General.Settings.ReadPluginSetting("autodragonpaste", false);
+			autoDrawOnEdit = General.Settings.ReadPluginSetting("autodrawonedit", true); //mxd
+			autoAlignTextureOffsetsOnCreate = General.Settings.ReadPluginSetting("autoaligntextureoffsetsoncreate", false); //mxd
+			dontMoveGeometryOutsideMapBoundary = General.Settings.ReadPluginSetting("dontmovegeometryoutsidemapboundary", false); //mxd
+			syncSelection = General.Settings.ReadPluginSetting("syncselection", false); //mxd
+		}
+
+		//mxd. Load settings, which can be changed via UI
+		private void LoadUISettings()
+		{
+			lockSectorTextureOffsetsWhileDragging = General.Settings.ReadPluginSetting("locktextureoffsets", false);
+			viewselectionnumbers = General.Settings.ReadPluginSetting("viewselectionnumbers", true);
+			viewselectioneffects = General.Settings.ReadPluginSetting("viewselectioneffects", true);
+			syncthingedit = General.Settings.ReadPluginSetting("syncthingedit", true);
+			alphabasedtexturehighlighting = General.Settings.ReadPluginSetting("alphabasedtexturehighlighting", true);
+			showlightradii = General.Settings.ReadPluginSetting("showlightradii", true);
+			showsoundradii = General.Settings.ReadPluginSetting("showsoundradii", true);
+		}
+
+		//mxd. Save settings, which can be changed via UI
+		private void SaveUISettings() 
+		{
+			General.Settings.WritePluginSetting("locktextureoffsets", lockSectorTextureOffsetsWhileDragging);
+			General.Settings.WritePluginSetting("viewselectionnumbers", viewselectionnumbers);
+			General.Settings.WritePluginSetting("viewselectioneffects", viewselectioneffects);
+			General.Settings.WritePluginSetting("syncthingedit", syncthingedit);
+			General.Settings.WritePluginSetting("alphabasedtexturehighlighting", alphabasedtexturehighlighting);
+			General.Settings.WritePluginSetting("showlightradii", showlightradii);
+			General.Settings.WritePluginSetting("showsoundradii", showsoundradii);
+		}
+
+		//mxd. These should be reset when changing maps
+		private void ResetCopyProperties()
+		{
+			copiedvertexprops = null;
+			copiedthingprops = null;
+			copiedlinedefprops = null;
+			copiedsidedefprops = null;
+			copiedsectorprops = null;
 		}
 
 		#endregion
@@ -242,15 +326,48 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			ImageData img = General.Map.Data.GetFlatImage(s.LongFloorTexture);
 			if((img != null) && img.IsImageLoaded)
 			{
-				// Make scalars
-				float sw = 1.0f / img.ScaledWidth;
-				float sh = 1.0f / img.ScaledHeight;
-				
-				// Make proper texture coordinates
-				for(int i = 0; i < vertices.Length; i++)
+				//mxd. Merged from GZDoomEditing plugin
+				if(General.Map.UDMF) 
 				{
-					vertices[i].u = vertices[i].u * sw;
-					vertices[i].v = -vertices[i].v * sh;
+					// Fetch ZDoom fields
+					Vector2D offset = new Vector2D(s.Fields.GetValue("xpanningfloor", 0.0f),
+												   s.Fields.GetValue("ypanningfloor", 0.0f));
+					Vector2D scale = new Vector2D(s.Fields.GetValue("xscalefloor", 1.0f),
+												  s.Fields.GetValue("yscalefloor", 1.0f));
+					float rotate = s.Fields.GetValue("rotationfloor", 0.0f);
+					int color, light;
+					bool absolute;
+
+					//mxd. Apply GLDEFS override?
+					if(General.Map.Data.GlowingFlats.ContainsKey(s.LongFloorTexture) 
+						&& General.Map.Data.GlowingFlats[s.LongFloorTexture].Fullbright)
+					{
+						color = -1;
+						light = 255;
+						absolute = true;
+					}
+					else
+					{
+                        color = PixelColor.Modulate(PixelColor.FromInt(s.Fields.GetValue("lightcolor", -1)), PixelColor.FromInt(s.Fields.GetValue("color_floor", -1))).ToInt();
+						light = s.Fields.GetValue("lightfloor", 0);
+						absolute = s.Fields.GetValue("lightfloorabsolute", false);
+					}
+
+					// Setup the vertices with the given settings
+					SetupSurfaceVertices(vertices, s, img, offset, scale, rotate, color, light, absolute);
+				} 
+				else 
+				{
+					// Make scalars
+					float sw = 1.0f / img.ScaledWidth;
+					float sh = 1.0f / img.ScaledHeight;
+
+					// Make proper texture coordinates
+					for(int i = 0; i < vertices.Length; i++) 
+					{
+						vertices[i].u = vertices[i].u * sw;
+						vertices[i].v = -vertices[i].v * sh;
+					}
 				}
 			}
 		}
@@ -261,15 +378,48 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			ImageData img = General.Map.Data.GetFlatImage(s.LongCeilTexture);
 			if((img != null) && img.IsImageLoaded)
 			{
-				// Make scalars
-				float sw = 1.0f / img.ScaledWidth;
-				float sh = 1.0f / img.ScaledHeight;
-
-				// Make proper texture coordinates
-				for(int i = 0; i < vertices.Length; i++)
+				//mxd. Merged from GZDoomEditing plugin
+				if(General.Map.UDMF) 
 				{
-					vertices[i].u = vertices[i].u * sw;
-					vertices[i].v = -vertices[i].v * sh;
+					// Fetch ZDoom fields
+					Vector2D offset = new Vector2D(s.Fields.GetValue("xpanningceiling", 0.0f),
+												   s.Fields.GetValue("ypanningceiling", 0.0f));
+					Vector2D scale = new Vector2D(s.Fields.GetValue("xscaleceiling", 1.0f),
+												  s.Fields.GetValue("yscaleceiling", 1.0f));
+					float rotate = s.Fields.GetValue("rotationceiling", 0.0f);
+					int color, light;
+					bool absolute;
+
+					//mxd. Apply GLDEFS override?
+					if(General.Map.Data.GlowingFlats.ContainsKey(s.LongCeilTexture)
+						&& General.Map.Data.GlowingFlats[s.LongCeilTexture].Fullbright)
+					{
+						color = -1;
+						light = 255;
+						absolute = true;
+					} 
+					else 
+					{
+                        color = PixelColor.Modulate(PixelColor.FromInt(s.Fields.GetValue("lightcolor", -1)), PixelColor.FromInt(s.Fields.GetValue("color_ceiling", -1))).ToInt();
+                        light = s.Fields.GetValue("lightceiling", 0);
+						absolute = s.Fields.GetValue("lightceilingabsolute", false);
+					}
+
+					// Setup the vertices with the given settings
+					SetupSurfaceVertices(vertices, s, img, offset, scale, rotate, color, light, absolute);
+				} 
+				else 
+				{
+					// Make scalars
+					float sw = 1.0f / img.ScaledWidth;
+					float sh = 1.0f / img.ScaledHeight;
+
+					// Make proper texture coordinates
+					for(int i = 0; i < vertices.Length; i++) 
+					{
+						vertices[i].u = vertices[i].u * sw;
+						vertices[i].v = -vertices[i].v * sh;
+					}
 				}
 			}
 		}
@@ -312,6 +462,12 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			base.OnMapNewEnd();
 			undoredopanel.SetBeginDescription("New Map");
 			undoredopanel.UpdateList();
+
+			//mxd
+			General.Interface.AddDocker(drawingOverridesDocker);
+			drawingOverridesPanel.Setup();
+			MakeDoor = new MakeDoorSettings(General.Map.Config.MakeDoorDoor, General.Map.Config.MakeDoorTrack, General.Map.Config.MakeDoorCeiling, MakeDoor.ResetOffsets);
+			ResetCopyProperties();
 		}
 		
 		// Map opened
@@ -320,6 +476,20 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			base.OnMapOpenEnd();
 			undoredopanel.SetBeginDescription("Opened Map");
 			undoredopanel.UpdateList();
+
+			//mxd
+			General.Interface.AddDocker(drawingOverridesDocker);
+			drawingOverridesPanel.Setup();
+			General.Map.Renderer2D.UpdateExtraFloorFlag();
+			MakeDoor = new MakeDoorSettings(General.Map.Config.MakeDoorDoor, General.Map.Config.MakeDoorTrack, General.Map.Config.MakeDoorCeiling, MakeDoor.ResetOffsets);
+			ResetCopyProperties();
+		}
+
+		//mxd
+		public override void OnMapCloseBegin()
+		{
+			drawingOverridesPanel.Terminate();
+			General.Interface.RemoveDocker(drawingOverridesDocker);
 		}
 		
 		// Map closed
@@ -327,6 +497,16 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		{
 			base.OnMapCloseEnd();
 			undoredopanel.UpdateList();
+			errorcheckform = null; //mxd. Error checks may need to be reinitialized
+
+			//mxd. Save settings
+			SaveUISettings();
+		}
+
+		//mxd. Error checks may need to be reinitialized
+		public override void OnMapReconfigure()
+		{
+			errorcheckform = null;
 		}
 		
 		// Redo performed
@@ -360,15 +540,41 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		#endregion
 		
 		#region ================== Tools
+
+		//mxd. merged from GZDoomEditing plugin
+		// This applies the given values on the vertices
+		private static void SetupSurfaceVertices(FlatVertex[] vertices, Sector s, ImageData img, Vector2D offset,
+										  Vector2D scale, float rotate, int color, int light, bool absolute) 
+		{
+			// Prepare for math!
+			rotate = Angle2D.DegToRad(rotate);
+			Vector2D texscale = new Vector2D(1.0f / img.ScaledWidth, 1.0f / img.ScaledHeight);
+			if(!absolute) light = s.Brightness + light;
+			PixelColor lightcolor = PixelColor.FromInt(color);
+			PixelColor brightness = PixelColor.FromInt(General.Map.Renderer2D.CalculateBrightness(light));
+			PixelColor finalcolor = PixelColor.Modulate(lightcolor, brightness);
+            color = finalcolor.WithAlpha(255).ToInt();
+
+			// Do the math for all vertices
+			for(int i = 0; i < vertices.Length; i++) 
+			{
+				Vector2D pos = new Vector2D(vertices[i].x, vertices[i].y);
+				pos = pos.GetRotated(rotate);
+				pos.y = -pos.y;
+				pos = (pos + offset) * scale * texscale;
+				vertices[i].u = pos.x;
+				vertices[i].v = pos.y;
+				vertices[i].c = color;
+			}
+		}
 		
 		// This finds all class types that inherits from the given type
 		public Type[] FindClasses(Type t)
 		{
 			List<Type> found = new List<Type>();
-			Type[] types;
 
 			// Get all exported types
-			types = Assembly.GetExecutingAssembly().GetTypes();
+			Type[] types = Assembly.GetExecutingAssembly().GetTypes();
 			foreach(Type it in types)
 			{
 				// Compare types
@@ -380,99 +586,200 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		}
 		
 		// This renders the associated sectors/linedefs with the indication color
-		public void PlotAssociations(IRenderer2D renderer, Association asso)
+		public static void PlotAssociations(IRenderer2D renderer, Association asso, List<Line3D> eventlines) 
 		{
 			// Tag must be above zero
-			if(asso.tag <= 0) return;
+			if(General.GetByIndex(asso.Tags, 0) < 1) return;
 			
 			// Sectors?
-			if(asso.type == UniversalType.SectorTag)
+			switch(asso.Type)
 			{
-				foreach(Sector s in General.Map.Map.Sectors)
-					if(s.Tag == asso.tag) renderer.PlotSector(s, General.Colors.Indication);
-			}
-			// Linedefs?
-			else if(asso.type == UniversalType.LinedefTag)
-			{
-				foreach(Linedef l in General.Map.Map.Linedefs)
-					if(l.Tag == asso.tag) renderer.PlotLinedef(l, General.Colors.Indication);
+				case UniversalType.SectorTag: {
+					foreach(Sector s in General.Map.Map.Sectors)
+					{
+						if(!asso.Tags.Overlaps(s.Tags))continue;
+						renderer.PlotSector(s, General.Colors.Indication);
+						
+						if(!General.Settings.GZShowEventLines) continue;
+						Vector2D end = (s.Labels.Count > 0 ? s.Labels[0].position : new Vector2D(s.BBox.X + s.BBox.Width / 2, s.BBox.Y + s.BBox.Height / 2));
+						eventlines.Add(new Line3D(asso.Center, end)); //mxd
+					}
+					break;
+				}
+
+				case UniversalType.LinedefTag: {
+					foreach(Linedef l in General.Map.Map.Linedefs) 
+					{
+						if(!asso.Tags.Overlaps(l.Tags)) continue;
+						renderer.PlotLinedef(l, General.Colors.Indication);
+						if(General.Settings.GZShowEventLines) eventlines.Add(new Line3D(asso.Center, l.GetCenterPoint())); //mxd
+					}
+					break;
+				}
 			}
 		}
-		
 
 		// This renders the associated things with the indication color
-		public void RenderAssociations(IRenderer2D renderer, Association asso)
+		public static void RenderAssociations(IRenderer2D renderer, Association asso, List<Line3D> eventlines)
 		{
 			// Tag must be above zero
-			if(asso.tag <= 0) return;
+			if(General.GetByIndex(asso.Tags, 0) < 1) return;
 
 			// Things?
-			if(asso.type == UniversalType.ThingTag)
+			switch(asso.Type)
 			{
-				foreach(Thing t in General.Map.Map.Things)
-					if(t.Tag == asso.tag) renderer.RenderThing(t, General.Colors.Indication, 1.0f);
+				case UniversalType.ThingTag:
+					foreach(Thing t in General.Map.Map.Things)
+					{
+						if(!asso.Tags.Contains(t.Tag)) continue;
+
+						//Do not draw the association if the user is hovering over a child link
+						ThingTypeInfo ti = General.Map.Data.GetThingInfoEx(t.Type);
+						if (ti != null && ti.ThingLink < 0)
+							continue;
+
+						renderer.RenderThing(t, General.Colors.Indication, General.Settings.ActiveThingsAlpha);
+						if(General.Settings.GZShowEventLines) eventlines.Add(new Line3D(asso.Center, t.Position)); //mxd
+					}
+					break;
+
+				case UniversalType.SectorTag:
+					foreach(Sector s in General.Map.Map.Sectors) 
+					{
+						if(!asso.Tags.Overlaps(s.Tags)) continue;
+						int highlightedColor = General.Colors.Highlight.WithAlpha(128).ToInt();
+						FlatVertex[] verts = new FlatVertex[s.FlatVertices.Length];
+						s.FlatVertices.CopyTo(verts, 0);
+						for(int i = 0; i < verts.Length; i++) verts[i].c = highlightedColor;
+						renderer.RenderGeometry(verts, null, true);
+					}
+					break;
 			}
 		}
-		
 
 		// This renders the associated sectors/linedefs with the indication color
-		public void PlotReverseAssociations(IRenderer2D renderer, Association asso)
+		public static void PlotReverseAssociations(IRenderer2D renderer, Association asso, List<Line3D> eventlines)
 		{
 			// Tag must be above zero
-			if(asso.tag <= 0) return;
+			if(General.GetByIndex(asso.Tags, 0) < 1) return;
 			
 			// Doom style referencing to sectors?
-			if(General.Map.Config.LineTagIndicatesSectors && (asso.type == UniversalType.SectorTag))
+			if(General.Map.Config.LineTagIndicatesSectors && (asso.Type == UniversalType.SectorTag))
 			{
 				// Linedefs
 				foreach(Linedef l in General.Map.Map.Linedefs)
 				{
 					// Any action on this line?
-					if(l.Action > 0)
-					{
-						if(l.Tag == asso.tag) renderer.PlotLinedef(l, General.Colors.Indication);
-					}
+					if(l.Action <= 0 || !asso.Tags.Overlaps(l.Tags)) continue;
+					renderer.PlotLinedef(l, General.Colors.Indication);
+					if(General.Settings.GZShowEventLines) eventlines.Add(new Line3D(l.GetCenterPoint(), asso.Center)); //mxd
 				}
 			}
-			else
+
+			// Linedefs
+			foreach(Linedef l in General.Map.Map.Linedefs)
 			{
-				// Linedefs
-				foreach(Linedef l in General.Map.Map.Linedefs)
+				// Known action on this line?
+				if((l.Action > 0) && General.Map.Config.LinedefActions.ContainsKey(l.Action))
 				{
-					// Known action on this line?
-					if((l.Action > 0) && General.Map.Config.LinedefActions.ContainsKey(l.Action))
+					LinedefActionInfo action = General.Map.Config.LinedefActions[l.Action];
+					if( ((action.Args[0].Type == (int)asso.Type) && (asso.Tags.Contains(l.Args[0]))) ||
+						((action.Args[1].Type == (int)asso.Type) && (asso.Tags.Contains(l.Args[1]))) ||
+						((action.Args[2].Type == (int)asso.Type) && (asso.Tags.Contains(l.Args[2]))) ||
+						((action.Args[3].Type == (int)asso.Type) && (asso.Tags.Contains(l.Args[3]))) ||
+						((action.Args[4].Type == (int)asso.Type) && (asso.Tags.Contains(l.Args[4]))))
 					{
-						LinedefActionInfo action = General.Map.Config.LinedefActions[l.Action];
-						if((action.Args[0].Type == (int)asso.type) && (l.Args[0] == asso.tag)) renderer.PlotLinedef(l, General.Colors.Indication);
-						if((action.Args[1].Type == (int)asso.type) && (l.Args[1] == asso.tag)) renderer.PlotLinedef(l, General.Colors.Indication);
-						if((action.Args[2].Type == (int)asso.type) && (l.Args[2] == asso.tag)) renderer.PlotLinedef(l, General.Colors.Indication);
-						if((action.Args[3].Type == (int)asso.type) && (l.Args[3] == asso.tag)) renderer.PlotLinedef(l, General.Colors.Indication);
-						if((action.Args[4].Type == (int)asso.type) && (l.Args[4] == asso.tag)) renderer.PlotLinedef(l, General.Colors.Indication);
+						renderer.PlotLinedef(l, General.Colors.Indication);
+						if(General.Settings.GZShowEventLines) eventlines.Add(new Line3D(l.GetCenterPoint(), asso.Center)); //mxd
 					}
 				}
 			}
 		}
-		
 
 		// This renders the associated things with the indication color
-		public void RenderReverseAssociations(IRenderer2D renderer, Association asso)
+		public static void RenderReverseAssociations(IRenderer2D renderer, Association asso, List<Line3D> eventlines)
 		{
 			// Tag must be above zero
-			if(asso.tag <= 0) return;
+			if(General.GetByIndex(asso.Tags, 0) < 1) return;
 
 			// Things
 			foreach(Thing t in General.Map.Map.Things)
 			{
+				// Get the thing type info
+				ThingTypeInfo ti = General.Map.Data.GetThingInfoEx(t.Type);
+
 				// Known action on this thing?
 				if((t.Action > 0) && General.Map.Config.LinedefActions.ContainsKey(t.Action))
 				{
+					//Do not draw the association if this is a child link.
+					//  This prevents a reverse link to a thing via an argument, when it should be a direct tag-to-tag link instead.
+					if(ti != null && asso.DirectLinkType < 0 && asso.DirectLinkType != -t.Type)
+						continue;
+
 					LinedefActionInfo action = General.Map.Config.LinedefActions[t.Action];
-					if((action.Args[0].Type == (int)asso.type) && (t.Args[0] == asso.tag)) renderer.RenderThing(t, General.Colors.Indication, 1.0f);
-					if((action.Args[1].Type == (int)asso.type) && (t.Args[1] == asso.tag)) renderer.RenderThing(t, General.Colors.Indication, 1.0f);
-					if((action.Args[2].Type == (int)asso.type) && (t.Args[2] == asso.tag)) renderer.RenderThing(t, General.Colors.Indication, 1.0f);
-					if((action.Args[3].Type == (int)asso.type) && (t.Args[3] == asso.tag)) renderer.RenderThing(t, General.Colors.Indication, 1.0f);
-					if((action.Args[4].Type == (int)asso.type) && (t.Args[4] == asso.tag)) renderer.RenderThing(t, General.Colors.Indication, 1.0f);
+					if(  ((action.Args[0].Type == (int)asso.Type) && (asso.Tags.Contains(t.Args[0]))) ||
+						 ((action.Args[1].Type == (int)asso.Type) && (asso.Tags.Contains(t.Args[1]))) ||
+						 ((action.Args[2].Type == (int)asso.Type) && (asso.Tags.Contains(t.Args[2]))) ||
+						 ((action.Args[3].Type == (int)asso.Type) && (asso.Tags.Contains(t.Args[3]))) ||
+						 ((action.Args[4].Type == (int)asso.Type) && (asso.Tags.Contains(t.Args[4]))))
+					{
+						renderer.RenderThing(t, General.Colors.Indication, General.Settings.ActiveThingsAlpha);
+						if(General.Settings.GZShowEventLines) eventlines.Add(new Line3D(t.Position, asso.Center)); //mxd
+					}
+
+					//If there is a link setup on this thing, and it matches the association, then draw a direct link to any matching tag
+					if(ti != null && asso.DirectLinkType == t.Type && asso.Tags.Contains(t.Tag))
+					{
+						renderer.RenderThing(t, General.Colors.Indication, General.Settings.ActiveThingsAlpha);
+						if (General.Settings.GZShowEventLines) eventlines.Add(new Line3D(t.Position, asso.Center));
+					}
 				}
+				//mxd. Thing action on this thing?
+				else if(t.Action == 0)
+				{
+					//Draw the association, unless it is a child link.
+					//  This prevents a reverse link to a thing via an argument, when it should be a direct tag-to-tag link instead.
+					if(ti != null && asso.DirectLinkType >= 0 && Math.Abs(asso.DirectLinkType) != t.Type)
+					{
+						if(  ((ti.Args[0].Type == (int)asso.Type) && (asso.Tags.Contains(t.Args[0]))) ||
+						     ((ti.Args[1].Type == (int)asso.Type) && (asso.Tags.Contains(t.Args[1]))) ||
+						     ((ti.Args[2].Type == (int)asso.Type) && (asso.Tags.Contains(t.Args[2]))) ||
+						     ((ti.Args[3].Type == (int)asso.Type) && (asso.Tags.Contains(t.Args[3]))) ||
+						     ((ti.Args[4].Type == (int)asso.Type) && (asso.Tags.Contains(t.Args[4]))))
+						{
+							renderer.RenderThing(t, General.Colors.Indication, General.Settings.ActiveThingsAlpha);
+							if(General.Settings.GZShowEventLines) eventlines.Add(new Line3D(t.Position, asso.Center));
+						}
+					}
+				}
+			}
+		}
+
+		#endregion
+
+		#region ================== Actions (mxd)
+
+		[BeginAction("exporttoobj")]
+		private void ExportToObj() 
+		{
+			// Convert geometry selection to sectors
+			General.Map.Map.ConvertSelection(SelectionType.Sectors);
+			
+			//get sectors
+			ICollection<Sector> sectors = General.Map.Map.SelectedSectorsCount == 0 ? General.Map.Map.Sectors : General.Map.Map.GetSelectedSectors(true);
+			if(sectors.Count == 0) 
+			{
+				General.Interface.DisplayStatus(StatusType.Warning, "OBJ export failed. Map has no sectors!");
+				return;
+			}
+
+			//show settings form
+			WavefrontSettingsForm form = new WavefrontSettingsForm(General.Map.Map.SelectedSectorsCount == 0 ? -1 : sectors.Count);
+			if(form.ShowDialog() == DialogResult.OK) 
+			{
+				WavefrontExportSettings data = new WavefrontExportSettings(Path.GetFileNameWithoutExtension(form.FilePath), Path.GetDirectoryName(form.FilePath), form.ObjScale, form.UseGZDoomScale, form.ExportTextures);
+				WavefrontExporter e = new WavefrontExporter();
+				e.Export(sectors, data);
 			}
 		}
 

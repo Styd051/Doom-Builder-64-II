@@ -19,8 +19,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using System.IO;
 using System.Windows.Forms;
 using CodeImp.DoomBuilder.Editing;
@@ -49,7 +47,7 @@ namespace CodeImp.DoomBuilder.Plugins
 		private List<Plugin> plugins;
 		
 		// Disposing
-		private bool isdisposed = false;
+		private bool isdisposed;
 
 		#endregion
 
@@ -103,19 +101,13 @@ namespace CodeImp.DoomBuilder.Plugins
 		// This loads all plugins
 		public void LoadAllPlugins()
 		{
-			List<string> filenames;
-			Type[] editclasses;
-			EditModeAttribute[] emattrs;
-			EditModeInfo editmodeinfo;
-			Configuration cfg;
 			IDictionary loadorderfiles = new ListDictionary();
-			Plugin p;
 			
 			try
 			{
 				// Load the load order cfg
-				cfg = new Configuration(Path.Combine(General.PluginsPath, "Loadorder.cfg"), true);
-				
+				Configuration cfg = new Configuration(Path.Combine(General.PluginsPath, "Loadorder.cfg"), true);
+
 				// Check for erors
 				if(cfg.ErrorResult)
 				{
@@ -136,7 +128,7 @@ namespace CodeImp.DoomBuilder.Plugins
 			}
 			
 			// Find all .dll files
-			filenames = new List<string>(Directory.GetFiles(General.PluginsPath, "*.dll", SearchOption.TopDirectoryOnly));
+			List<string> filenames = new List<string>(Directory.GetFiles(General.PluginsPath, "*.dll", SearchOption.TopDirectoryOnly));
 			
 			// Load the ones in order as specified by the load order cfg
 			foreach(DictionaryEntry de in loadorderfiles)
@@ -152,6 +144,7 @@ namespace CodeImp.DoomBuilder.Plugins
 				if(filenameindex > -1)
 				{
 					// Load plugin from this file
+					Plugin p;
 					try
 					{
 						p = new Plugin(filenames[filenameindex]);
@@ -169,6 +162,9 @@ namespace CodeImp.DoomBuilder.Plugins
 						
 						// Load actions
 						General.Actions.LoadActions(p.Assembly);
+
+						//mxd. And hints
+						General.Hints.LoadHints(p.Assembly);
 						
 						// Plugin is now initialized
 						p.Plug.OnInitialize();
@@ -183,6 +179,7 @@ namespace CodeImp.DoomBuilder.Plugins
 			foreach(string fn in filenames)
 			{
 				// Load plugin from this file
+				Plugin p;
 				try
 				{
 					p = new Plugin(fn);
@@ -200,6 +197,9 @@ namespace CodeImp.DoomBuilder.Plugins
 					
 					// Load actions
 					General.Actions.LoadActions(p.Assembly);
+
+					//mxd. And hints
+					General.Hints.LoadHints(p.Assembly);
 					
 					// Plugin is now initialized
 					p.Plug.OnInitialize();
@@ -213,7 +213,7 @@ namespace CodeImp.DoomBuilder.Plugins
 			// Go for all plugins the find the one with matching assembly
 			foreach(Plugin p in plugins)
 			{
-				if(p.Assembly == assembly) return p;
+				if(Equals(p.Assembly, assembly)) return p;
 			}
 
 			// Nothing found
@@ -282,8 +282,8 @@ namespace CodeImp.DoomBuilder.Plugins
 		public void OnSectorFloorSurfaceUpdate(Sector s, ref FlatVertex[] vertices) { foreach(Plugin p in plugins) p.Plug.OnSectorFloorSurfaceUpdate(s, ref vertices); }
 		public void OnShowPreferences(PreferencesController controller) { foreach(Plugin p in plugins) p.Plug.OnShowPreferences(controller); }
 		public void OnClosePreferences(PreferencesController controller) { foreach(Plugin p in plugins) p.Plug.OnClosePreferences(controller); }
-		public void OnActionBegin(CodeImp.DoomBuilder.Actions.Action action) { foreach(Plugin p in plugins) p.Plug.OnActionBegin(action); }
-		public void OnActionEnd(CodeImp.DoomBuilder.Actions.Action action) { foreach(Plugin p in plugins) p.Plug.OnActionEnd(action); }
+		public void OnActionBegin(Actions.Action action) { foreach(Plugin p in plugins) p.Plug.OnActionBegin(action); }
+		public void OnActionEnd(Actions.Action action) { foreach(Plugin p in plugins) p.Plug.OnActionEnd(action); }
 		public void OnEditEngage(EditMode oldmode, EditMode newmode) { foreach(Plugin p in plugins) p.Plug.OnEditEngage(oldmode, newmode); }
 		public void OnEditDisengage(EditMode oldmode, EditMode newmode) { foreach(Plugin p in plugins) p.Plug.OnEditDisengage(oldmode, newmode); }
 		public void OnEditCancel() { foreach(Plugin p in plugins) p.Plug.OnEditCancel(); }
@@ -301,6 +301,15 @@ namespace CodeImp.DoomBuilder.Plugins
 		public void OnEditRedrawDisplayBegin() { foreach(Plugin p in plugins) p.Plug.OnEditRedrawDisplayBegin(); }
 		public void OnEditRedrawDisplayEnd() { foreach(Plugin p in plugins) p.Plug.OnEditRedrawDisplayEnd(); }
 		public void OnPresentDisplayBegin() { foreach(Plugin p in plugins) p.Plug.OnPresentDisplayBegin(); }
+		public void OnMapNodesRebuilt() { foreach(Plugin p in plugins) p.Plug.OnMapNodesRebuilt(); }
+
+		//mxd. Highlight events
+		public void OnHighlightSector(Sector s) { foreach(Plugin p in plugins) p.Plug.OnHighlightSector(s); }
+		public void OnHighlightLinedef(Linedef l) { foreach(Plugin p in plugins) p.Plug.OnHighlightLinedef(l); }
+		public void OnHighlightThing(Thing t) { foreach(Plugin p in plugins) p.Plug.OnHighlightThing(t); }
+		public void OnHighlightVertex(Vertex v) { foreach(Plugin p in plugins) p.Plug.OnHighlightVertex(v); }
+		public void OnHighlightRefreshed(object o) { foreach(Plugin p in plugins) p.Plug.OnHighlightRefreshed(o); }
+		public void OnHighlightLost() { foreach(Plugin p in plugins) p.Plug.OnHighlightLost(); }
 		
 		#endregion
 	}

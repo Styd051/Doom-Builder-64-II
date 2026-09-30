@@ -28,28 +28,32 @@ namespace CodeImp.DoomBuilder.Controls
 		/// </summary>
 		private void InitializeComponent()
 		{
+			this.components = new System.ComponentModel.Container();
 			this.combobox = new System.Windows.Forms.ComboBox();
 			this.button = new System.Windows.Forms.Button();
 			this.scrollbuttons = new System.Windows.Forms.VScrollBar();
+			this.tooltip = new System.Windows.Forms.ToolTip(this.components);
 			this.SuspendLayout();
 			// 
 			// combobox
 			// 
 			this.combobox.DropDownWidth = 130;
-			this.combobox.Location = new System.Drawing.Point(0, 1);
+			this.combobox.ForeColor = System.Drawing.SystemColors.HotTrack;
+			this.combobox.Location = new System.Drawing.Point(0, 2);
 			this.combobox.Name = "combobox";
-			this.combobox.Size = new System.Drawing.Size(149, 22);
+			this.combobox.Size = new System.Drawing.Size(149, 21);
 			this.combobox.TabIndex = 0;
+			this.tooltip.SetToolTip(this.combobox, "Use ++ or -- prefixes to change by given value.\r\nUse +++ or --- prefixes to incre" +
+					"mentally change by given value.\r\nUse < or > prefixes to decrementally or increme" +
+					"ntally set given value.");
 			this.combobox.Validating += new System.ComponentModel.CancelEventHandler(this.combobox_Validating);
 			this.combobox.TextChanged += new System.EventHandler(this.combobox_TextChanged);
 			// 
 			// button
 			// 
-			this.button.Font = new System.Drawing.Font("Arial", 8.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
 			this.button.Image = global::CodeImp.DoomBuilder.Properties.Resources.treeview;
 			this.button.Location = new System.Drawing.Point(153, 0);
 			this.button.Name = "button";
-			this.button.Padding = new System.Windows.Forms.Padding(0, 0, 1, 2);
 			this.button.Size = new System.Drawing.Size(28, 24);
 			this.button.TabIndex = 1;
 			this.button.UseVisualStyleBackColor = true;
@@ -75,7 +79,6 @@ namespace CodeImp.DoomBuilder.Controls
 			this.Controls.Add(this.scrollbuttons);
 			this.Controls.Add(this.button);
 			this.Controls.Add(this.combobox);
-			this.Font = new System.Drawing.Font("Arial", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
 			this.Name = "ArgumentBox";
 			this.Size = new System.Drawing.Size(268, 64);
 			this.Layout += new System.Windows.Forms.LayoutEventHandler(this.ArgumentBox_Layout);
@@ -89,5 +92,6 @@ namespace CodeImp.DoomBuilder.Controls
 		private System.Windows.Forms.ComboBox combobox;
 		private System.Windows.Forms.Button button;
 		private System.Windows.Forms.VScrollBar scrollbuttons;
+		private System.Windows.Forms.ToolTip tooltip;
 	}
 }

@@ -28,9 +28,22 @@
 		/// </summary>
 		private void InitializeComponent()
 		{
+			this.pinbutton = new System.Windows.Forms.Button();
 			this.splitter = new CodeImp.DoomBuilder.Controls.TransparentPanel();
 			this.tabs = new CodeImp.DoomBuilder.Controls.DockersTabsControl();
 			this.SuspendLayout();
+			// 
+			// pinbutton
+			// 
+			this.pinbutton.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
+			this.pinbutton.Image = global::CodeImp.DoomBuilder.Properties.Resources.DockerCollapse;
+			this.pinbutton.Location = new System.Drawing.Point(3, 1);
+			this.pinbutton.Name = "pinbutton";
+			this.pinbutton.Size = new System.Drawing.Size(305, 14);
+			this.pinbutton.TabIndex = 0;
+			this.pinbutton.TabStop = false;
+			this.pinbutton.UseVisualStyleBackColor = true;
+			this.pinbutton.Click += new System.EventHandler(this.pinbutton_Click);
 			// 
 			// splitter
 			// 
@@ -49,19 +62,18 @@
 			// 
 			// tabs
 			// 
-			this.tabs.Alignment = System.Windows.Forms.TabAlignment.Right;
+			this.tabs.Alignment = System.Windows.Forms.TabAlignment.Left;
 			this.tabs.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
 						| System.Windows.Forms.AnchorStyles.Left)
 						| System.Windows.Forms.AnchorStyles.Right)));
-			this.tabs.Font = new System.Drawing.Font("Arial", 8.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-			this.tabs.ItemSize = new System.Drawing.Size(100, 26);
-			this.tabs.Location = new System.Drawing.Point(0, 0);
+			this.tabs.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+			this.tabs.Location = new System.Drawing.Point(0, 18);
 			this.tabs.Margin = new System.Windows.Forms.Padding(0);
 			this.tabs.Multiline = true;
 			this.tabs.Name = "tabs";
 			this.tabs.Padding = new System.Drawing.Point(10, 5);
 			this.tabs.SelectedIndex = 0;
-			this.tabs.Size = new System.Drawing.Size(308, 541);
+			this.tabs.Size = new System.Drawing.Size(308, 523);
 			this.tabs.TabIndex = 0;
 			this.tabs.TabStop = false;
 			this.tabs.MouseLeave += new System.EventHandler(this.RaiseMouseContainerLeave);
@@ -75,12 +87,13 @@
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(96F, 96F);
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
+			this.Controls.Add(this.pinbutton);
 			this.Controls.Add(this.splitter);
 			this.Controls.Add(this.tabs);
-			this.Font = new System.Drawing.Font("Arial", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
 			this.Name = "DockersControl";
 			this.Size = new System.Drawing.Size(308, 541);
 			this.MouseLeave += new System.EventHandler(this.RaiseMouseContainerLeave);
+			this.Resize += new System.EventHandler(this.DockersControl_Resize);
 			this.MouseEnter += new System.EventHandler(this.RaiseMouseContainerEnter);
 			this.ResumeLayout(false);
 
@@ -90,5 +103,6 @@
 
 		private DockersTabsControl tabs;
 		private TransparentPanel splitter;
+		private System.Windows.Forms.Button pinbutton;
 	}
 }

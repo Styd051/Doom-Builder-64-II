@@ -17,15 +17,11 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Text;
 using System.IO;
 using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Geometry;
-using System.Windows.Forms;
-using CodeImp.DoomBuilder.Config;
+using System.Collections;
 using CodeImp.DoomBuilder.Types;
 
 #endregion
@@ -37,13 +33,7 @@ namespace CodeImp.DoomBuilder.IO
 		#region ================== Constants
 
 		// Name of the UDMF configuration file
-		private const string UDMF_CONFIG_NAME = "UDMF.cfg";
-		
-		#endregion
-
-		#region ================== Variables
-
-		private Configuration config;
+		private const string UDMF_UI_CONFIG_NAME = "UDMF_UI.cfg";
 		
 		#endregion
 		
@@ -55,14 +45,14 @@ namespace CodeImp.DoomBuilder.IO
 			if((manager != null) && (manager.Config != null))
 			{
 				// Make configuration
-				config = new Configuration();
+				Configuration config = new Configuration();
 				
-				// Find a resource named UDMF.cfg
+				//mxd. Find a resource named UDMF_UI.cfg
 				string[] resnames = General.ThisAssembly.GetManifestResourceNames();
 				foreach(string rn in resnames)
 				{
 					// Found it?
-					if(rn.EndsWith(UDMF_CONFIG_NAME, StringComparison.InvariantCultureIgnoreCase))
+					if(rn.EndsWith(UDMF_UI_CONFIG_NAME, StringComparison.OrdinalIgnoreCase))
 					{
 						// Get a stream from the resource
 						Stream udmfcfg = General.ThisAssembly.GetManifestResourceStream(rn);
@@ -70,26 +60,30 @@ namespace CodeImp.DoomBuilder.IO
 						
 						// Load configuration from stream
 						config.InputConfiguration(udmfcfgreader.ReadToEnd());
-						
-						// Now we add the linedef flags, activations and thing flags
-						// to this list, so that these don't show up in the custom
-						// fields list either. We use true as dummy value (it has no meaning)
-						
-						// Add linedef flags
-						foreach(KeyValuePair<string, string> flag in manager.Config.LinedefFlags)
-							config.WriteSetting("managedfields.linedef." + flag.Key, true);
-						
-						// Add linedef activations
-						foreach(LinedefActivateInfo activate in manager.Config.LinedefActivates)
-							config.WriteSetting("managedfields.linedef." + activate.Key, true);
-						
-						// Add thing flags
-						foreach(KeyValuePair<string, string> flag in manager.Config.ThingFlags)
-							config.WriteSetting("managedfields.thing." + flag.Key, true);
+						Dictionary<string, MapElementType> elements = new Dictionary<string, MapElementType>
+						                                              {
+							                                              { "vertex", MapElementType.VERTEX },
+																		  { "linedef", MapElementType.LINEDEF },
+																		  { "sidedef", MapElementType.SIDEDEF },
+																		  { "sector", MapElementType.SECTOR },
+																		  { "thing", MapElementType.THING }
+						                                              };
+
+						foreach(KeyValuePair<string, MapElementType> group in elements) 
+						{
+							IDictionary dic = config.ReadSetting("uifields." + group.Key, new Hashtable());
+
+							Dictionary<string, UniversalType> values = new Dictionary<string, UniversalType>(StringComparer.Ordinal);
+							foreach(DictionaryEntry de in dic) 
+							{
+								values.Add(de.Key.ToString(), (UniversalType)de.Value);
+							}
+
+							uifields.Add(group.Value, values);
+						}
 						
 						// Done
 						udmfcfgreader.Dispose();
-						udmfcfg.Dispose();
 						break;
 					}
 				}
@@ -131,11 +125,13 @@ namespace CodeImp.DoomBuilder.IO
 		public override int MinEffect { get { return int.MinValue; } }
 		public override int MaxBrightness { get { return int.MaxValue; } }
 		public override int MinBrightness { get { return int.MinValue; } }
-		public override int MaxThingType { get { return int.MaxValue; } }
-		public override int MinThingType { get { return int.MinValue; } }
-		public override double MaxCoordinate { get { return (double)float.MaxValue; } }
-		public override double MinCoordinate { get { return (double)float.MinValue; } }
-        public override bool InDoom64Mode { get { return false; } } // villsa
+		public override int MaxThingType { get { return short.MaxValue; } } //mxd. Editor numbers must be in [1 .. 32767] range
+		public override int MinThingType { get { return 1; } } //mxd
+		public override float MaxCoordinate { get { return short.MaxValue; } } //mxd. UDMF maps are still bounded to -32768 .. 32767 range
+		public override float MinCoordinate { get { return short.MinValue; } } //mxd
+		public override int MaxThingAngle { get { return int.MaxValue; } }
+		public override int MinThingAngle { get { return int.MinValue; } }
+		public override Dictionary<MapElementType, Dictionary<string, UniversalType>> UIFields { get { return uifields; } } //mxd
 		
 		#endregion
 
@@ -144,7 +140,7 @@ namespace CodeImp.DoomBuilder.IO
 		// This reads a map from the file and returns a MapSet
 		public override MapSet Read(MapSet map, string mapname)
 		{
-			UniversalStreamReader udmfreader = new UniversalStreamReader();
+			UniversalStreamReader udmfreader = new UniversalStreamReader(uifields); //mxd
 			
 			// Find the index where first map lump begins
 			int firstindex = wad.FindLumpIndex(mapname) + 1;
@@ -178,7 +174,7 @@ namespace CodeImp.DoomBuilder.IO
 			udmfwriter.Write(map, memstream, manager.Config.EngineName);
 
 			// Find insert position and remove old lump
-			int insertpos = MapManager.RemoveSpecificLump(wad, "TEXTMAP", position, MapManager.TEMP_MAP_HEADER, manager.Config.MapLumpNames);
+			int insertpos = MapManager.RemoveSpecificLump(wad, "TEXTMAP", position, MapManager.TEMP_MAP_HEADER, manager.Config.MapLumps);
 			if(insertpos == -1) insertpos = position + 1;
 			if(insertpos > wad.Lumps.Count) insertpos = wad.Lumps.Count;
 

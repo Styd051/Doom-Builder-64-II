@@ -1,16 +1,16 @@
-﻿using System.Reflection;
-using System.Runtime.CompilerServices;
+using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Resources;
 
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("Builder Modes")]
-[assembly: AssemblyDescription("Doom Builder Editing Modes")]
+[assembly: AssemblyDescription("GZDoom Builder Editing Modes")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("CodeImp")]
-[assembly: AssemblyProduct("Doom Builder")]
-[assembly: AssemblyCopyright("Copyright ©  2007")]
+[assembly: AssemblyCompany("CodeImp, MaxED")]
+[assembly: AssemblyProduct("GZDoom Builder")]
+[assembly: AssemblyCopyright("Copyright ©  2007, 2016")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -29,4 +29,5 @@ using System.Runtime.InteropServices;
 //      Build Number
 //      Revision
 //
-[assembly: AssemblyVersion("2.1.0.0")]
+[assembly: AssemblyVersion("2.3.0.2910")]
+[assembly: NeutralResourcesLanguageAttribute("en")]

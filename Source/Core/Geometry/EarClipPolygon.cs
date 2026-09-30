@@ -17,20 +17,14 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Rendering;
-using SlimDX.Direct3D9;
 using System.Drawing;
-using CodeImp.DoomBuilder.Map;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.Geometry
 {
+	[Serializable]
 	public sealed class EarClipPolygon : LinkedList<EarClipVertex>
 	{
 		#region ================== Variables
@@ -115,13 +109,13 @@ namespace CodeImp.DoomBuilder.Geometry
 		}
 		
 		// Point inside the polygon?
-		// See: http://local.wasp.uwa.edu.au/~pbourke/geometry/insidepoly/
+		// See: http://paulbourke.net/geometry/polygonmesh/index.html#insidepoly
 		public bool Intersect(Vector2D p)
 		{
 			Vector2D v1 = base.Last.Value.Position;
-			Vector2D v2;
 			LinkedListNode<EarClipVertex> n = base.First;
 			uint c = 0;
+			Vector2D v2;
 			
 			// Go for all vertices
 			while(n != null)
@@ -129,31 +123,21 @@ namespace CodeImp.DoomBuilder.Geometry
 				// Get next vertex
 				v2 = n.Value.Position;
 
-				// Determine min/max values
-				float miny = Math.Min(v1.y, v2.y);
-				float maxy = Math.Max(v1.y, v2.y);
-				float maxx = Math.Max(v1.x, v2.x);
-
 				// Check for intersection
-				if((p.y > miny) && (p.y <= maxy))
-				{
-					if(p.x <= maxx)
-					{
-						if(v1.y != v2.y)
-						{
-							float xint = (p.y - v1.y) * (v2.x - v1.x) / (v2.y - v1.y) + v1.x;
-							if((v1.x == v2.x) || (p.x <= xint)) c++;
-						}
-					}
-				}
-				
+				if(v1.y != v2.y //mxd. If line is not horizontal...
+				  && p.y >  (v1.y < v2.y ? v1.y : v2.y) //mxd. ...And test point y intersects with the line y bounds...
+				  && p.y <= (v1.y > v2.y ? v1.y : v2.y) //mxd
+				  && (p.x < (v1.x < v2.x ? v1.x : v2.x) || (p.x <= (v1.x > v2.x ? v1.x : v2.x) //mxd. ...And test point x is to the left of the line, or is inside line x bounds and intersects it
+						&& (v1.x == v2.x || p.x <= ((p.y - v1.y) * (v2.x - v1.x) / (v2.y - v1.y) + v1.x))))) 
+					c++; //mxd. ...Count the line as crossed
+
 				// Move to next
 				v1 = v2;
 				n = n.Next;
 			}
 
-			// Inside this polygon?
-			if((c & 0x00000001UL) != 0)
+			// Inside this polygon when we crossed odd number of polygon lines
+			if(c % 2 != 0)
 			{
 				// Check if not inside the children
 				foreach(EarClipPolygon child in children)
@@ -165,11 +149,9 @@ namespace CodeImp.DoomBuilder.Geometry
 				// Inside polygon!
 				return true;
 			}
-			else
-			{
-				// Not inside the polygon
-				return false;
-			}
+
+			// Not inside the polygon
+			return false;
 		}
 		
 		// This inserts a polygon if it is a child of this one

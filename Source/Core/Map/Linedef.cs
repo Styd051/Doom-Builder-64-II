@@ -17,14 +17,10 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using CodeImp.DoomBuilder.Config;
+using CodeImp.DoomBuilder.Data;
 using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Rendering;
-using SlimDX.Direct3D9;
 using System.Drawing;
 using CodeImp.DoomBuilder.IO;
 
@@ -32,7 +28,7 @@ using CodeImp.DoomBuilder.IO;
 
 namespace CodeImp.DoomBuilder.Map
 {
-	public sealed class Linedef : SelectableElement
+	public sealed class Linedef : SelectableElement, IMultiTaggedMapElement
 	{
 		#region ================== Constants
 
@@ -67,21 +63,16 @@ namespace CodeImp.DoomBuilder.Map
 		private float lengthinv;
 		private float angle;
 		private RectangleF rect;
-		private bool blocksoundflag;
 		private bool impassableflag;
-        private bool invisibleflag; //villsa
-        private bool secretflag;    // villsa
-        private bool monsterblockflag;  // villsa
-        private bool tagonlyflag;   // villsa
 		
 		// Properties
 		private Dictionary<string, bool> flags;
 		private int action;
 		private int activate;
-        private int switchmask; // villsa 9/12/11
-		private int tag;
+		private List<int> tags; //mxd
 		private int[] args;
 		private bool frontinterior;		// for drawing only
+		private int colorPresetIndex;//mxd
 
 		// Clone
 		private int serializedindex;
@@ -97,10 +88,11 @@ namespace CodeImp.DoomBuilder.Map
 		public Sidedef Back { get { return back; } }
 		public Line2D Line { get { return new Line2D(start.Position, end.Position); } }
 		internal Dictionary<string, bool> Flags { get { return flags; } }
-		public int Action { get { return action; } set { BeforePropsChange(); action = value; } }
-		public int Activate { get { return activate; } set { BeforePropsChange(); activate = value; } }
-        public int SwitchMask { get { return switchmask; } set { BeforePropsChange(); switchmask = value; } }
-		public int Tag { get { return tag; } set { BeforePropsChange(); tag = value; if((tag < General.Map.FormatInterface.MinTag) || (tag > General.Map.FormatInterface.MaxTag)) throw new ArgumentOutOfRangeException("Tag", "Invalid tag number"); } }
+		public int Action { get { return action; } set { BeforePropsChange(); action = value; UpdateColorPreset(); } }
+		public int Activate { get { return activate; } set { BeforePropsChange(); activate = value; UpdateColorPreset(); } }
+
+		public int Tag { get { return tags[0]; } set { BeforePropsChange(); tags[0] = value; if((value < General.Map.FormatInterface.MinTag) || (value > General.Map.FormatInterface.MaxTag)) throw new ArgumentOutOfRangeException("Tag", "Invalid tag number"); } } //mxd
+		public List<int> Tags { get { return tags; } set { BeforePropsChange(); tags = value; } } //mxd
 		public float LengthSq { get { return lengthsq; } }
 		public float Length { get { return length; } }
 		public float LengthInv { get { return lengthinv; } }
@@ -111,11 +103,8 @@ namespace CodeImp.DoomBuilder.Map
 		internal int SerializedIndex { get { return serializedindex; } set { serializedindex = value; } }
 		internal bool FrontInterior { get { return frontinterior; } set { frontinterior = value; } }
 		internal bool ImpassableFlag { get { return impassableflag; } }
-		internal bool BlockSoundFlag { get { return blocksoundflag; } }
-        internal bool InvisibleFlag { get { return invisibleflag; } }   // villsa
-        internal bool MonsterBlockFlag { get { return monsterblockflag; } }   // villsa
-        internal bool SecretFlag { get { return secretflag; } }   // villsa
-        internal bool TagonlyFlag { get { return tagonlyflag; } set { tagonlyflag = value; } }   // villsa
+		internal int ColorPresetIndex { get { return colorPresetIndex; } } //mxd
+		internal bool ExtraFloorFlag; //mxd
 		
 		#endregion
 
@@ -125,11 +114,14 @@ namespace CodeImp.DoomBuilder.Map
 		internal Linedef(MapSet map, int listindex, Vertex start, Vertex end)
 		{
 			// Initialize
+			this.elementtype = MapElementType.LINEDEF; //mxd
 			this.map = map;
 			this.listindex = listindex;
 			this.updateneeded = true;
 			this.args = new int[NUM_ARGS];
-			this.flags = new Dictionary<string, bool>();
+			this.tags = new List<int> { 0 }; //mxd
+			this.flags = new Dictionary<string, bool>(StringComparer.Ordinal);
+			this.colorPresetIndex = -1;//mxd
 			
 			// Attach to vertices
 			this.start = start;
@@ -139,7 +131,7 @@ namespace CodeImp.DoomBuilder.Map
 			
 			if(map == General.Map.Map)
 				General.Map.UndoRedo.RecAddLinedef(this);
-			
+            
 			// We have no destructor
 			GC.SuppressFinalize(this);
 		}
@@ -178,6 +170,9 @@ namespace CodeImp.DoomBuilder.Map
 				back = null;
 				map = null;
 
+				//mxd. Restore isdisposed so base classes can do their disposal job
+				isdisposed = false;
+
 				// Clean up base
 				base.Dispose();
 			}
@@ -195,7 +190,7 @@ namespace CodeImp.DoomBuilder.Map
 		}
 		
 		// Serialize / deserialize (passive: doesn't record)
-		internal void ReadWrite(IReadWriteStream s)
+		new internal void ReadWrite(IReadWriteStream s)
 		{
 			if(!s.IsWriting)
 			{
@@ -219,7 +214,7 @@ namespace CodeImp.DoomBuilder.Map
 			{
 				int c; s.rInt(out c);
 
-				flags = new Dictionary<string, bool>(c);
+				flags = new Dictionary<string, bool>(c, StringComparer.Ordinal);
 				for(int i = 0; i < c; i++)
 				{
 					string t; s.rString(out t);
@@ -230,8 +225,28 @@ namespace CodeImp.DoomBuilder.Map
 
 			s.rwInt(ref action);
 			s.rwInt(ref activate);
-			s.rwInt(ref tag);
+
+			//mxd
+			if(s.IsWriting)
+			{
+				s.wInt(tags.Count);
+				foreach(int tag in tags) s.wInt(tag);
+			}
+			else
+			{
+				int c; s.rInt(out c);
+				tags = new List<int>(c);
+				for(int i = 0; i < c; i++) 
+				{
+					int t; s.rInt(out t);
+					tags.Add(t);
+				}
+			}
+
 			for(int i = 0; i < NUM_ARGS; i++) s.rwInt(ref args[i]);
+
+			//mxd
+			if(!s.IsWriting) UpdateColorPreset();
 		}
 
 		// This sets new start vertex
@@ -282,7 +297,7 @@ namespace CodeImp.DoomBuilder.Map
 		}
 		
 		// This copies all properties to another line
-		new public void CopyPropertiesTo(Linedef l)
+		public void CopyPropertiesTo(Linedef l)
 		{
 			l.BeforePropsChange();
 			
@@ -290,16 +305,11 @@ namespace CodeImp.DoomBuilder.Map
 			l.action = action;
 			l.args = (int[])args.Clone();
 			l.flags = new Dictionary<string, bool>(flags);
-			l.tag = tag;
+			l.tags = new List<int>(tags); //mxd
 			l.updateneeded = true;
 			l.activate = activate;
 			l.impassableflag = impassableflag;
-			l.blocksoundflag = blocksoundflag;
-            l.invisibleflag = invisibleflag;    // villsa
-            l.switchmask = switchmask;
-            l.secretflag = secretflag;
-            l.monsterblockflag = monsterblockflag;
-            l.tagonlyflag = tagonlyflag;
+			l.UpdateColorPreset();//mxd
 			base.CopyPropertiesTo(l);
 		}
 		
@@ -366,8 +376,6 @@ namespace CodeImp.DoomBuilder.Map
 		// This updates the line when changes have been made
 		public void UpdateCache()
 		{
-            this.TagonlyFlag = ((this.Tag != 0) && ((this.Action & 511) == 0));
-
 			// Update if needed
 			if(updateneeded)
 			{
@@ -387,11 +395,10 @@ namespace CodeImp.DoomBuilder.Map
 				rect = new RectangleF(l, t, r - l, b - t);
 				
 				// Cached flags
-				blocksoundflag = IsFlagSet(General.Map.Config.SoundLinedefFlag);
 				impassableflag = IsFlagSet(General.Map.Config.ImpassableFlag);
-                invisibleflag = IsFlagSet(General.Map.Config.InvisibleFlag);   // villsa
-                monsterblockflag = IsFlagSet(General.Map.Config.MonsterblockFlag);
-                secretflag = IsFlagSet(General.Map.Config.SecretFlag);
+
+				//mxd. Color preset
+				UpdateColorPreset();
 				
 				// Updated
 				updateneeded = false;
@@ -410,18 +417,21 @@ namespace CodeImp.DoomBuilder.Map
 		}
 		
 		// This translates the flags and activations into UDMF fields
-		internal void TranslateToUDMF()
+		internal void TranslateToUDMF(Type previousmapformatinterfacetype)
 		{
 			// First make a single integer with all bits from activation and flags
 			int bits = activate;
-			int flagbit = 0;
+			int flagbit;
 			foreach(KeyValuePair<string, bool> f in flags)
 				if(int.TryParse(f.Key, out flagbit) && f.Value) bits |= flagbit;
-
-            bits |= switchmask;
 			
 			// Now make the new flags
 			flags.Clear();
+
+			//mxd. Add default activation flag if needed
+			if(action != 0 && activate == 0 && !string.IsNullOrEmpty(General.Map.Config.DefaultLinedefActivationFlag)) 
+				flags[General.Map.Config.DefaultLinedefActivationFlag] = true;
+
 			foreach(FlagTranslation f in General.Map.Config.LinedefFlagsTranslation)
 			{
 				// Flag found in bits?
@@ -435,15 +445,77 @@ namespace CodeImp.DoomBuilder.Map
 				else
 				{
 					// Add fields with inverted value
-					for(int i = 0; i < f.Fields.Count; i++)
-						flags[f.Fields[i]] = !f.FieldValues[i];
+					for(int i = 0; i < f.Fields.Count; i++) 
+					{
+						if(!flags.ContainsKey(f.Fields[i])) //mxd
+							flags[f.Fields[i]] = !f.FieldValues[i];
+					}
 				}
 			}
+
+			//mxd. Hexen -> UDMF action translation. Hardcoded for now...
+			if(previousmapformatinterfacetype == typeof(HexenMapSetIO)) 
+			{
+				switch(Action) 
+				{
+					case 121: //Line_SetIdentification
+						//Convert arg0 to tag
+						tags[0] = args[0] + args[4] * 256;
+
+						//Convert arg1 to flags
+						ConvertArgToFlags(1);
+
+						//clear action and arguments
+						action = 0;
+						for(int i = 0; i < args.Length; i++) args[i] = 0;
+						break;
+
+					case 208: //TranslucentLine
+						//Convert arg0 to tag
+						tags[0] = args[0];
+
+						//Convert arg3 to flags
+						ConvertArgToFlags(3);
+						break;
+
+					case 1: ConvertArgToTag(3, true); break; //Polyobj_StartLine
+					case 5: ConvertArgToTag(4, true); break; //Polyobj_ExplicitLine
+					case 181: ConvertArgToTag(2, true); break; //Plane_Align
+					case 215: ConvertArgToTag(0, true); break; //Teleport_Line
+					case 222: ConvertArgToTag(0, false); break; //Scroll_Texture_Model
+
+					case 160: //Sector_3DFloor
+						// Convert to UDMF
+						if((args[1] & 8) == 8) // arg4 is LineID?
+						{
+							tags[0] = args[4];
+							args[1] &= ~8; // Unset flag
+						}
+						else // It's sector's HiTag then
+						{
+							args[0] += args[4] * 256;
+						}
+
+						// Clear arg
+						args[4] = 0;
+						break;
+				}
+			}
+
+			//mxd. Update cached flags
+			impassableflag = IsFlagSet(General.Map.Config.ImpassableFlag);
+
+			// Update color preset
+			UpdateColorPreset();
 		}
 		
 		// This translates UDMF fields back into the normal flags and activations
 		internal void TranslateFromUDMF()
 		{
+			//mxd. Clear UDMF-related properties
+			this.Fields.Clear();
+			ExtraFloorFlag = false;
+			
 			// Make copy of the flags
 			Dictionary<string, bool> oldfields = new Dictionary<string, bool>(flags);
 
@@ -452,7 +524,7 @@ namespace CodeImp.DoomBuilder.Map
 			foreach(KeyValuePair<string, string> f in General.Map.Config.LinedefFlags)
 			{
 				// Flag must be numeric
-				int flagbit = 0;
+				int flagbit;
 				if(int.TryParse(f.Key, out flagbit))
 				{
 					foreach(FlagTranslation ft in General.Map.Config.LinedefFlagsTranslation)
@@ -511,6 +583,164 @@ namespace CodeImp.DoomBuilder.Map
 				}
 				if(foundactivation) break;
 			}
+
+			//mxd. UDMF -> Hexen action translation. Hardcoded for now...
+			if(General.Map.FormatInterface is HexenMapSetIO)
+			{
+				switch(action)
+				{
+					case 208: //TranslucentLine
+						//Convert tag to arg0
+						if(tags[0] < General.Map.FormatInterface.MinArgument || tags[0] > General.Map.FormatInterface.MaxArgument)
+						{
+							string message = "Linedef " + Index + ": unable to convert Tag (" + tags[0] + ") to LineID because it's outside of supported argument range [" + General.Map.FormatInterface.MinArgument + ".." + General.Map.FormatInterface.MaxArgument + "].";
+							General.ErrorLogger.Add(new MapElementErrorItem(ErrorType.Warning, this, message));
+						}
+						else
+						{
+							args[0] = tags[0];
+						}
+
+						//Convert flags to arg3
+						ConvertFlagsToArg(oldfields, 3);
+						break;
+
+					case 1: ConvertTagToArg(3); break; //Polyobj_StartLine
+					case 5: ConvertTagToArg(4); break; //Polyobj_ExplicitLine
+					case 181: ConvertTagToArg(2); break; //Plane_Align
+					case 215: ConvertTagToArg(0); break; //Teleport_Line
+					case 222: ConvertTagToArg(0); break; //Scroll_Texture_Model
+
+					case 160: //Sector_3DFloor
+						if(args[0] > General.Map.FormatInterface.MaxArgument) // Split sector tag?
+						{
+							int hitag = args[0] / 256;
+							int lotag = args[0] - hitag;
+
+							args[0] = lotag;
+							args[4] = hitag;
+
+							if(tags[0] != 0)
+							{
+								string message = "Linedef " + Index + ": unable to convert Tag (" + tags[0] + ") to LineID, because target sector tag (arg0) is greater than " + General.Map.FormatInterface.MaxArgument + ".";
+								General.ErrorLogger.Add(new MapElementErrorItem(ErrorType.Warning, this, message));
+							}
+						}
+						else if(args[0] < General.Map.FormatInterface.MinArgument) 
+						{
+							string message = "Linedef " + Index + ": unable to convert arg0 (" + args[0] + "), because it's outside of supported argument range [" + General.Map.FormatInterface.MinArgument + ".." + General.Map.FormatInterface.MaxArgument + "].";
+							General.ErrorLogger.Add(new MapElementErrorItem(ErrorType.Warning, this, message));
+						} 
+						else if(tags[0] > General.Map.FormatInterface.MinArgument) // Convert to LineID?
+						{
+							if(tags[0] > General.Map.FormatInterface.MaxArgument)
+							{
+								string message = "Linedef " + Index + ": unable to convert Tag (" + tags[0] + ") to LineID, because linedef tag is greater than " + General.Map.FormatInterface.MaxArgument + ".";
+								General.ErrorLogger.Add(new MapElementErrorItem(ErrorType.Warning, this, message));
+							}
+							else
+							{
+								args[4] = tags[0];
+								args[1] |= 8; // Add "Use arg4 as LineID" flag
+							}
+						}
+						break;
+
+					default: // Convert tag to Line_SetIdentification?
+						if(tags[0] > General.Map.FormatInterface.MinArgument)
+						{
+							if(action != 0)
+							{
+								string message = "Linedef " + Index + ": unable to convert Tag (" + tags[0] + ") to LineID, because linedef already has an action.";
+								General.ErrorLogger.Add(new MapElementErrorItem(ErrorType.Warning, this, message));
+							}
+							else // Convert to Line_SetIdentification
+							{
+								int hiid = tags[0] / 256;
+								int loid = tags[0] - hiid;
+
+								action = 121;
+								args[0] = loid;
+								args[4] = hiid;
+								ConvertFlagsToArg(oldfields, 1);
+							}
+						} 
+						else if(tags[0] < General.Map.FormatInterface.MinArgument) 
+						{
+							string message = "Linedef " + Index + ": unable to convert Tag (" + tags[0] + ") to LineID, because it's outside of supported argument range [" + General.Map.FormatInterface.MinArgument + ".." + General.Map.FormatInterface.MaxArgument + "].";
+							General.ErrorLogger.Add(new MapElementErrorItem(ErrorType.Warning, this, message));
+						}
+						break;
+				}
+
+				// Clear tag
+				tags[0] = 0;
+			}
+
+			//mxd. Update cached flags
+			impassableflag = IsFlagSet(General.Map.Config.ImpassableFlag);
+
+			// Update color preset
+			UpdateColorPreset();
+		}
+
+		//mxd
+		private void ConvertArgToTag(int argnum, bool cleararg) 
+		{
+			// Convert arg to tag
+			tags[0] = args[argnum];
+
+			// Clear obsolete arg
+			if(cleararg) args[argnum] = 0;
+		}
+
+		//mxd
+		private void ConvertTagToArg(int argnum) 
+		{
+			if(tags[0] < General.Map.FormatInterface.MinArgument || tags[0] > General.Map.FormatInterface.MaxArgument)
+			{
+				General.ErrorLogger.Add(ErrorType.Warning, "Linedef " + Index + ": unable to convert Tag (" + tags[0] + ") to LineID because it's outside of supported argument range [" + General.Map.FormatInterface.MinArgument + ".." + General.Map.FormatInterface.MaxArgument + "].");
+			}
+			else
+			{
+				args[argnum] = tags[0];
+			}
+		}
+
+		//mxd
+		private void ConvertArgToFlags(int argnum) 
+		{
+			if(args[argnum] == 0) return;
+
+			// Convert to flags
+			if((args[argnum] & 1) == 1) flags["zoneboundary"] = true;
+			if((args[argnum] & 2) == 2) flags["jumpover"] = true;
+			if((args[argnum] & 4) == 4) flags["blockfloaters"] = true;
+			if((args[argnum] & 8) == 8) flags["clipmidtex"] = true;
+			if((args[argnum] & 16) == 16) flags["wrapmidtex"] = true;
+			if((args[argnum] & 32) == 32) flags["midtex3d"] = true;
+			if((args[argnum] & 64) == 64) flags["checkswitchrange"] = true;
+			if((args[argnum] & 128) == 128) flags["firstsideonly"] = true;
+
+			// Clear obsolete arg
+			args[argnum] = 0;
+		}
+
+		//mxd
+		private void ConvertFlagsToArg(Dictionary<string, bool> oldflags, int argnum)
+		{
+			int bits = 0;
+			if(oldflags.ContainsKey("zoneboundary") && oldflags["zoneboundary"]) bits &= 1;
+			if(oldflags.ContainsKey("jumpover") && oldflags["jumpover"]) bits &= 2;
+			if(oldflags.ContainsKey("blockfloaters") && oldflags["blockfloaters"]) bits &= 4;
+			if(oldflags.ContainsKey("clipmidtex") && oldflags["clipmidtex"]) bits &= 8;
+			if(oldflags.ContainsKey("wrapmidtex") && oldflags["wrapmidtex"]) bits &= 16;
+			if(oldflags.ContainsKey("midtex3d") && oldflags["midtex3d"]) bits &= 32;
+			if(oldflags.ContainsKey("checkswitchrange") && oldflags["checkswitchrange"]) bits &= 64;
+			if(oldflags.ContainsKey("firstsideonly") && oldflags["firstsideonly"]) bits &= 128;
+			
+			// Set arg
+			args[argnum] = bits;
 		}
 
 		// Selected
@@ -535,10 +765,7 @@ namespace CodeImp.DoomBuilder.Map
 		// This checks and returns a flag without creating it
 		public bool IsFlagSet(string flagname)
 		{
-			if(flags.ContainsKey(flagname))
-				return flags[flagname];
-			else
-				return false;
+			return flags.ContainsKey(flagname) && flags[flagname];
 		}
 
 		// This sets a flag
@@ -551,11 +778,10 @@ namespace CodeImp.DoomBuilder.Map
 				flags[flagname] = value;
 
 				// Cached flags
-				if(flagname == General.Map.Config.SoundLinedefFlag) blocksoundflag = value;
 				if(flagname == General.Map.Config.ImpassableFlag) impassableflag = value;
-                if (flagname == General.Map.Config.InvisibleFlag) invisibleflag = value;   // villsa
-                if (flagname == General.Map.Config.MonsterblockFlag) monsterblockflag = value;   // villsa
-                if (flagname == General.Map.Config.SecretFlag) secretflag = value;   // villsa
+
+				//mxd
+				UpdateColorPreset();
 			}
 		}
 
@@ -564,17 +790,25 @@ namespace CodeImp.DoomBuilder.Map
 		{
 			return new Dictionary<string, bool>(flags);
 		}
+
+		//mxd. This returns enabled flags
+		public HashSet<string> GetEnabledFlags()
+		{
+			HashSet<string> result = new HashSet<string>();
+			foreach(KeyValuePair<string, bool> group in flags)
+				if(group.Value) result.Add(group.Key);
+			return result;
+		}
 		
 		// This clears all flags
 		public void ClearFlags()
 		{
 			BeforePropsChange();
 			flags.Clear();
-			blocksoundflag = false;
 			impassableflag = false;
-            invisibleflag = false;  // villsa
-            monsterblockflag = false;
-            secretflag = false;
+
+			//mxd
+			UpdateColorPreset();
 		}
 		
 		// This flips the linedef's vertex attachments
@@ -659,11 +893,17 @@ namespace CodeImp.DoomBuilder.Map
 		}
 
 		// This returns all points at which the line intersects with the grid
-		public List<Vector2D> GetGridIntersections()
+		public List<Vector2D> GetGridIntersections() 
+		{
+			return GetGridIntersections(new Vector2D());
+		}
+
+		// This returns all points at which the line intersects with the grid
+		public List<Vector2D> GetGridIntersections(Vector2D gridoffset)
 		{
 			List<Vector2D> coords = new List<Vector2D>();
 			Vector2D v = new Vector2D();
-			float gx, gy, minx, maxx, miny, maxy;
+			float minx, maxx, miny, maxy;
 			bool reversex, reversey;
 			
 			if(start.Position.x > end.Position.x)
@@ -693,7 +933,7 @@ namespace CodeImp.DoomBuilder.Map
 			}
 
 			// Go for all vertical grid lines in between line start and end
-			gx = General.Map.Grid.GetHigher(minx);
+			float gx = General.Map.Grid.GetHigher(minx) + gridoffset.x;
 			if(gx < maxx)
 			{
 				for(; gx < maxx; gx += General.Map.Grid.GridSizeF)
@@ -708,7 +948,7 @@ namespace CodeImp.DoomBuilder.Map
 			}
 			
 			// Go for all horizontal grid lines in between line start and end
-			gy = General.Map.Grid.GetHigher(miny);
+			float gy = General.Map.Grid.GetHigher(miny) + gridoffset.y;
 			if(gy < maxy)
 			{
 				for(; gy < maxy; gy += General.Map.Grid.GridSizeF)
@@ -746,14 +986,21 @@ namespace CodeImp.DoomBuilder.Map
 			// Limit intersection offset to the line
 			if(bounded) if(u < lengthinv) u = lengthinv; else if(u > (1f - lengthinv)) u = 1f - lengthinv;
 
-			// Calculate intersection point
-			Vector2D i = v1 + u * (v2 - v1);
+            /*
+            // Calculate intersection point
+            Vector2D i = v1 + u * (v2 - v1);
 
 			// Return distance between intersection and point
 			// which is the shortest distance to the line
 			float ldx = p.x - i.x;
 			float ldy = p.y - i.y;
-			return ldx * ldx + ldy * ldy;
+            */
+
+            // ano - let's check to see if we can do the previous faster without using operator overloading and etc
+            // the answer: running it  int.MaxValue / 64 times it tended to be around 100ms faster
+            float ldx = p.x - (v1.x + u * (v2.x - v1.x));
+            float ldy = p.y - (v1.y + u * (v2.y - v1.y));
+            return ldx * ldx + ldy * ldy;
 		}
 
 		// This returns the shortest distance from given coordinates to line
@@ -805,16 +1052,16 @@ namespace CodeImp.DoomBuilder.Map
 		// Returns the new line resulting from the split, or null when it failed
 		public Linedef Split(Vertex v)
 		{
-			Linedef nl;
 			Sidedef nsd;
 
 			// Copy linedef and change vertices
-			nl = map.CreateLinedef(v, end);
+			Linedef nl = map.CreateLinedef(v, end);
 			if(nl == null) return null;
 			CopyPropertiesTo(nl);
 			SetEndVertex(v);
 			nl.Selected = this.Selected;
 			nl.marked = this.marked;
+			nl.ExtraFloorFlag = this.ExtraFloorFlag; //mxd
 			
 			// Copy front sidedef if exists
 			if(front != null)
@@ -823,9 +1070,6 @@ namespace CodeImp.DoomBuilder.Map
 				if(nsd == null) return null;
 				front.CopyPropertiesTo(nsd);
 				nsd.Marked = front.Marked;
-
-				// Make texture offset adjustments
-				nsd.OffsetX += (int)Vector2D.Distance(this.start.Position, this.end.Position);
 			}
 
 			// Copy back sidedef if exists
@@ -835,10 +1079,10 @@ namespace CodeImp.DoomBuilder.Map
 				if(nsd == null) return null;
 				back.CopyPropertiesTo(nsd);
 				nsd.Marked = back.Marked;
-				
-				// Make texture offset adjustments
-				back.OffsetX += (int)Vector2D.Distance(nl.start.Position, nl.end.Position);
 			}
+
+			//mxd
+			AdjustSplitCoordinates(this, nl, General.Settings.SplitLineBehavior);
 
 			// Return result
 			General.Map.IsChanged = true;
@@ -850,27 +1094,24 @@ namespace CodeImp.DoomBuilder.Map
 		// Returns false when the operation could not be completed
 		public bool Join(Linedef other)
 		{
-			Sector l1fs, l1bs, l2fs, l2bs;
-			bool l1was2s, l2was2s;
-			
 			// Check which lines were 2 sided
-			l1was2s = ((other.Front != null) && (other.Back != null));
-			l2was2s = ((this.Front != null) && (this.Back != null));
+			bool otherwas2s = ((other.Front != null) && (other.Back != null));
+			bool thiswas2s = ((this.Front != null) && (this.Back != null));
 			
 			// Get sector references
-			if(other.front != null) l1fs = other.front.Sector; else l1fs = null;
-			if(other.back != null) l1bs = other.back.Sector; else l1bs = null;
-			if(this.front != null) l2fs = this.front.Sector; else l2fs = null;
-			if(this.back != null) l2bs = this.back.Sector; else l2bs = null;
+			Sector otherfs = (other.front != null ? other.front.Sector : null);
+			Sector otherbs = (other.back != null ? other.back.Sector : null);
+			Sector thisfs = (this.front != null ? this.front.Sector : null);
+			Sector thisbs = (this.back != null ? this.back.Sector : null);
 
 			// This line has no sidedefs?
-			if((l2fs == null) && (l2bs == null))
+			if((thisfs == null) && (thisbs == null))
 			{
 				// We have no sidedefs, so we have no influence
 				// Nothing to change on the other line
 			}
 			// Other line has no sidedefs?
-			else if((l1fs == null) && (l1bs == null))
+			else if((otherfs == null) && (otherbs == null))
 			{
 				// The other has no sidedefs, so it has no influence
 				// Copy my sidedefs to the other
@@ -891,43 +1132,43 @@ namespace CodeImp.DoomBuilder.Map
 			else
 			{
 				// Compare front sectors
-				if((l1fs != null) && (l1fs == l2fs))
+				if((otherfs != null) && (otherfs == thisfs))
 				{
 					// Copy textures
 					if(other.front != null) other.front.AddTexturesTo(this.back);
 					if(this.front != null) this.front.AddTexturesTo(other.back);
 
-					// Change sidedefs
+					// Change sidedefs?
 					if(!JoinChangeSidedefs(other, true, back)) return false;
 				}
 				// Compare back sectors
-				else if((l1bs != null) && (l1bs == l2bs))
+				else if((otherbs != null) && (otherbs == thisbs))
 				{
 					// Copy textures
 					if(other.back != null) other.back.AddTexturesTo(this.front);
 					if(this.back != null) this.back.AddTexturesTo(other.front);
 
-					// Change sidedefs
+					// Change sidedefs?
 					if(!JoinChangeSidedefs(other, false, front)) return false;
 				}
 				// Compare front and back
-				else if((l1fs != null) && (l1fs == l2bs))
+				else if((otherfs != null) && (otherfs == thisbs))
 				{
 					// Copy textures
 					if(other.front != null) other.front.AddTexturesTo(this.front);
 					if(this.back != null) this.back.AddTexturesTo(other.back);
 
-					// Change sidedefs
+					// Change sidedefs?
 					if(!JoinChangeSidedefs(other, true, front)) return false;
 				}
 				// Compare back and front
-				else if((l1bs != null) && (l1bs == l2fs))
+				else if((otherbs != null) && (otherbs == thisfs))
 				{
 					// Copy textures
 					if(other.back != null) other.back.AddTexturesTo(this.back);
 					if(this.front != null) this.front.AddTexturesTo(other.front);
 
-					// Change sidedefs
+					// Change sidedefs?
 					if(!JoinChangeSidedefs(other, false, back)) return false;
 				}
 				else
@@ -939,19 +1180,17 @@ namespace CodeImp.DoomBuilder.Map
 						if(this.start == other.end)
 						{
 							// Copy textures
-							if(other.back != null) other.back.AddTexturesTo(this.front);
 							if(this.back != null) this.back.AddTexturesTo(other.front);
 
-							// Change sidedefs
+							// Change sidedefs?
 							if(!JoinChangeSidedefs(other, false, front)) return false;
 						}
 						else
 						{
 							// Copy textures
-							if(other.back != null) other.back.AddTexturesTo(this.back);
 							if(this.front != null) this.front.AddTexturesTo(other.front);
 
-							// Change sidedefs
+							// Change sidedefs?
 							if(!JoinChangeSidedefs(other, false, back)) return false;
 						}
 					}
@@ -961,21 +1200,25 @@ namespace CodeImp.DoomBuilder.Map
 						// Other line with its back to this?
 						if(other.start == this.end)
 						{
-							// Copy textures
-							if(other.back != null) other.back.AddTexturesTo(this.front);
-							if(this.back != null) this.back.AddTexturesTo(other.front);
+							if(otherbs == null)
+							{
+								// Copy textures
+								if(other.back != null) other.back.AddTexturesTo(this.front);
 
-							// Change sidedefs
-							if(!JoinChangeSidedefs(other, false, front)) return false;
+								// Change sidedefs
+								if(!JoinChangeSidedefs(other, false, front)) return false;
+							}
 						}
 						else
 						{
-							// Copy textures
-							if(other.front != null) other.front.AddTexturesTo(this.front);
-							if(this.back != null) this.back.AddTexturesTo(other.back);
+							if(otherfs == null)
+							{
+								// Copy textures
+								if(other.front != null) other.front.AddTexturesTo(this.front);
 
-							// Change sidedefs
-							if(!JoinChangeSidedefs(other, true, front)) return false;
+								// Change sidedefs
+								if(!JoinChangeSidedefs(other, true, front)) return false;
+							}
 						}
 					}
 					else
@@ -990,6 +1233,7 @@ namespace CodeImp.DoomBuilder.Map
 							// Change sidedefs
 							if(!JoinChangeSidedefs(other, false, front)) return false;
 						}
+						// Both lines face the same way
 						else
 						{
 							// Copy textures
@@ -1003,13 +1247,13 @@ namespace CodeImp.DoomBuilder.Map
 				}
 				
 				// Apply single/double sided flags if the double-sided-ness changed
-				if( (!l1was2s && ((other.Front != null) && (other.Back != null))) ||
-					(l1was2s && ((other.Front == null) || (other.Back == null))) )
+				if( (!otherwas2s && (other.Front != null && other.Back != null)) ||
+					 (otherwas2s && (other.Front == null || other.Back == null)) )
 					other.ApplySidedFlags();
 				
 				// Remove unneeded textures
-				if(other.front != null) other.front.RemoveUnneededTextures(!(l1was2s && l2was2s));
-				if(other.back != null) other.back.RemoveUnneededTextures(!(l1was2s && l2was2s));
+				if(other.front != null) other.front.RemoveUnneededTextures(!(otherwas2s && thiswas2s));
+				if(other.back != null) other.back.RemoveUnneededTextures(!(otherwas2s && thiswas2s));
 			}
 			
 			// If either of the two lines was selected, keep the other selected
@@ -1030,8 +1274,6 @@ namespace CodeImp.DoomBuilder.Map
 		// Returns false when the operation could not be completed.
 		private bool JoinChangeSidedefs(Linedef target, bool front, Sidedef newside)
 		{
-			Sidedef sd;
-			
 			// Change sidedefs
 			if(front)
 			{
@@ -1044,7 +1286,7 @@ namespace CodeImp.DoomBuilder.Map
 			
 			if(newside != null)
 			{
-				sd = map.CreateSidedef(target, front, newside.Sector);
+				Sidedef sd = map.CreateSidedef(target, front, newside.Sector);
 				if(sd == null) return false;
 				newside.CopyPropertiesTo(sd);
 				sd.Marked = newside.Marked;
@@ -1053,10 +1295,30 @@ namespace CodeImp.DoomBuilder.Map
 			return true;
 		}
 
+		//mxd
+		internal void UpdateColorPreset() 
+		{
+			for(int i = 0; i < General.Map.ConfigSettings.LinedefColorPresets.Length; i++) 
+			{
+				if(General.Map.ConfigSettings.LinedefColorPresets[i].Matches(this)) 
+				{
+					colorPresetIndex = i;
+					return;
+				}
+			}
+			colorPresetIndex = -1;
+		}
+
 		// String representation
 		public override string ToString()
 		{
+#if DEBUG
+			string starttext = (start != null ? " (" + start : string.Empty);
+			string endtext = (end != null ? ", " + end + ")" : string.Empty);
+			return "Linedef " + listindex + (marked ? " (marked)" : "") + starttext + endtext; //mxd
+#else
 			return "Linedef " + listindex;
+#endif
 		}
 		
 		#endregion
@@ -1064,19 +1326,202 @@ namespace CodeImp.DoomBuilder.Map
 		#region ================== Changes
 		
 		// This updates all properties
-		public void Update(Dictionary<string, bool> flags, int activate, int tag, int action, int mask, int[] args)
+		public void Update(Dictionary<string, bool> flags, int activate, List<int> tags, int action, int[] args)
 		{
 			BeforePropsChange();
 			
 			// Apply changes
 			this.flags = new Dictionary<string, bool>(flags);
-			this.tag = tag;
+			this.tags = new List<int>(tags); //mxd
 			this.activate = activate;
 			this.action = action;
-            this.switchmask = mask; // villsa 9/12/11
 			this.args = new int[NUM_ARGS];
 			args.CopyTo(this.args, 0);
 			this.updateneeded = true;
+		}
+
+		// mxd. Moved here from BuilderModes.BuilderPlug
+		// This adjusts texture coordinates for splitted lines according to the user preferences
+		private static void AdjustSplitCoordinates(Linedef oldline, Linedef newline, SplitLineBehavior splitlinebehavior) 
+		{
+			switch(splitlinebehavior) 
+			{
+				case SplitLineBehavior.Interpolate:
+					//Make texture offset adjustments
+					if(oldline.back != null) 
+					{
+						if((oldline.back.MiddleRequired() && oldline.back.LongMiddleTexture != MapSet.EmptyLongName) || oldline.back.HighRequired() || oldline.back.LowRequired()) 
+						{
+							int distance = (int)Vector2D.Distance(newline.start.Position, newline.end.Position);
+							if(General.Map.UDMF && General.Map.Config.UseLocalSidedefTextureOffsets) 
+							{
+								if(distance != 0) oldline.back.SetUdmfTextureOffsetX(distance);
+							} 
+							else 
+							{
+								oldline.back.OffsetX += distance;
+							}
+						}
+					}
+
+					if(newline.front != null && ((newline.front.MiddleRequired() || newline.front.LongMiddleTexture != MapSet.EmptyLongName) || newline.front.HighRequired() || newline.front.LowRequired())) 
+					{
+						int distance = (int)Vector2D.Distance(oldline.start.Position, oldline.end.Position);
+						if(General.Map.UDMF && General.Map.Config.UseLocalSidedefTextureOffsets) 
+						{
+							if(distance != 0) newline.front.SetUdmfTextureOffsetX(distance);
+						} 
+						else 
+						{
+							newline.front.OffsetX += distance;
+						}
+					}
+
+					//Clamp texture coordinates
+					if((oldline.front != null) && (newline.front != null)) 
+					{
+						//get texture
+						ImageData texture = null;
+
+						if(newline.front.MiddleRequired() && newline.front.LongMiddleTexture != MapSet.EmptyLongName && General.Map.Data.GetTextureExists(newline.front.LongMiddleTexture)) 
+							texture = General.Map.Data.GetTextureImage(newline.front.MiddleTexture);
+						else if(newline.front.HighRequired() && newline.front.LongHighTexture != MapSet.EmptyLongName && General.Map.Data.GetTextureExists(newline.front.LongHighTexture)) 
+							texture = General.Map.Data.GetTextureImage(newline.front.HighTexture);
+						else if(newline.front.LowRequired() && newline.front.LongLowTexture != MapSet.EmptyLongName && General.Map.Data.GetTextureExists(newline.front.LongLowTexture)) 
+							texture = General.Map.Data.GetTextureImage(newline.front.LowTexture);
+
+						//clamp offsetX
+						if(texture != null && texture.IsImageLoaded) 
+							newline.front.OffsetX %= texture.Width;
+					}
+
+					if((oldline.back != null) && (newline.back != null)) 
+					{
+						//get texture
+						ImageData texture = null;
+
+						if(newline.back.MiddleRequired() && newline.back.LongMiddleTexture != MapSet.EmptyLongName && General.Map.Data.GetTextureExists(newline.back.LongMiddleTexture))
+							texture = General.Map.Data.GetTextureImage(newline.back.MiddleTexture);
+						else if(newline.back.HighRequired() && newline.back.LongHighTexture != MapSet.EmptyLongName && General.Map.Data.GetTextureExists(newline.back.LongHighTexture))
+							texture = General.Map.Data.GetTextureImage(newline.back.HighTexture);
+						else if(newline.back.LowRequired() && newline.back.LongLowTexture != MapSet.EmptyLongName && General.Map.Data.GetTextureExists(newline.back.LongLowTexture))
+							texture = General.Map.Data.GetTextureImage(newline.back.LowTexture);
+
+						//clamp offsetX
+						if(texture != null && texture.IsImageLoaded) 
+							newline.back.OffsetX %= texture.Width;
+					}
+
+					break;
+
+				case SplitLineBehavior.CopyXY:
+					if((oldline.front != null) && (newline.front != null)) 
+					{
+						newline.front.OffsetX = oldline.front.OffsetX;
+						newline.front.OffsetY = oldline.front.OffsetY;
+
+						//mxd. Copy UDMF offsets as well
+						if(General.Map.UDMF && General.Map.Config.UseLocalSidedefTextureOffsets) 
+						{
+							UniFields.SetFloat(newline.front.Fields, "offsetx_top", oldline.front.Fields.GetValue("offsetx_top", 0f));
+							UniFields.SetFloat(newline.front.Fields, "offsetx_mid", oldline.front.Fields.GetValue("offsetx_mid", 0f));
+							UniFields.SetFloat(newline.front.Fields, "offsetx_bottom", oldline.front.Fields.GetValue("offsetx_bottom", 0f));
+
+							UniFields.SetFloat(newline.front.Fields, "offsety_top", oldline.front.Fields.GetValue("offsety_top", 0f));
+							UniFields.SetFloat(newline.front.Fields, "offsety_mid", oldline.front.Fields.GetValue("offsety_mid", 0f));
+							UniFields.SetFloat(newline.front.Fields, "offsety_bottom", oldline.front.Fields.GetValue("offsety_bottom", 0f));
+						}
+					}
+
+					if((oldline.back != null) && (newline.back != null)) 
+					{
+						newline.back.OffsetX = oldline.back.OffsetX;
+						newline.back.OffsetY = oldline.back.OffsetY;
+
+						//mxd. Copy UDMF offsets as well
+						if(General.Map.UDMF && General.Map.Config.UseLocalSidedefTextureOffsets) 
+						{
+							UniFields.SetFloat(newline.back.Fields, "offsetx_top", oldline.back.Fields.GetValue("offsetx_top", 0f));
+							UniFields.SetFloat(newline.back.Fields, "offsetx_mid", oldline.back.Fields.GetValue("offsetx_mid", 0f));
+							UniFields.SetFloat(newline.back.Fields, "offsetx_bottom", oldline.back.Fields.GetValue("offsetx_bottom", 0f));
+
+							UniFields.SetFloat(newline.back.Fields, "offsety_top", oldline.back.Fields.GetValue("offsety_top", 0f));
+							UniFields.SetFloat(newline.back.Fields, "offsety_mid", oldline.back.Fields.GetValue("offsety_mid", 0f));
+							UniFields.SetFloat(newline.back.Fields, "offsety_bottom", oldline.back.Fields.GetValue("offsety_bottom", 0f));
+						}
+					}
+					break;
+
+				case SplitLineBehavior.ResetXCopyY:
+					if((oldline.front != null) && (newline.front != null)) 
+					{
+						newline.front.OffsetX = 0;
+						newline.front.OffsetY = oldline.front.OffsetY;
+
+						//mxd. Reset UDMF X offset as well
+						if(General.Map.UDMF && General.Map.Config.UseLocalSidedefTextureOffsets) 
+						{
+							UniFields.SetFloat(newline.front.Fields, "offsetx_top", 0f);
+							UniFields.SetFloat(newline.front.Fields, "offsetx_mid", 0f);
+							UniFields.SetFloat(newline.front.Fields, "offsetx_bottom", 0f);
+						}
+					}
+
+					if((oldline.back != null) && (newline.back != null)) 
+					{
+						newline.back.OffsetX = 0;
+						newline.back.OffsetY = oldline.back.OffsetY;
+
+						//mxd. Reset UDMF X offset and copy Y offset as well
+						if(General.Map.UDMF && General.Map.Config.UseLocalSidedefTextureOffsets) 
+						{
+							UniFields.SetFloat(newline.back.Fields, "offsetx_top", 0f);
+							UniFields.SetFloat(newline.back.Fields, "offsetx_mid", 0f);
+							UniFields.SetFloat(newline.back.Fields, "offsetx_bottom", 0f);
+
+							UniFields.SetFloat(newline.back.Fields, "offsety_top", oldline.back.Fields.GetValue("offsety_top", 0f));
+							UniFields.SetFloat(newline.back.Fields, "offsety_mid", oldline.back.Fields.GetValue("offsety_mid", 0f));
+							UniFields.SetFloat(newline.back.Fields, "offsety_bottom", oldline.back.Fields.GetValue("offsety_bottom", 0f));
+						}
+					}
+					break;
+
+				case SplitLineBehavior.ResetXY:
+					if(newline.front != null) 
+					{
+						newline.front.OffsetX = 0;
+						newline.front.OffsetY = 0;
+
+						if(General.Map.UDMF && General.Map.Config.UseLocalSidedefTextureOffsets) 
+						{
+							UniFields.SetFloat(newline.front.Fields, "offsetx_top", 0f);
+							UniFields.SetFloat(newline.front.Fields, "offsetx_mid", 0f);
+							UniFields.SetFloat(newline.front.Fields, "offsetx_bottom", 0f);
+
+							UniFields.SetFloat(newline.front.Fields, "offsety_top", 0f);
+							UniFields.SetFloat(newline.front.Fields, "offsety_mid", 0f);
+							UniFields.SetFloat(newline.front.Fields, "offsety_bottom", 0f);
+						}
+					}
+
+					if(newline.back != null) 
+					{
+						newline.back.OffsetX = 0;
+						newline.back.OffsetY = 0;
+
+						if(General.Map.UDMF && General.Map.Config.UseLocalSidedefTextureOffsets) 
+						{
+							UniFields.SetFloat(newline.back.Fields, "offsetx_top", 0f);
+							UniFields.SetFloat(newline.back.Fields, "offsetx_mid", 0f);
+							UniFields.SetFloat(newline.back.Fields, "offsetx_bottom", 0f);
+
+							UniFields.SetFloat(newline.back.Fields, "offsety_top", 0f);
+							UniFields.SetFloat(newline.back.Fields, "offsety_mid", 0f);
+							UniFields.SetFloat(newline.back.Fields, "offsety_bottom", 0f);
+						}
+					}
+					break;
+			}
 		}
 
 		#endregion

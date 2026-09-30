@@ -16,28 +16,10 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
 using CodeImp.DoomBuilder.Controls;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Geometry;
-using System.Drawing;
 using CodeImp.DoomBuilder.Editing;
 using CodeImp.DoomBuilder.Plugins;
-using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Types;
 using CodeImp.DoomBuilder.Config;
-using CodeImp.DoomBuilder.Data;
 
 #endregion
 
@@ -74,12 +56,6 @@ namespace CodeImp.DoomBuilder.CommentsPanel
 			// Keep a static reference
             me = this;
 		}
-		
-		// This is called when the plugin is terminated
-		public override void Dispose()
-		{
-			base.Dispose();
-        }
 
 		// When a map is created
 		public override void OnMapNewEnd()
@@ -101,8 +77,8 @@ namespace CodeImp.DoomBuilder.CommentsPanel
 			}
 		}
 
-		// This is called after a map has been closed
-		public override void OnMapCloseEnd()
+		// Occurs before the map is closed
+		public override void OnMapCloseBegin()
 		{
 			// If we have a Comments panel, remove it
 			if(dockerpanel != null)

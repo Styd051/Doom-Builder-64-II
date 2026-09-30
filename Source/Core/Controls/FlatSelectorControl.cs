@@ -17,22 +17,9 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
-using System.Text;
-using System.Windows.Forms;
-using Microsoft.Win32;
-using System.Diagnostics;
-using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.Config;
-using CodeImp.DoomBuilder.Rendering;
-using SlimDX.Direct3D9;
-using System.Drawing.Imaging;
-using System.Drawing.Drawing2D;
-using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Windows;
+using CodeImp.DoomBuilder.Data;
 
 #endregion
 
@@ -52,26 +39,50 @@ namespace CodeImp.DoomBuilder.Controls
 		// This finds the image we need for the given flat name
 		protected override Image FindImage(string imagename)
 		{
+			timer.Stop(); //mxd
+
 			// Check if name is a "none" texture
-			if((imagename.Length < 1) || (imagename[0] == '-'))
+			if(string.IsNullOrEmpty(imagename))
 			{
+				DisplayImageSize(0, 0); //mxd
+				UpdateToggleImageNameButton(null); //mxd
+				
+				//mxd. Flat required?
+				return multipletextures ? Properties.Resources.ImageStack : Properties.Resources.MissingTexture;
+			} 
+			else if(imagename == "-") //mxd
+			{
+				DisplayImageSize(0, 0);
+				UpdateToggleImageNameButton(null); //mxd
+
 				// Flat required!
-				return CodeImp.DoomBuilder.Properties.Resources.MissingTexture;
+				return Properties.Resources.MissingTexture;
 			}
 			else
 			{
+				ImageData texture = General.Map.Data.GetFlatImage(imagename); //mxd
+				UpdateToggleImageNameButton(texture); //mxd
+
+				if(string.IsNullOrEmpty(texture.FilePathName) || texture is UnknownImage) DisplayImageSize(0, 0); //mxd
+				else DisplayImageSize(texture.ScaledWidth, texture.ScaledHeight); //mxd
+				if(!texture.IsPreviewLoaded) timer.Start(); //mxd
+				
 				// Set the image
-				return General.Map.Data.GetFlatImage(imagename).GetPreview();
+				return texture.GetPreview();
 			}
+		}
+
+		//mxd. This gets ImageData by name...
+		protected override ImageData GetImageData(string imagename)
+		{
+			return General.Map.Data.GetFlatImage(imagename);
 		}
 
 		// This browses for a flat
 		protected override string BrowseImage(string imagename)
 		{
-			string result;
-
 			// Browse for texture
-			result = FlatBrowserForm.Browse(this.ParentForm, imagename);
+			string result = TextureBrowserForm.Browse(this.ParentForm, imagename, true);
 			if(result != null) return result; else return imagename;
 		}
 	}

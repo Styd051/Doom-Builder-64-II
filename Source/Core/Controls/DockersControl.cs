@@ -18,21 +18,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
-using System.Text;
 using System.Windows.Forms;
-using Microsoft.Win32;
-using System.Diagnostics;
-using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.Config;
-using CodeImp.DoomBuilder.Rendering;
-using SlimDX.Direct3D9;
-using System.Drawing.Imaging;
-using System.Drawing.Drawing2D;
-using CodeImp.DoomBuilder.Map;
-using System.Globalization;
 
 #endregion
 
@@ -77,7 +64,8 @@ namespace CodeImp.DoomBuilder.Controls
 		#region ================== Properties
 		
 		public bool IsCollpased { get { return iscollapsed; } }
-		
+		public string SelectedTabName { get { return (tabs.SelectedTab == null ? "None" : tabs.SelectedTab.Text); } } //mxd
+
 		// This returns true when the focus is here, but not in some special cases
 		public bool IsFocused
 		{
@@ -99,7 +87,7 @@ namespace CodeImp.DoomBuilder.Controls
 		public DockersControl()
 		{
 			InitializeComponent();
-			expandedwidth = (int)((float)this.Width * (this.CurrentAutoScaleDimensions.Width / this.AutoScaleDimensions.Width));
+			expandedwidth = (int)(this.Width * (this.CurrentAutoScaleDimensions.Width / this.AutoScaleDimensions.Width));
 		}
 		
 		#endregion
@@ -114,10 +102,8 @@ namespace CodeImp.DoomBuilder.Controls
 			while(c is IContainerControl)
 			{
 				IContainerControl cc = (c as IContainerControl);
-				if(cc.ActiveControl != null)
-					c = cc.ActiveControl;
-				else
-					break;
+				if(cc.ActiveControl != null) c = cc.ActiveControl;
+				else break;
 			}
 			
 			return c;
@@ -126,23 +112,24 @@ namespace CodeImp.DoomBuilder.Controls
 		// This sets up the controls for left or right alignment
 		public void Setup(bool right)
 		{
+			int voffset = pinbutton.Bottom + pinbutton.Margin.Bottom; //mxd
 			rightalign = right;
 			if(rightalign)
 			{
 				splitter.Dock = DockStyle.Left;
 				tabs.Alignment = TabAlignment.Right;
-				tabs.Location = new Point(0, 0);
-				tabs.Size = new Size(this.ClientRectangle.Width + 2, this.ClientRectangle.Height);
+				tabs.Location = new Point(0, voffset);
 			}
 			else
 			{
 				splitter.Dock = DockStyle.Right;
 				tabs.Alignment = TabAlignment.Left;
-				tabs.Location = new Point(-2, 0);
-				tabs.Size = new Size(this.ClientRectangle.Width + 2, this.ClientRectangle.Height);
+				tabs.Location = new Point(-2, voffset);
 			}
-			
+
+			tabs.Size = new Size(this.ClientRectangle.Width + 2, this.ClientRectangle.Height - voffset);
 			tabs.SendToBack();
+			UpdatePinIcon(); //mxd
 		}
 		
 		// This collapses the docker
@@ -203,7 +190,7 @@ namespace CodeImp.DoomBuilder.Controls
 		}
 		
 		// This adds a docker
-		public void Add(Docker d)
+		public void Add(Docker d, bool notify)
 		{
 			// Set up page
 			TabPage page = new TabPage(d.Title);
@@ -215,7 +202,11 @@ namespace CodeImp.DoomBuilder.Controls
 			d.Control.Dock = DockStyle.Fill;
 			tabs.TabPages.Add(page);
 			page.ResumeLayout(true);
-			if(iscollapsed) tabs.SelectedIndex = -1;
+			if(iscollapsed)
+			{
+				tabs.SelectedIndex = -1;
+				if(notify) tabs.PlayNotifyAnimation(tabs.TabPages.Count - 1); //mxd
+			}
 			
 			// Go for all controls to add events
 			Queue<Control> todo = new Queue<Control>();
@@ -250,13 +241,21 @@ namespace CodeImp.DoomBuilder.Controls
 					}
 					
 					// Take down that page
-					if(page == tabs.SelectedTab) SelectPrevious();
+					if(page == tabs.SelectedTab || tabs.SelectedTab == null) SelectPrevious();
 					page.Controls.Clear();
 					tabs.TabPages.Remove(page);
 					return true;
 				}
 			}
 			
+			return false;
+		}
+
+		//mxd. This checks if given docker exists in this control
+		public bool Contains(Docker d) 
+		{
+			foreach(TabPage page in tabs.TabPages) 
+				if((page.Tag as Docker) == d) return true;
 			return false;
 		}
 		
@@ -270,7 +269,8 @@ namespace CodeImp.DoomBuilder.Controls
 				{
 					if(iscollapsed)
 					{
-						previousselected = currentselected;
+						if(!string.IsNullOrEmpty(currentselected)) previousselected = currentselected; //mxd
+						currentselected = d.FullName; //mxd
 						expandedtab = index;
 					}
 					else
@@ -288,6 +288,12 @@ namespace CodeImp.DoomBuilder.Controls
 		// This selectes the previous docker
 		public void SelectPrevious()
 		{
+			//mxd. First one is better than nothing
+			if(string.IsNullOrEmpty(previousselected) && tabs.TabPages.Count > 0)
+			{
+				previousselected = (tabs.TabPages[0].Tag as Docker).FullName;
+			}
+			
 			if(!string.IsNullOrEmpty(previousselected))
 			{
 				int index = 0;
@@ -297,7 +303,7 @@ namespace CodeImp.DoomBuilder.Controls
 					{
 						if(iscollapsed)
 						{
-							previousselected = currentselected;
+							currentselected = previousselected;
 							expandedtab = index;
 						}
 						else
@@ -314,7 +320,7 @@ namespace CodeImp.DoomBuilder.Controls
 		// This sorts tabs by their full name
 		public void SortTabs(IEnumerable<string> fullnames)
 		{
-			Dictionary<string, TabPage> pages = new Dictionary<string, TabPage>(tabs.TabPages.Count);
+			Dictionary<string, TabPage> pages = new Dictionary<string, TabPage>(tabs.TabPages.Count, StringComparer.Ordinal);
 			foreach(TabPage p in tabs.TabPages) pages.Add((p.Tag as Docker).FullName, p);
 			tabs.TabPages.Clear();
 			
@@ -331,6 +337,15 @@ namespace CodeImp.DoomBuilder.Controls
 			// Add remaining tabs
 			foreach(KeyValuePair<string, TabPage> p in pages)
 				tabs.TabPages.Add(p.Value);
+		}
+
+		//mxd
+		private void UpdatePinIcon() 
+		{
+			if(tabs.Alignment == TabAlignment.Left)
+				pinbutton.Image = (General.Settings.CollapseDockers ? Properties.Resources.DockerCollapse : Properties.Resources.DockerExpand);
+			else
+				pinbutton.Image = (General.Settings.CollapseDockers ? Properties.Resources.DockerExpand : Properties.Resources.DockerCollapse);
 		}
 		
 		#endregion
@@ -362,7 +377,8 @@ namespace CodeImp.DoomBuilder.Controls
 			if(!controlledselection)
 			{
 				// Keep track of previous selected tab
-				previousselected = currentselected;
+				if(!string.IsNullOrEmpty(currentselected)) previousselected = currentselected;
+
 				if(tabs.SelectedTab != null)
 				{
 					Docker d = (tabs.SelectedTab.Tag as Docker);
@@ -409,19 +425,25 @@ namespace CodeImp.DoomBuilder.Controls
 				int collapsedwidth = GetCollapsedWidth();
 				if(rightalign)
 				{
-					this.Left += delta;
-					this.Width -= delta;
-					if(this.Width < collapsedwidth)
+					if((this.Width > collapsedwidth) || (delta < 0))
 					{
-						this.Left -= collapsedwidth - this.Width;
-						this.Width = collapsedwidth;
+						this.Left += delta;
+						this.Width -= delta;
+						if(this.Width < collapsedwidth)
+						{
+							this.Left -= collapsedwidth - this.Width;
+							this.Width = collapsedwidth;
+						}
 					}
 				}
 				else
 				{
-					this.Width += delta;
-					if(this.Width < collapsedwidth)
-						this.Width = collapsedwidth;
+					if((this.Width > collapsedwidth) || (delta > 0))
+					{
+						this.Width += delta;
+						if(this.Width < collapsedwidth)
+							this.Width = collapsedwidth;
+					}
 				}
 
 				General.MainWindow.UnlockUpdate();
@@ -430,9 +452,22 @@ namespace CodeImp.DoomBuilder.Controls
 				General.MainWindow.Update();
 				
 				// Raise event
-				if(UserResize != null)
-					UserResize(this, EventArgs.Empty);
+				if(UserResize != null) UserResize(this, EventArgs.Empty);
 			}
+		}
+
+		//mxd
+		private void pinbutton_Click(object sender, EventArgs e)
+		{
+			General.Settings.CollapseDockers = !General.Settings.CollapseDockers;
+			General.MainWindow.SetupInterface();
+			UpdatePinIcon();
+		}
+
+		//mxd
+		private void DockersControl_Resize(object sender, EventArgs e)
+		{
+			pinbutton.Width = this.Width - pinbutton.Margin.Left - pinbutton.Margin.Right;
 		}
 		
 		#endregion

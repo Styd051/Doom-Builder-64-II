@@ -13,26 +13,15 @@
  */
 
 #endregion
-
+/*
 #region ================== Namespaces
 
 using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
 using System.Text;
-using System.Windows.Forms;
 using System.IO;
-using System.Reflection;
 using System.Drawing;
-using System.ComponentModel;
-using CodeImp.DoomBuilder.Map;
-using SlimDX.Direct3D9;
 using SlimDX;
-using CodeImp.DoomBuilder.Geometry;
-using System.Drawing.Imaging;
-using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.Editing;
 
 using Configuration = CodeImp.DoomBuilder.IO.Configuration;
 
@@ -74,7 +63,7 @@ namespace CodeImp.DoomBuilder.Rendering
 		private FontCharacter[] characters;
 		
 		// Disposing
-		private bool isdisposed = false;
+		private bool isdisposed;
 
 		#endregion
 
@@ -89,34 +78,28 @@ namespace CodeImp.DoomBuilder.Rendering
 		// Constructor
 		internal TextFont()
 		{
-			Configuration cfg;
-			Stream fontdata;
-			StreamReader fontreader;
-			string[] resnames;
-			
 			// Initialize
 			characters = new FontCharacter[256];
 
 			// Make chars configuration
-			cfg = new Configuration();
+			Configuration cfg = new Configuration();
 			
 			// Find a resource named Font.cfg
-			resnames = General.ThisAssembly.GetManifestResourceNames();
+			string[] resnames = General.ThisAssembly.GetManifestResourceNames();
 			foreach(string rn in resnames)
 			{
 				// Found it?
-				if(rn.EndsWith(FONT_RESOURCE, StringComparison.InvariantCultureIgnoreCase))
+				if(rn.EndsWith(FONT_RESOURCE, StringComparison.OrdinalIgnoreCase))
 				{
 					// Get a stream from the resource
-					fontdata = General.ThisAssembly.GetManifestResourceStream(rn);
-					fontreader = new StreamReader(fontdata, Encoding.ASCII);
+					Stream fontdata = General.ThisAssembly.GetManifestResourceStream(rn);
+					StreamReader fontreader = new StreamReader(fontdata, Encoding.ASCII);
 
 					// Load configuration from stream
 					cfg.InputConfiguration(fontreader.ReadToEnd());
 
 					// Done
 					fontreader.Dispose();
-					fontdata.Dispose();
 					break;
 				}
 			}
@@ -133,8 +116,8 @@ namespace CodeImp.DoomBuilder.Rendering
 
 				// This is ancient code of mine.
 				// The charater sizes were based on 800x600 resolution.
-				characters[i].width = (float)(int)chr["width"] / 40f;
-				characters[i].height = (float)(int)chr["height"] / 30f;
+				characters[i].width = (int)chr["width"] / 40f;
+				characters[i].height = (int)chr["height"] / 30f;
 				characters[i].u1 = (float)chr["u1"];
 				characters[i].v1 = (float)chr["v1"];
 				characters[i].u2 = (float)chr["u2"];
@@ -166,12 +149,10 @@ namespace CodeImp.DoomBuilder.Rendering
 						ref float textx, float texty, float textheight, float offsetv)
 		{
 			FlatVertex vert = new FlatVertex();
-			FontCharacter cinfo;
-			float cwidth;
-			
+
 			// Get the character information
-			cinfo = characters[c];
-			cwidth = cinfo.width * scale;
+			FontCharacter cinfo = characters[c];
+			float cwidth = cinfo.width * scale;
 
 			// Create lefttop vertex
 			vert.c = color;
@@ -179,7 +160,7 @@ namespace CodeImp.DoomBuilder.Rendering
 			vert.v = cinfo.v1 * 0.5f + offsetv;
 			vert.x = textx;
 			vert.y = texty;
-			stream.Write<FlatVertex>(vert);
+			stream.Write(vert);
 
 			// Create leftbottom vertex
 			vert.c = color;
@@ -187,7 +168,7 @@ namespace CodeImp.DoomBuilder.Rendering
 			vert.v = cinfo.v2 * 0.5f + offsetv;
 			vert.x = textx;
 			vert.y = texty + textheight;
-			stream.Write<FlatVertex>(vert);
+			stream.Write(vert);
 
 			// Create righttop vertex
 			vert.c = color;
@@ -195,7 +176,7 @@ namespace CodeImp.DoomBuilder.Rendering
 			vert.v = cinfo.v1 * 0.5f + offsetv;
 			vert.x = textx + cwidth;
 			vert.y = texty;
-			stream.Write<FlatVertex>(vert);
+			stream.Write(vert);
 
 			// Create leftbottom vertex
 			vert.c = color;
@@ -203,7 +184,7 @@ namespace CodeImp.DoomBuilder.Rendering
 			vert.v = cinfo.v2 * 0.5f + offsetv;
 			vert.x = textx;
 			vert.y = texty + textheight;
-			stream.Write<FlatVertex>(vert);
+			stream.Write(vert);
 
 			// Create righttop vertex
 			vert.c = color;
@@ -211,7 +192,7 @@ namespace CodeImp.DoomBuilder.Rendering
 			vert.v = cinfo.v1 * 0.5f + offsetv;
 			vert.x = textx + cwidth;
 			vert.y = texty;
-			stream.Write<FlatVertex>(vert);
+			stream.Write(vert);
 
 			// Create rightbottom vertex
 			vert.c = color;
@@ -219,7 +200,7 @@ namespace CodeImp.DoomBuilder.Rendering
 			vert.v = cinfo.v2 * 0.5f + offsetv;
 			vert.x = textx + cwidth;
 			vert.y = texty + textheight;
-			stream.Write<FlatVertex>(vert);
+			stream.Write(vert);
 
 			textx += (cwidth + (ADJUST_SPACING * scale));
 		}
@@ -237,7 +218,7 @@ namespace CodeImp.DoomBuilder.Rendering
 		{
 			// Check if the character has been set
 			return ((characters[b].width > 0.000000001f) ||
-			        (characters[b].height > 0.000000001f));
+					(characters[b].height > 0.000000001f));
 		}
 
 		// This calculates the size of a text string at a given scale
@@ -264,3 +245,4 @@ namespace CodeImp.DoomBuilder.Rendering
 		#endregion
 	}
 }
+*/

@@ -16,27 +16,15 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Geometry;
-using System.Drawing;
-using CodeImp.DoomBuilder.Editing;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.BuilderModes
 {
-	[FindReplace("Vertex Index", BrowseButton = false, Replacable = false)]
+	[FindReplace("Vertex Index", BrowseButton = false)]
 	internal class FindVertexNumber : FindReplaceType
 	{
 		#region ================== Constants
@@ -53,38 +41,25 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 		#region ================== Constructor / Destructor
 
-		// Constructor
-		public FindVertexNumber()
-		{
-			// Initialize
-
-		}
-
-		// Destructor
-		~FindVertexNumber()
-		{
-		}
-
 		#endregion
 
 		#region ================== Methods
 
-		// This is called when the browse button is pressed
-		public override string Browse(string initialvalue)
+		//mxd
+		public override bool CanReplace() 
 		{
-			return "";
+			return false;
 		}
-
 
 		// This is called to perform a search (and replace)
 		// Returns a list of items to show in the results list
 		// replacewith is null when not replacing
-		public override FindReplaceObject[] Find(string value, bool withinselection, string replacewith, bool keepselection)
+		public override FindReplaceObject[] Find(string value, bool withinselection, bool replace, string replacewith, bool keepselection)
 		{
 			List<FindReplaceObject> objs = new List<FindReplaceObject>();
 
 			// Interpret the number given
-			int index = 0;
+			int index;
 			if(int.TryParse(value, out index))
 			{
 				Vertex v = General.Map.Map.GetVertexByIndex(index);
@@ -121,8 +96,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// Edit objects
 		public override void EditObjects(FindReplaceObject[] selection)
 		{
-			List<Vertex> vertices = new List<Vertex>(selection.Length);
-			foreach(FindReplaceObject o in selection) vertices.Add(o.Vertex);
+			HashSet<Vertex> vertices = new HashSet<Vertex>();
+			foreach(FindReplaceObject o in selection)
+				if(!vertices.Contains(o.Vertex)) vertices.Add(o.Vertex);
 			General.Interface.ShowEditVertices(vertices);
 			General.Map.Map.Update();
 		}

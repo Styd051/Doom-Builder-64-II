@@ -17,28 +17,18 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Geometry;
 using System.Drawing;
-using CodeImp.DoomBuilder.Editing;
+using System.Windows.Forms;
 using CodeImp.DoomBuilder.Config;
+using CodeImp.DoomBuilder.Map;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.BuilderModes
 {
 	[FindReplace("Sector Effect", BrowseButton = true)]
-	internal class FindSectorEffect : FindReplaceType
+	internal class FindSectorEffect : BaseFindSector
 	{
 		#region ================== Constants
 
@@ -56,18 +46,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 		#region ================== Constructor / Destructor
 
-		// Constructor
-		public FindSectorEffect()
-		{
-			// Initialize
-
-		}
-
-		// Destructor
-		~FindSectorEffect()
-		{
-		}
-
 		#endregion
 
 		#region ================== Methods
@@ -77,21 +55,27 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		{
 			int effect;
 			int.TryParse(initialvalue, out effect);
-			effect = General.Interface.BrowseSectorEffect(BuilderPlug.Me.FindReplaceForm, effect);
-			return effect.ToString();
+			return General.Interface.BrowseSectorEffect(BuilderPlug.Me.FindReplaceForm, effect, true).ToString();
 		}
 
+		//mxd. This is called when the browse replace button is pressed
+		public override string BrowseReplace(string initialvalue)
+		{
+			int effect;
+			int.TryParse(initialvalue, out effect);
+			return General.Interface.BrowseSectorEffect(BuilderPlug.Me.FindReplaceForm, effect).ToString();
+		}
 
 		// This is called to perform a search (and replace)
 		// Returns a list of items to show in the results list
 		// replacewith is null when not replacing
-		public override FindReplaceObject[] Find(string value, bool withinselection, string replacewith, bool keepselection)
+		public override FindReplaceObject[] Find(string value, bool withinselection, bool replace, string replacewith, bool keepselection)
 		{
 			List<FindReplaceObject> objs = new List<FindReplaceObject>();
 
 			// Interpret the replacement
 			int replaceeffect = 0;
-			if(replacewith != null)
+			if(replace)
 			{
 				// If it cannot be interpreted, set replacewith to null (not replacing at all)
 				if(!int.TryParse(replacewith, out replaceeffect)) replacewith = null;
@@ -105,20 +89,39 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			}
 
 			// Interpret the number given
-			int effect = 0;
+			int effect;
 			if(int.TryParse(value, out effect))
 			{
+				//mxd
+				SectorEffectData sd = General.Map.Config.GetSectorEffectData(effect);
+				
 				// Where to search?
-				ICollection<Sector> list = withinselection ? General.Map.Map.GetSelectedSectors(true) : General.Map.Map.Sectors;
+				ICollection<Sector> list = (withinselection ? General.Map.Map.GetSelectedSectors(true) : General.Map.Map.Sectors);
 
 				// Go for all sectors
 				foreach(Sector s in list)
 				{
-					// Tag matches?
-					if(s.Effect == effect)
+					bool match = false;
+
+					//mxd. Effect matches? -1 means any effect
+					if(effect == -1)
+					{
+						match = s.Effect > 0;
+					}
+					else if(effect == s.Effect)
+					{
+						match = true;
+					}
+					else if(General.Map.Config.GeneralizedEffects && effect != 0 && s.Effect != 0)
+					{
+						SectorEffectData sdo = General.Map.Config.GetSectorEffectData(s.Effect);
+						match = (sd.Effect == sdo.Effect || (sd.GeneralizedBits.Count == sdo.GeneralizedBits.Count && sd.GeneralizedBits.Overlaps(sdo.GeneralizedBits)));
+					}
+					
+					if(match)
 					{
 						// Replace
-						if(replacewith != null) s.Effect = replaceeffect;
+						if(replace) s.Effect = replaceeffect;
 						
 						SectorEffectInfo info = General.Map.Config.GetSectorEffectInfo(s.Effect);
 						if(!info.IsNull)
@@ -130,41 +133,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			}
 
 			return objs.ToArray();
-		}
-
-		// This is called when a specific object is selected from the list
-		public override void ObjectSelected(FindReplaceObject[] selection)
-		{
-			if(selection.Length == 1)
-			{
-				ZoomToSelection(selection);
-				General.Interface.ShowSectorInfo(selection[0].Sector);
-			}
-			else
-				General.Interface.HideInfo();
-
-			General.Map.Map.ClearAllSelected();
-			foreach(FindReplaceObject obj in selection) obj.Sector.Selected = true;
-		}
-
-		// Render selection
-		public override void PlotSelection(IRenderer2D renderer, FindReplaceObject[] selection)
-		{
-			foreach(FindReplaceObject o in selection)
-			{
-				foreach(Sidedef sd in o.Sector.Sidedefs)
-				{
-					renderer.PlotLinedef(sd.Line, General.Colors.Selection);
-				}
-			}
-		}
-
-		// Edit objects
-		public override void EditObjects(FindReplaceObject[] selection)
-		{
-			List<Sector> sectors = new List<Sector>(selection.Length);
-			foreach(FindReplaceObject o in selection) sectors.Add(o.Sector);
-			General.Interface.ShowEditSectors(sectors);
 		}
 
 		#endregion

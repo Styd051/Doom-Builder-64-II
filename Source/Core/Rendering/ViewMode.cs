@@ -16,24 +16,6 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using System.Drawing;
-using System.ComponentModel;
-using CodeImp.DoomBuilder.Map;
-using SlimDX.Direct3D9;
-using SlimDX;
-using CodeImp.DoomBuilder.Geometry;
-using System.Drawing.Imaging;
-using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.Editing;
-
 #endregion
 
 namespace CodeImp.DoomBuilder.Rendering
@@ -41,11 +23,8 @@ namespace CodeImp.DoomBuilder.Rendering
 	public enum ViewMode : int
 	{
 		Normal = 0,
-		//Brightness = 1,
-		FloorTextures = 1,
-		CeilingTextures = 2,
-        FloorColor = 3, // villsa
-        CeilingColor = 4, // villsa
-        ThingColor = 5, // villsa
+		Brightness = 1,
+		FloorTextures = 2,
+		CeilingTextures = 3
 	}
 }

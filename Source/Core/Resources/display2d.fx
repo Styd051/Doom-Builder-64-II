@@ -4,17 +4,17 @@
 // Vertex input data
 struct VertexData
 {
-    float3 pos		: POSITION;
-    float4 color	: COLOR0;
-    float2 uv		: TEXCOORD0;
+	float3 pos		: POSITION;
+	float4 color	: COLOR0;
+	float2 uv		: TEXCOORD0;
 };
 
 // Pixel input data
 struct PixelData
 {
-    float4 pos		: POSITION;
-    float4 color	: COLOR0;
-    float2 uv		: TEXCOORD0;
+	float4 pos		: POSITION;
+	float4 color	: COLOR0;
+	float2 uv		: TEXCOORD0;
 };
 
 // Render settings
@@ -33,29 +33,17 @@ dword filtersettings;
 // Texture1 input
 texture texture1
 <
-    string UIName = "Texture1";
-    string ResourceType = "2D";
+	string UIName = "Texture1";
+	string ResourceType = "2D";
 >;
 
 // Texture sampler settings
 sampler2D texture1samp = sampler_state
 {
-    Texture = <texture1>;
-    MagFilter = filtersettings;
-    MinFilter = filtersettings;
-    MipFilter = filtersettings;
-	AddressU = Wrap;
-	AddressV = Wrap;
-	MipMapLodBias = 0.0f;
-};
-
-// Texture sampler settings
-sampler2D texture1linear = sampler_state
-{
-    Texture = <texture1>;
-    MagFilter = Linear;
-    MinFilter = Linear;
-    MipFilter = Linear;
+	Texture = <texture1>;
+	MagFilter = filtersettings;
+	MinFilter = filtersettings;
+	MipFilter = filtersettings;
 	AddressU = Wrap;
 	AddressV = Wrap;
 	MipMapLodBias = 0.0f;
@@ -111,12 +99,12 @@ float4 ps_normal(PixelData pd) : COLOR
 	return float4(c.rgb, c.a * rendersettings.w) * pd.color;
 }
 
-// Pixel shader for text
-float4 ps_text(PixelData pd) : COLOR
+//mxd. Pixel shader for full bright drawing
+float4 ps_fullbright(PixelData pd) : COLOR
 {
 	// Take this pixel's color
-	float4 c = tex2D(texture1linear, pd.uv);
-	return float4(c.rgb, c.a * rendersettings.w) * pd.color;
+	float4 c = tex2D(texture1samp, pd.uv);
+	return float4(c.rgb, c.a * rendersettings.w);
 }
 
 // Technique for shader model 2.0
@@ -124,19 +112,19 @@ technique SM20
 {
 	pass p0
 	{
-	    VertexShader = compile vs_2_0 vs_transform();
-	    PixelShader = compile ps_2_0 ps_fsaa();
+		VertexShader = compile vs_2_0 vs_transform();
+		PixelShader = compile ps_2_0 ps_fsaa();
 	}
 	
 	pass p1
 	{
-	    VertexShader = compile vs_2_0 vs_transform();
-	    PixelShader = compile ps_2_0 ps_normal();
+		VertexShader = compile vs_2_0 vs_transform();
+		PixelShader = compile ps_2_0 ps_normal();
 	}
 	
-	pass p2
+	pass p2 //mxd
 	{
-	    VertexShader = compile vs_2_0 vs_transform();
-	    PixelShader = compile ps_2_0 ps_text();
+		VertexShader = compile vs_2_0 vs_transform();
+		PixelShader = compile ps_2_0 ps_fullbright();
 	}
 }

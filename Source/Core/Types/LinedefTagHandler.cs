@@ -16,25 +16,51 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Data;
-using System.IO;
-using System.Diagnostics;
 using CodeImp.DoomBuilder.Config;
-using CodeImp.DoomBuilder.Windows;
-using System.Windows.Forms;
+using CodeImp.DoomBuilder.Map;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.Types
 {
 	[TypeHandler(UniversalType.LinedefTag, "Linedef Tag", true)]
-	internal class LinedefTagHandler : IntegerHandler
+	internal class LinedefTagHandler : SectorTagHandler
 	{
+		#region ================== Setup (mxd)
+
+		protected override EnumList CreateEnumList()
+		{
+			// Collect tags
+			List<int> tags = new List<int>();
+			HashSet<int> tagshash = new HashSet<int>();
+			EnumList taglist = new EnumList();
+
+			if(General.Map.Map != null)
+			{
+				foreach(Linedef l in General.Map.Map.Linedefs)
+				{
+					if(l.Tag == 0 || tagshash.IsSupersetOf(l.Tags)) continue;
+					tags.AddRange(l.Tags);
+					foreach(int i in l.Tags) tagshash.Add(i);
+				}
+
+				// Now sort them in descending order
+				tags.Sort((a, b) => -1 * a.CompareTo(b));
+
+				// Create enum items
+				foreach(int tag in tags)
+				{
+					if(General.Map.Options.TagLabels.ContainsKey(tag)) // Tag labels
+						taglist.Add(new EnumItem(tag.ToString(), General.Map.Options.TagLabels[tag]));
+					else
+						taglist.Add(new EnumItem(tag.ToString(), tag.ToString()));
+				}
+			}
+
+			return taglist;
+		}
+
+		#endregion
 	}
 }

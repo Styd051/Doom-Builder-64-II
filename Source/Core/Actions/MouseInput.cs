@@ -17,14 +17,6 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Text;
-using CodeImp.DoomBuilder.Properties;
-using System.IO;
-using CodeImp.DoomBuilder.IO;
-using System.Collections;
 using System.Windows.Forms;
 using SlimDX;
 using SlimDX.DirectInput;
@@ -40,10 +32,10 @@ namespace CodeImp.DoomBuilder.Actions
 
 		// Mouse input
 		private DirectInput dinput;
-        private Mouse mouse;
+		private Mouse mouse;
 		
 		// Disposing
-		private bool isdisposed = false;
+		private bool isdisposed;
 
 		#endregion
 
@@ -62,8 +54,8 @@ namespace CodeImp.DoomBuilder.Actions
 			dinput = new DirectInput();
 			
 			// Start mouse input
-            mouse = new Mouse(dinput);
-            if (mouse == null) throw new Exception("No mouse device found.");
+			mouse = new Mouse(dinput);
+			if(mouse == null) throw new Exception("No mouse device found.");
 			
 			// Set mouse input settings
 			mouse.Properties.AxisMode = DeviceAxisMode.Relative;
@@ -74,8 +66,15 @@ namespace CodeImp.DoomBuilder.Actions
 			
 			// Aquire device
 			try { mouse.Acquire(); }
+#if DEBUG
+			catch(Exception e)
+			{
+				Console.WriteLine("MouseInput initialization failed: " + e.Message);
+			}
+#else
 			catch(Exception) { }
-			
+#endif
+
 			// We have no destructor
 			GC.SuppressFinalize(this);
 		}
@@ -111,9 +110,6 @@ namespace CodeImp.DoomBuilder.Actions
 		// This processes the input
 		public Vector2D Process()
 		{
-			MouseState ms;
-			float changex, changey;
-			
 			// Poll the device
 			try
 			{
@@ -121,30 +117,53 @@ namespace CodeImp.DoomBuilder.Actions
 				if(result.IsSuccess)
 				{
 					// Get the changes since previous poll
-					ms = mouse.GetCurrentState();
+					MouseState ms = mouse.GetCurrentState();
 
 					// Calculate changes depending on sensitivity
-					changex = (float)ms.X * General.Settings.VisualMouseSensX * (float)General.Settings.MouseSpeed * 0.01f;
-					changey = (float)ms.Y * General.Settings.VisualMouseSensY * (float)General.Settings.MouseSpeed * 0.01f;
+					float changex = ms.X * General.Settings.VisualMouseSensX * General.Settings.MouseSpeed * 0.01f;
+					float changey = ms.Y * General.Settings.VisualMouseSensY * General.Settings.MouseSpeed * 0.01f;
 
 					// Return changes
 					return new Vector2D(changex, changey);
 				}
-				else
+
+				// Reaquire device
+				try { mouse.Acquire(); }
+#if DEBUG
+				catch(Exception e)
 				{
-					// Reaquire device
-					try { mouse.Acquire(); }
-					catch(Exception) { }
-					return new Vector2D();
+					Console.WriteLine("MouseInput process failed: " + e.Message);
 				}
+#else
+				catch(Exception) { }
+#endif
+				return new Vector2D();
 			}
+#if DEBUG
+			catch(DirectInputException die)
+			{
+				Console.WriteLine("MouseInput process failed: " + die.Message);
+			
+				// Reaquire device
+				try
+				{
+					mouse.Acquire();
+				}
+				catch(Exception e)
+				{
+					Console.WriteLine("MouseInput process failed: " + e.Message);
+				}
+				return new Vector2D();
+			}
+#else
 			catch(DirectInputException)
 			{
 				// Reaquire device
-				try { mouse.Acquire(); }
+				try { mouse.Acquire(); } 
 				catch(Exception) { }
 				return new Vector2D();
 			}
+#endif
 		}
 
 		#endregion

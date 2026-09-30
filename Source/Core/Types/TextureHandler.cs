@@ -16,16 +16,7 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Drawing;
-using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Data;
-using System.IO;
-using System.Diagnostics;
 using System.Windows.Forms;
 using CodeImp.DoomBuilder.Windows;
 
@@ -58,7 +49,7 @@ namespace CodeImp.DoomBuilder.Types
 
 		public override void Browse(IWin32Window parent)
 		{
-			this.value = TextureBrowserForm.Browse(parent, this.value);
+			this.value = TextureBrowserForm.Browse(parent, this.value, false);
 		}
 
 		public override void SetValue(object value)
@@ -77,6 +68,11 @@ namespace CodeImp.DoomBuilder.Types
 		public override string GetStringValue()
 		{
 			return this.value;
+		}
+
+		public override object GetDefaultValue()
+		{
+			return string.Empty;
 		}
 
 		#endregion

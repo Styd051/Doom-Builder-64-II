@@ -16,18 +16,8 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Data;
-using System.IO;
-using System.Diagnostics;
-using System.Windows.Forms;
-using System.Text.RegularExpressions;
-using System.Collections.Specialized;
 
 #endregion
 
@@ -74,16 +64,29 @@ namespace CodeImp.DoomBuilder.Config
 		// Add a texture
 		internal void AddTexture(ImageData image)
 		{
-			if(textures.ContainsKey(image.LongName))
-				General.ErrorLogger.Add(ErrorType.Warning, "Texture \"" + image.Name + "\" is double defined in resource \"" + this.Location.location + "\".");
+			//mxd. Wad duplicates are checked by WadReader
+			if(location.type != DataLocation.RESOURCE_WAD && textures.ContainsKey(image.LongName) && !image.HasPatchWithSameName)
+			{
+				if(image is CameraTextureImage)
+					General.ErrorLogger.Add(ErrorType.Warning, "Texture \"" + image.Name + "\" is overridden by CameraTexture with the same name in resource \"" + this.Location.GetDisplayName() + "\".");
+				else
+					General.ErrorLogger.Add(ErrorType.Warning, "Texture \"" + image.Name + "\" is double defined in resource \"" + this.Location.GetDisplayName() + "\".");
+			}
 			textures[image.LongName] = image;
 		}
 
 		// Add a flat
 		internal void AddFlat(ImageData image)
 		{
-			if(flats.ContainsKey(image.LongName))
-				General.ErrorLogger.Add(ErrorType.Warning, "Flat \"" + image.Name + "\" is double defined in resource \"" + this.Location.location + "\".");
+			//mxd. Wad duplicates are checked by WadReader
+			if(location.type != DataLocation.RESOURCE_WAD && flats.ContainsKey(image.LongName) && (!General.Map.Config.MixTexturesFlats || !image.HasPatchWithSameName))
+			{
+				if(image is CameraTextureImage)
+					General.ErrorLogger.Add(ErrorType.Warning, "Flat \"" + image.Name + "\" is overridden by CameraTexture with the same name in resource \"" + this.Location.GetDisplayName() + "\".");
+				else
+					General.ErrorLogger.Add(ErrorType.Warning, "Flat \"" + image.Name + "\" is double defined in resource \"" + this.Location.GetDisplayName() + "\".");
+			}
+				
 			flats[image.LongName] = image;
 		}
 
@@ -104,19 +107,17 @@ namespace CodeImp.DoomBuilder.Config
 		{
 			// Make a copy of the flats only
 			Dictionary<long, ImageData> flatsonly = new Dictionary<long, ImageData>(flats);
-			
+
 			// Add textures to flats
-			foreach(KeyValuePair<long, ImageData> t in textures)
+			foreach(KeyValuePair<long, ImageData> t in textures) 
 			{
-				if(!flats.ContainsKey(t.Key))
-					flats.Add(t.Key, t.Value);
+				if(!flats.ContainsKey(t.Key)) flats.Add(t.Key, t.Value);
 			}
-			
+
 			// Add flats to textures
-			foreach(KeyValuePair<long, ImageData> f in flatsonly)
+			foreach(KeyValuePair<long, ImageData> f in flatsonly) 
 			{
-				if(!textures.ContainsKey(f.Key))
-					textures.Add(f.Key, f.Value);
+				if(!textures.ContainsKey(f.Key)) textures.Add(f.Key, f.Value);
 			}
 		}
 		

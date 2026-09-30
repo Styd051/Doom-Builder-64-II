@@ -16,16 +16,7 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Drawing;
-using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Data;
-using System.IO;
-using System.Diagnostics;
 using CodeImp.DoomBuilder.Windows;
 using System.Windows.Forms;
 
@@ -64,7 +55,7 @@ namespace CodeImp.DoomBuilder.Types
 		public override void SetValue(object value)
 		{
 			if(value != null)
-				this.value = value.ToString();
+				this.value = value.ToString().Replace("\"", ""); //mxd
 			else
 				this.value = "";
 		}
@@ -77,13 +68,17 @@ namespace CodeImp.DoomBuilder.Types
 		public override int GetIntValue()
 		{
 			int result;
-			if(int.TryParse(this.value, out result)) return result;
-				else return 0;
+			return (int.TryParse(this.value, out result) ? result : 0);
 		}
 
 		public override string GetStringValue()
 		{
 			return this.value;
+		}
+
+		public override object GetDefaultValue()
+		{
+			return string.Empty;
 		}
 
 		#endregion

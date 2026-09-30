@@ -17,15 +17,9 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Text;
 using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Data;
-using System.IO;
-using System.Diagnostics;
-using System.Windows.Forms;
 using CodeImp.DoomBuilder.Map;
 
 #endregion
@@ -41,14 +35,16 @@ namespace CodeImp.DoomBuilder.Config
 		#region ================== Variables
 
 		// Properties
-		private int index;
-		private string prefix;
-		private string category;
-		private string name;
-		private string title;
-		private ArgumentInfo[] args;
-		private bool isgeneralized;
-		private bool isknown;
+		private readonly int index;
+		private readonly string prefix;
+		private readonly string category;
+		private readonly string name;
+		private readonly string title;
+		private readonly string id; //mxd. wiki-compatible name 
+		private readonly ArgumentInfo[] args;
+		private readonly bool isgeneralized;
+		private readonly bool isknown;
+		private readonly bool requiresactivation; //mxd
 		
 		#endregion
 
@@ -59,9 +55,11 @@ namespace CodeImp.DoomBuilder.Config
 		public string Category { get { return category; } }
 		public string Name { get { return name; } }
 		public string Title { get { return title; } }
+		public string Id { get { return id; } } //mxd
 		public bool IsGeneralized { get { return isgeneralized; } }
 		public bool IsKnown { get { return isknown; } }
 		public bool IsNull { get { return (index == 0); } }
+		public bool RequiresActivation { get { return requiresactivation; } } //mxd
 		public ArgumentInfo[] Args { get { return args; } }
 
 		#endregion
@@ -82,7 +80,9 @@ namespace CodeImp.DoomBuilder.Config
 			
 			// Read settings
 			this.name = cfg.ReadSetting(actionsetting + ".title", "Unnamed");
+			this.id = cfg.ReadSetting(actionsetting + ".id", string.Empty); //mxd
 			this.prefix = cfg.ReadSetting(actionsetting + ".prefix", "");
+			this.requiresactivation = cfg.ReadSetting(actionsetting + ".requiresactivation", true); //mxd
 			this.title = this.prefix + " " + this.name;
 			this.title = this.title.Trim();
 
@@ -100,6 +100,7 @@ namespace CodeImp.DoomBuilder.Config
 			this.index = index;
 			this.isgeneralized = isgeneralized;
 			this.isknown = isknown;
+			this.requiresactivation = true; //mxd. Unused, set for consistency sake.
 			this.title = title;
 			this.args = new ArgumentInfo[Linedef.NUM_ARGS];
 			for(int i = 0; i < Linedef.NUM_ARGS; i++)

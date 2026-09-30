@@ -19,28 +19,29 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Drawing;
 using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
 using System.IO;
 using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
+using System.Runtime.InteropServices;
+using System.Security.AccessControl;
+using System.Security.Principal;
+using System.Text;
+using System.Threading;
+using System.Windows.Forms;
+using CodeImp.DoomBuilder.Actions;
+using CodeImp.DoomBuilder.Config;
+using CodeImp.DoomBuilder.Data;
+using CodeImp.DoomBuilder.Editing;
 using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Geometry;
-using System.Runtime.InteropServices;
-using CodeImp.DoomBuilder.Actions;
-using System.Diagnostics;
+using CodeImp.DoomBuilder.Plugins;
 using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Config;
+using CodeImp.DoomBuilder.Types;
+using CodeImp.DoomBuilder.Windows;
 using Microsoft.Win32;
 using SlimDX.Direct3D9;
-using System.Drawing;
-using CodeImp.DoomBuilder.Plugins;
-using CodeImp.DoomBuilder.Types;
-using System.Collections.ObjectModel;
-using System.Threading;
-using CodeImp.DoomBuilder.Editing;
 
 #endregion
 
@@ -50,14 +51,17 @@ namespace CodeImp.DoomBuilder
 	{
 		#region ================== API Declarations
 
+		[DllImport("devil.dll")]
+		private static extern void ilInit();
+
 		[DllImport("user32.dll")]
 		internal static extern bool LockWindowUpdate(IntPtr hwnd);
 
 		[DllImport("kernel32.dll", EntryPoint = "RtlZeroMemory", SetLastError = false)]
 		internal static extern void ZeroMemory(IntPtr dest, int size);
 
-		[DllImport("kernel32.dll", EntryPoint = "RtlMoveMemory", SetLastError = false)]
-		internal static extern unsafe void CopyMemory(void* dst, void* src, uint length);
+		//[DllImport("kernel32.dll", EntryPoint = "RtlMoveMemory", SetLastError = false)]
+		//internal static extern unsafe void CopyMemory(void* dst, void* src, uint length);
 
 		[DllImport("user32.dll", EntryPoint = "SendMessage", SetLastError = true, CallingConvention = CallingConvention.StdCall)]
 		internal static extern int SendMessage(IntPtr hwnd, uint Msg, int wParam, int lParam);
@@ -65,31 +69,31 @@ namespace CodeImp.DoomBuilder
 		[DllImport("user32.dll", SetLastError = true)]
 		internal static extern bool MessageBeep(MessageBeepType type);
 
-		[DllImport("kernel32.dll")]
-		internal extern static IntPtr LoadLibrary(string filename);
+		//[DllImport("kernel32.dll")]
+		//internal extern static IntPtr LoadLibrary(string filename);
 
-		[DllImport("kernel32.dll")]
-		internal extern static bool FreeLibrary(IntPtr moduleptr);
+		//[DllImport("kernel32.dll")]
+		//internal extern static bool FreeLibrary(IntPtr moduleptr);
 
-		[DllImport("user32.dll")]
-		internal static extern IntPtr CreateWindowEx(uint exstyle, string classname, string windowname, uint style,
+		//[DllImport("user32.dll")]
+		/*internal static extern IntPtr CreateWindowEx(uint exstyle, string classname, string windowname, uint style,
 												   int x, int y, int width, int height, IntPtr parentptr, int menu,
-												   IntPtr instanceptr, string param);
+												   IntPtr instanceptr, string param);*/
 
-		[DllImport("user32.dll")]
-		internal static extern bool DestroyWindow(IntPtr windowptr);
+		//[DllImport("user32.dll")]
+		//internal static extern bool DestroyWindow(IntPtr windowptr);
 
-		[DllImport("user32.dll")]
-		internal static extern int SetWindowPos(IntPtr windowptr, int insertafterptr, int x, int y, int cx, int cy, int flags);
+		//[DllImport("user32.dll")]
+		//internal static extern int SetWindowPos(IntPtr windowptr, int insertafterptr, int x, int y, int cx, int cy, int flags);
 		
 		[DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
 		private static extern uint GetShortPathName([MarshalAs(UnmanagedType.LPTStr)] string longpath, [MarshalAs(UnmanagedType.LPTStr)]StringBuilder shortpath, uint buffersize);
 
-		[DllImport("user32.dll")]
-		internal static extern int SetScrollInfo(IntPtr windowptr, int bar, IntPtr scrollinfo, bool redraw);
+		//[DllImport("user32.dll")]
+		//internal static extern int SetScrollInfo(IntPtr windowptr, int bar, IntPtr scrollinfo, bool redraw);
 
-		[DllImport("user32.dll")]
-		internal static extern int GetScrollInfo(IntPtr windowptr, int bar, IntPtr scrollinfo);
+		//[DllImport("user32.dll")]
+		//internal static extern int GetScrollInfo(IntPtr windowptr, int bar, IntPtr scrollinfo);
 
 		#endregion
 
@@ -100,42 +104,34 @@ namespace CodeImp.DoomBuilder
 		internal const int WM_SYSCOMMAND = 0x112;
 		internal const int SC_KEYMENU = 0xF100;
 		internal const int CB_SETITEMHEIGHT = 0x153;
-		internal const int CB_SHOWDROPDOWN = 0x14F;
-		internal const int EM_GETSCROLLPOS = WM_USER + 221;
-		internal const int EM_SETSCROLLPOS = WM_USER + 222;
-		internal const int SB_HORZ = 0;
-		internal const int SB_VERT = 1;
-		internal const int SB_CTL = 2;
-		internal const int SIF_RANGE = 0x1;
-		internal const int SIF_PAGE = 0x2;
-		internal const int SIF_POS = 0x4;
-		internal const int SIF_DISABLENOSCROLL = 0x8;
-		internal const int SIF_TRACKPOS = 0x16;
-		internal const int SIF_ALL = SIF_RANGE + SIF_PAGE + SIF_POS + SIF_TRACKPOS;
+		//internal const int CB_SHOWDROPDOWN = 0x14F;
+		//internal const int EM_GETSCROLLPOS = WM_USER + 221;
+		//internal const int EM_SETSCROLLPOS = WM_USER + 222;
+		//internal const int SB_HORZ = 0;
+		//internal const int SB_VERT = 1;
+		//internal const int SB_CTL = 2;
+		//internal const int SIF_RANGE = 0x1;
+		//internal const int SIF_PAGE = 0x2;
+		//internal const int SIF_POS = 0x4;
+		//internal const int SIF_DISABLENOSCROLL = 0x8;
+		//internal const int SIF_TRACKPOS = 0x16;
+		//internal const int SIF_ALL = SIF_RANGE + SIF_PAGE + SIF_POS + SIF_TRACKPOS;
 		
 		// Files and Folders
-		private const string SETTINGS_FILE = "Builder64II.cfg";
+		private const string SETTINGS_FILE = "3DGEBuilder.cfg";
+		private const string DEFAULT_SETTINGS_FILE = "3DGEBuilder.default.cfg"; //mxd
 		private const string SETTINGS_DIR = "Doom Builder";
-		private const string LOG_FILE = "Builder.log";
+		private const string LOG_FILE = "3DGEBuilder.log";
 		private const string GAME_CONFIGS_DIR = "Configurations";
 		private const string COMPILERS_DIR = "Compilers";
 		private const string PLUGINS_DIR = "Plugins";
 		private const string SCRIPTS_DIR = "Scripting";
-		private const string SETUP_DIR = "Setup";
+		private const string SCREENSHOTS_DIR = "Screenshots"; //mxd
+		private const string SNIPPETS_DIR = "Snippets"; //mxd
+		private const string MAP_RESTORE_DIR = "Restore"; //mxd
 		private const string SPRITES_DIR = "Sprites";
+		private const string TEXTURES_DIR = "Textures"; //mxd
 		private const string HELP_FILE = "Refmanual.chm";
-
-		// SCROLLINFO structure
-		internal struct ScrollInfo
-		{
-			public int size;		// size of this structure
-			public uint mask;		// combination of SIF_ constants
-			public int min;			// minimum scrolling position
-			public int max;			// maximum scrolling position
-			public uint page;		// page size (scroll bar uses this value to determine the appropriate size of the proportional scroll box)
-			public int pos;			// position of the scroll box
-			public int trackpos;	// immediate position of a scroll box that the user is dragging
-		}
 
 		#endregion
 
@@ -143,15 +139,18 @@ namespace CodeImp.DoomBuilder
 
 		// Files and Folders
 		private static string apppath;
-		private static string setuppath;
 		private static string settingspath;
+		private static string restorepath; //mxd
 		private static string logfile;
 		private static string temppath;
 		private static string configspath;
 		private static string compilerspath;
 		private static string scriptspath;
+		private static string snippetspath; //mxd
+		private static string screenshotspath; //mxd
 		private static string pluginspath;
 		private static string spritespath;
+		private static string texturespath; //mxd
 		
 		// Main objects
 		private static Assembly thisasm;
@@ -160,29 +159,37 @@ namespace CodeImp.DoomBuilder
 		private static MapManager map;
 		private static EditingManager editing;
 		private static ActionManager actions;
+		private static HintsManager hints; //mxd
 		private static PluginManager plugins;
 		private static ColorCollection colors;
 		private static TypesManager types;
-        //private static Clock clock;
-        public static Stopwatch stopwatch; // instead of clock
-        private static ErrorLogger errorlogger;
-		private static Mutex appmutex;
+		private static ErrorLogger errorlogger;
+		private static string commithash; //mxd. Git commit hash
+		//private static Mutex appmutex;
 		
 		// Configurations
 		private static List<ConfigurationInfo> configs;
 		private static List<CompilerInfo> compilers;
 		private static List<NodebuilderInfo> nodebuilders;
 		private static Dictionary<string, ScriptConfiguration> scriptconfigs;
+		private static Dictionary<string, ScriptConfiguration> compiledscriptconfigs; //mxd
 		
 		// States
 		private static bool debugbuild;
 		
 		// Command line arguments
 		private static string[] cmdargs;
-		private static string autoloadfile = null;
-		private static string autoloadmap = null;
-		private static string autoloadconfig = null;
+		private static string autoloadfile;
+		private static string autoloadmap;
+		private static string autoloadconfig;
+		private static bool autoloadstrictpatches;
+		private static DataLocationList autoloadresources;
 		private static bool delaymainwindow;
+		private static bool nosettings;
+		private static bool portablemode; //mxd
+
+		//misc
+		private static readonly Random random = new Random(); //mxd
 
 		#endregion
 
@@ -192,10 +199,16 @@ namespace CodeImp.DoomBuilder
 		public static string AppPath { get { return apppath; } }
 		public static string TempPath { get { return temppath; } }
 		public static string ConfigsPath { get { return configspath; } }
+		internal static string SettingsPath { get { return settingspath; } } //mxd
+		internal static string MapRestorePath { get { return restorepath; } } //mxd
+		internal static string LogFile { get { return logfile; } } //mxd
 		public static string CompilersPath { get { return compilerspath; } }
 		public static string PluginsPath { get { return pluginspath; } }
 		public static string SpritesPath { get { return spritespath; } }
-		public static ICollection<string> CommandArgs { get { return Array.AsReadOnly<string>(cmdargs); } }
+		internal static string TexturesPath { get { return texturespath; } } //mxd
+		public static string SnippetsPath { get { return snippetspath; } } //mxd
+		public static string DefaultScreenshotsPath { get { return screenshotspath; } } //mxd
+		public static ICollection<string> CommandArgs { get { return Array.AsReadOnly(cmdargs); } }
 		internal static MainForm MainWindow { get { return mainwindow; } }
 		public static IMainForm Interface { get { return mainwindow; } }
 		public static ProgramConfiguration Settings { get { return settings; } }
@@ -204,19 +217,24 @@ namespace CodeImp.DoomBuilder
 		internal static List<NodebuilderInfo> Nodebuilders { get { return nodebuilders; } }
 		internal static List<CompilerInfo> Compilers { get { return compilers; } }
 		internal static Dictionary<string, ScriptConfiguration> ScriptConfigs { get { return scriptconfigs; } }
+		internal static Dictionary<string, ScriptConfiguration> CompiledScriptConfigs { get { return compiledscriptconfigs; } } //mxd
 		public static MapManager Map { get { return map; } }
 		public static ActionManager Actions { get { return actions; } }
+		public static HintsManager Hints { get { return hints; } } //mxd
 		internal static PluginManager Plugins { get { return plugins; } }
-		//public static Clock Clock { get { return clock; } }
 		public static bool DebugBuild { get { return debugbuild; } }
 		internal static TypesManager Types { get { return types; } }
 		public static string AutoLoadFile { get { return autoloadfile; } }
 		public static string AutoLoadMap { get { return autoloadmap; } }
 		public static string AutoLoadConfig { get { return autoloadconfig; } }
+		public static bool AutoLoadStrictPatches { get { return autoloadstrictpatches; } }
+		public static DataLocationList AutoLoadResources { get { return new DataLocationList(autoloadresources); } }
 		public static bool DelayMainWindow { get { return delaymainwindow; } }
+		public static bool NoSettings { get { return nosettings; } }
 		public static EditingManager Editing { get { return editing; } }
 		public static ErrorLogger ErrorLogger { get { return errorlogger; } }
-		
+		public static string CommitHash { get { return commithash; } } //mxd
+
 		#endregion
 
 		#region ================== Configurations
@@ -241,10 +259,8 @@ namespace CodeImp.DoomBuilder
 		}
 
 		// This loads and returns a game configuration
-		internal static Configuration LoadGameConfiguration(string filename)
+		private static Configuration LoadGameConfiguration(string filename)
 		{
-			Configuration cfg;
-			
 			// Make the full filepathname
 			string filepathname = Path.Combine(configspath, filename);
 			
@@ -252,7 +268,7 @@ namespace CodeImp.DoomBuilder
 			try
 			{
 				// Try loading the configuration
-				cfg = new Configuration(filepathname, true);
+				Configuration cfg = new Configuration(filepathname, true);
 
 				// Check for erors
 				if(cfg.ErrorResult)
@@ -263,18 +279,16 @@ namespace CodeImp.DoomBuilder
 					return null;
 				}
 				// Check if this is a Doom Builder 2 config
-				else if(cfg.ReadSetting("type", "") != "Doom Builder 2 Game Configuration")
+				if(cfg.ReadSetting("type", "") != "Doom Builder 2 Game Configuration")
 				{
 					// Old configuration
 					errorlogger.Add(ErrorType.Error, "Unable to load the game configuration file \"" + filename + "\". " +
 													 "This configuration is not a Doom Builder 2 game configuration.");
 					return null;
 				}
-				else
-				{
-					// Return config
-					return cfg;
-				}
+
+				// Return config
+				return cfg;
 			}
 			catch(Exception e)
 			{
@@ -288,10 +302,6 @@ namespace CodeImp.DoomBuilder
 		// This loads all game configurations
 		private static void LoadAllGameConfigurations()
 		{
-			Configuration cfg;
-			string[] filenames;
-			string name, fullfilename;
-			
 			// Display status
 			mainwindow.DisplayStatus(StatusType.Busy, "Loading game configurations...");
 
@@ -299,33 +309,30 @@ namespace CodeImp.DoomBuilder
 			configs = new List<ConfigurationInfo>();
 
 			// Go for all cfg files in the configurations directory
-			filenames = Directory.GetFiles(configspath, "*.cfg", SearchOption.TopDirectoryOnly);
+			string[] filenames = Directory.GetFiles(configspath, "*.cfg", SearchOption.TopDirectoryOnly);
+
 			foreach(string filepath in filenames)
 			{
 				// Check if it can be loaded
-				cfg = LoadGameConfiguration(Path.GetFileName(filepath));
+				Configuration cfg = LoadGameConfiguration(Path.GetFileName(filepath));
 				if(cfg != null)
 				{
-					fullfilename = Path.GetFileName(filepath);
+					string fullfilename = Path.GetFileName(filepath);
 					ConfigurationInfo cfginfo = new ConfigurationInfo(cfg, fullfilename);
 					
 					// Add to lists
-					General.WriteLogLine("Registered game configuration '" + cfginfo.Name + "' from '" + fullfilename + "'");
+					General.WriteLogLine("Registered game configuration \"" + cfginfo.Name + "\" from \"" + fullfilename + "\"");
 					configs.Add(cfginfo);
 				}
 			}
 
-			// Sort the list
+			// Sort the configs
 			configs.Sort();
 		}
 
 		// This loads all nodebuilder configurations
 		private static void LoadAllNodebuilderConfigurations()
 		{
-			Configuration cfg;
-			IDictionary builderslist;
-			string[] filenames;
-			
 			// Display status
 			mainwindow.DisplayStatus(StatusType.Busy, "Loading nodebuilder configurations...");
 
@@ -333,25 +340,25 @@ namespace CodeImp.DoomBuilder
 			nodebuilders = new List<NodebuilderInfo>();
 
 			// Go for all cfg files in the compilers directory
-			filenames = Directory.GetFiles(compilerspath, "*.cfg", SearchOption.AllDirectories);
+			string[] filenames = Directory.GetFiles(compilerspath, "*.cfg", SearchOption.AllDirectories);
 			foreach(string filepath in filenames)
 			{
 				try
 				{
 					// Try loading the configuration
-					cfg = new Configuration(filepath, true);
+					Configuration cfg = new Configuration(filepath, true);
 
 					// Check for erors
 					if(cfg.ErrorResult)
 					{
 						// Error in configuration
 						errorlogger.Add(ErrorType.Error, "Unable to load the compiler configuration file \"" + Path.GetFileName(filepath) + "\". " +
-										                 "Error in file \"" + cfg.ErrorFile + "\" near line " + cfg.ErrorLine + ": " + cfg.ErrorDescription);
+														 "Error in file \"" + cfg.ErrorFile + "\" near line " + cfg.ErrorLine + ": " + cfg.ErrorDescription);
 					}
 					else
 					{
 						// Get structures
-						builderslist = cfg.ReadSetting("nodebuilders", new Hashtable());
+						IDictionary builderslist = cfg.ReadSetting("nodebuilders", new Hashtable());
 						foreach(DictionaryEntry de in builderslist)
 						{
 							// Check if this is a structure
@@ -365,7 +372,7 @@ namespace CodeImp.DoomBuilder
 								catch(Exception e)
 								{
 									// Unable to load configuration
-									errorlogger.Add(ErrorType.Error, "Unable to load the nodebuilder configuration '" + de.Key.ToString() + "' from \"" + Path.GetFileName(filepath) + "\". Error: " + e.Message);
+									errorlogger.Add(ErrorType.Error, "Unable to load the nodebuilder configuration \"" + de.Key + "\" from \"" + Path.GetFileName(filepath) + "\". Error: " + e.Message);
 								}
 							}
 						}
@@ -385,24 +392,22 @@ namespace CodeImp.DoomBuilder
 		// This loads all script configurations
 		private static void LoadAllScriptConfigurations()
 		{
-			Configuration cfg;
-			string[] filenames;
-			
 			// Display status
 			mainwindow.DisplayStatus(StatusType.Busy, "Loading script configurations...");
 			
 			// Make collection
-			scriptconfigs = new Dictionary<string, ScriptConfiguration>();
+			scriptconfigs = new Dictionary<string, ScriptConfiguration>(StringComparer.Ordinal);
+			compiledscriptconfigs = new Dictionary<string, ScriptConfiguration>(StringComparer.Ordinal); //mxd
 			
 			// Go for all cfg files in the scripts directory
-			filenames = Directory.GetFiles(scriptspath, "*.cfg", SearchOption.TopDirectoryOnly);
+			string[] filenames = Directory.GetFiles(scriptspath, "*.cfg", SearchOption.TopDirectoryOnly);
 			foreach(string filepath in filenames)
 			{
 				try
 				{
 					// Try loading the configuration
-					cfg = new Configuration(filepath, true);
-					
+					Configuration cfg = new Configuration(filepath, true);
+
 					// Check for erors
 					if(cfg.ErrorResult)
 					{
@@ -418,6 +423,10 @@ namespace CodeImp.DoomBuilder
 							ScriptConfiguration scfg = new ScriptConfiguration(cfg);
 							string filename = Path.GetFileName(filepath);
 							scriptconfigs.Add(filename.ToLowerInvariant(), scfg);
+
+							//mxd. Store acc compilers in a separate dictionary
+							if(scfg.ScriptType == ScriptType.ACS)
+								compiledscriptconfigs.Add(filename.ToLowerInvariant(), scfg);
 						}
 						catch(Exception e)
 						{
@@ -430,18 +439,15 @@ namespace CodeImp.DoomBuilder
 				{
 					// Unable to load configuration
 					errorlogger.Add(ErrorType.Error, "Unable to load the script configuration file \"" + Path.GetFileName(filepath) + "\". Error: " + e.Message);
-                    General.WriteLogLine(e.StackTrace);
-                }
+					General.WriteLogLine(e.StackTrace);
+				}
 			}
 		}
 
 		// This loads all compiler configurations
 		private static void LoadAllCompilerConfigurations()
 		{
-			Configuration cfg;
-			Dictionary<string, CompilerInfo> addedcompilers = new Dictionary<string,CompilerInfo>();
-			IDictionary compilerslist;
-			string[] filenames;
+			Dictionary<string, CompilerInfo> addedcompilers = new Dictionary<string, CompilerInfo>(StringComparer.Ordinal);
 
 			// Display status
 			mainwindow.DisplayStatus(StatusType.Busy, "Loading compiler configurations...");
@@ -450,13 +456,13 @@ namespace CodeImp.DoomBuilder
 			compilers = new List<CompilerInfo>();
 
 			// Go for all cfg files in the compilers directory
-			filenames = Directory.GetFiles(compilerspath, "*.cfg", SearchOption.AllDirectories);
+			string[] filenames = Directory.GetFiles(compilerspath, "*.cfg", SearchOption.AllDirectories);
 			foreach(string filepath in filenames)
 			{
 				try
 				{
 					// Try loading the configuration
-					cfg = new Configuration(filepath, true);
+					Configuration cfg = new Configuration(filepath, true);
 
 					// Check for erors
 					if(cfg.ErrorResult)
@@ -468,7 +474,7 @@ namespace CodeImp.DoomBuilder
 					else
 					{
 						// Get structures
-						compilerslist = cfg.ReadSetting("compilers", new Hashtable());
+						IDictionary compilerslist = cfg.ReadSetting("compilers", new Hashtable());
 						foreach(DictionaryEntry de in compilerslist)
 						{
 							// Check if this is a structure
@@ -493,8 +499,8 @@ namespace CodeImp.DoomBuilder
 				{
 					// Unable to load configuration
 					errorlogger.Add(ErrorType.Error, "Unable to load the compiler configuration file \"" + Path.GetFileName(filepath) + "\". " + e.GetType().Name + ": " + e.Message);
-                    General.WriteLogLine(e.StackTrace);
-                }
+					General.WriteLogLine(e.StackTrace);
+				}
 			}
 		}
 		
@@ -520,70 +526,85 @@ namespace CodeImp.DoomBuilder
 		[STAThread]
 		internal static void Main(string[] args)
 		{
-			Uri localpath;
-			Version thisversion;
-			
 			// Determine states
 			#if DEBUG
 				debugbuild = true;
 			#else
 				debugbuild = false;
+				//mxd. Custom exception dialog.
+				AppDomain.CurrentDomain.UnhandledException += CurrentDomainOnUnhandledException;
+				Application.ThreadException += Application_ThreadException;
 			#endif
-			
+
 			// Enable OS visual styles
 			Application.EnableVisualStyles();
-			Application.DoEvents();		// This must be here to work around a .NET bug
-			ToolStripManager.Renderer = new ToolStripProfessionalRenderer(new TanColorTable());
+			Application.SetCompatibleTextRenderingDefault(false); //mxd
+			//Application.DoEvents();		// This must be here to work around a .NET bug
+
+			//mxd. Set CultureInfo
+			Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
 			
 			// Hook to DLL loading failure event
-			AppDomain.CurrentDomain.AssemblyResolve += new ResolveEventHandler(CurrentDomain_AssemblyResolve);
+			AppDomain.CurrentDomain.AssemblyResolve += CurrentDomain_AssemblyResolve;
 			
 			// Set current thread name
 			Thread.CurrentThread.Name = "Main Application";
 
 			// Application is running
-			appmutex = new Mutex(false, "doombuilder2");
+			//appmutex = new Mutex(false, "gzdoombuilder"); //"doombuilder2"
 			
 			// Get a reference to this assembly
 			thisasm = Assembly.GetExecutingAssembly();
-			thisversion = thisasm.GetName().Version;
 			
 			// Find application path
-			localpath = new Uri(Path.GetDirectoryName(thisasm.GetName().CodeBase));
-			apppath = Uri.UnescapeDataString(localpath.AbsolutePath);
-			
+			apppath = Path.GetDirectoryName(Application.ExecutablePath); //mxd. What was the point of using Uri here (other than to prevent lauching from a shared folder)?
+
+			// Parse command-line arguments
+			ParseCommandLineArgs(args);
+
 			// Setup directories
 			temppath = Path.GetTempPath();
-			setuppath = Path.Combine(apppath, SETUP_DIR);
-			settingspath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), SETTINGS_DIR);
+			settingspath = (portablemode ? apppath : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), SETTINGS_DIR)); //mxd
+			restorepath = Path.Combine(settingspath, MAP_RESTORE_DIR);
 			configspath = Path.Combine(apppath, GAME_CONFIGS_DIR);
 			compilerspath = Path.Combine(apppath, COMPILERS_DIR);
 			pluginspath = Path.Combine(apppath, PLUGINS_DIR);
 			scriptspath = Path.Combine(apppath, SCRIPTS_DIR);
+			snippetspath = Path.Combine(apppath, SNIPPETS_DIR); //mxd
+			screenshotspath = Path.Combine(apppath, SCREENSHOTS_DIR).Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar); //mxd
 			spritespath = Path.Combine(apppath, SPRITES_DIR);
+			texturespath = Path.Combine(apppath, TEXTURES_DIR); //mxd
 			logfile = Path.Combine(settingspath, LOG_FILE);
 			
 			// Make program settings directory if missing
-			if(!Directory.Exists(settingspath)) Directory.CreateDirectory(settingspath);
+			if(!portablemode && !Directory.Exists(settingspath)) Directory.CreateDirectory(settingspath);
+
+			//mxd. Get git commit hash
+			var hashes = (AssemblyHashAttribute[])thisasm.GetCustomAttributes(typeof(AssemblyHashAttribute), false);
+			if(hashes.Length == 1)
+			{
+				commithash = hashes[0].CommitHash;
+			}
+			else
+			{
+				WriteLogLine("Unable to determine commit hash. Missing AssemblyHashAttribute?");
+				commithash = "0000000";
+			}
 			
 			// Remove the previous log file and start logging
 			if(File.Exists(logfile)) File.Delete(logfile);
-			General.WriteLogLine("Doom Builder " + thisversion.Major + "." + thisversion.Minor + " startup");
-			General.WriteLogLine("Application path:        " + apppath);
-			General.WriteLogLine("Temporary path:          " + temppath);
-			General.WriteLogLine("Local settings path:     " + settingspath);
-			General.WriteLogLine("Command-line arguments:  " + args.Length);
-			for(int i = 0; i < args.Length; i++)
-				General.WriteLogLine("Argument " + i + ":   \"" + args[i] + "\"");
-			
-			// Parse command-line arguments
-			ParseCommandLineArgs(args);
+			General.WriteLogLine("GZDoom Builder R" + thisasm.GetName().Version.Revision + " (" + commithash + ") startup"); //mxd
+			General.WriteLogLine("Application path:        \"" + apppath + "\"");
+			General.WriteLogLine("Temporary path:          \"" + temppath + "\"");
+			General.WriteLogLine("Local settings path:     \"" + settingspath + "\"");
+			General.WriteLogLine("Command-line arguments:  \"" + string.Join(" ", args) + "\""); //mxd
 			
 			// Load configuration
 			General.WriteLogLine("Loading program configuration...");
 			settings = new ProgramConfiguration();
-			if(settings.Load(Path.Combine(settingspath, SETTINGS_FILE),
-							 Path.Combine(apppath, SETTINGS_FILE)))
+			string defaultsettingsfile = Path.Combine(apppath, DEFAULT_SETTINGS_FILE);
+			string usersettingsfile = nosettings ? defaultsettingsfile : Path.Combine(settingspath, SETTINGS_FILE);
+			if(settings.Load(usersettingsfile, defaultsettingsfile))
 			{
 				// Create error logger
 				errorlogger = new ErrorLogger();
@@ -594,8 +615,12 @@ namespace CodeImp.DoomBuilder
 				// Bind static methods to actions
 				General.Actions.BindMethods(typeof(General));
 
+				//mxd. Create hints manager
+				hints = new HintsManager();
+
 				// Initialize static classes
 				MapSet.Initialize();
+				ilInit();
 
 				// Create main window
 				General.WriteLogLine("Loading main interface window...");
@@ -615,8 +640,8 @@ namespace CodeImp.DoomBuilder
 				// Start Direct3D
 				General.WriteLogLine("Starting Direct3D graphics driver...");
 				try { D3DDevice.Startup(); }
-				catch(Direct3D9NotFoundException) { AskDownloadDirectX(); return; }
-				catch(Direct3DX9NotFoundException) { AskDownloadDirectX(); return; }
+				catch(Direct3D9NotFoundException e) { AskDownloadDirectX(e.Message); return; }
+				catch(Direct3DX9NotFoundException e) { AskDownloadDirectX(e.Message); return; }
 				
 				// Load plugin manager
 				General.WriteLogLine("Loading plugins...");
@@ -653,19 +678,12 @@ namespace CodeImp.DoomBuilder
 				General.WriteLogLine("Loading color settings...");
 				colors = new ColorCollection(settings.Config);
 				
-				// Create application clock
-				General.WriteLogLine("Creating application clock...");
-                //clock = new Clock();
-                stopwatch = new Stopwatch();
-                stopwatch.Start();
-
-                // Create types manager
-                General.WriteLogLine("Creating types manager...");
+				// Create types manager
+				General.WriteLogLine("Creating types manager...");
 				types = new TypesManager();
 				
 				// Do auto map loading when window is delayed
-				if(delaymainwindow)
-					mainwindow.PerformAutoMapLoading();
+				if(delaymainwindow) mainwindow.PerformAutoMapLoading();
 				
 				// All done
 				General.WriteLogLine("Startup done");
@@ -674,9 +692,43 @@ namespace CodeImp.DoomBuilder
 				// Show any errors if preferred
 				if(errorlogger.IsErrorAdded)
 				{
-					mainwindow.DisplayStatus(StatusType.Warning, "There were errors during program statup!");
+					mainwindow.DisplayStatus(StatusType.Warning, "There were errors during program startup!");
 					if(!delaymainwindow && General.Settings.ShowErrorsWindow) mainwindow.ShowErrors();
 				}
+
+				//mxd. Check enabled game configuration
+				bool noneenabled = true;
+				for(int i = 0; i < configs.Count; i++) 
+				{
+					if(configs[i].Enabled) 
+					{
+						noneenabled = false;
+						break;
+					}
+				}
+
+				if(noneenabled) 
+				{
+					if(MessageBox.Show("No game configurations are currently enabled.\nPlease enable at least one game configuration", "Warning", MessageBoxButtons.OK) == DialogResult.OK) 
+						mainwindow.ShowConfiguration();
+				}
+
+				//mxd. Check backup files
+				if(Directory.Exists(restorepath))
+				{
+					foreach(string backup in Directory.GetFiles(restorepath, "*.restore"))
+					{
+						// Remove if created more than a month ago
+						if((DateTime.Now - File.GetLastWriteTime(backup)).TotalDays > 30)
+						{
+							File.Delete(backup);
+							WriteLogLine("Removed \"" + backup + "\" map backup.");
+						}
+					}
+				}
+
+				//mxd. Check for updates?
+				if(General.Settings.CheckForUpdates) UpdateChecker.PerformCheck(false);
 				
 				// Run application from the main window
 				Application.Run(mainwindow);
@@ -689,17 +741,17 @@ namespace CodeImp.DoomBuilder
 		}
 
 		// This handles DLL linking errors
-		private static System.Reflection.Assembly CurrentDomain_AssemblyResolve(object sender, ResolveEventArgs args)
+		private static Assembly CurrentDomain_AssemblyResolve(object sender, ResolveEventArgs args)
 		{
 			// Check if SlimDX failed loading
-			if(args.Name.Contains("SlimDX")) AskDownloadDirectX();
+			if(args.Name.Contains("SlimDX")) AskDownloadSlimDX();
 
 			// Return null
 			return null;
 		}
 		
 		// This asks the user to download DirectX
-		private static void AskDownloadDirectX()
+		private static void AskDownloadDirectX(string message)
 		{
 			// Cancel loading map from command-line parameters, if any.
 			// This causes problems, because when the window is shown, the map will
@@ -707,13 +759,33 @@ namespace CodeImp.DoomBuilder
 			CancelAutoMapLoad();
 			
 			// Ask the user to download DirectX
-			if(MessageBox.Show("This application requires the latest version of Microsoft DirectX installed on your computer." + Environment.NewLine +
-				"Do you want to install and/or update Microsoft DirectX now?", "DirectX Error", System.Windows.Forms.MessageBoxButtons.YesNo,
-				System.Windows.Forms.MessageBoxIcon.Exclamation) == System.Windows.Forms.DialogResult.Yes)
+			if(MessageBox.Show("Unable to initialize DirectX: " + message + Environment.NewLine + Environment.NewLine +
+				"Do you want to install and/or update Microsoft DirectX 9.0 now?", "DirectX 9.0 Error", MessageBoxButtons.YesNo,
+				MessageBoxIcon.Exclamation) == DialogResult.Yes)
 			{
-				// Open DX web setup
-				//System.Diagnostics.Process.Start("http://www.microsoft.com/downloads/details.aspx?FamilyId=2DA43D38-DB71-4C1B-BC6A-9B6652CD92A3").WaitForExit(1000);
-				System.Diagnostics.Process.Start(Path.Combine(setuppath, "dxwebsetup.exe")).WaitForExit(1000);
+				// Go to DirectX End-User Runtime Web Installer page (mxd)
+				OpenWebsite("https://www.microsoft.com/en-us/download/details.aspx?id=35&44F86079-8679-400C-BFF2-9CA5F2BCBDFC=1");
+			}
+
+			// End program here
+			Terminate(false);
+		}
+
+		// This asks the user to download SlimDX (mxd)
+		private static void AskDownloadSlimDX() 
+		{
+			// Cancel loading map from command-line parameters, if any.
+			// This causes problems, because when the window is shown, the map will
+			// be loaded and SlimDX is initialized (which we seem to be missing)
+			CancelAutoMapLoad();
+
+			// Ask the user to download SlimDX
+			if(MessageBox.Show("This application requires the latest version of SlimDX for .NET 2.0 installed on your computer." + Environment.NewLine +
+				"Do you want to install SlimDX now?", "SlimDX Error", MessageBoxButtons.YesNo,
+				MessageBoxIcon.Exclamation) == DialogResult.Yes) 
+			{
+				// Go to SlimDX download page
+				OpenWebsite("http://slimdx.org/download.php");
 			}
 
 			// End program here
@@ -723,6 +795,8 @@ namespace CodeImp.DoomBuilder
 		// This parses the command line arguments
 		private static void ParseCommandLineArgs(string[] args)
 		{
+			autoloadresources = new DataLocationList();
+			
 			// Keep a copy
 			cmdargs = args;
 			
@@ -741,6 +815,12 @@ namespace CodeImp.DoomBuilder
 					// Delay showing the main window
 					delaymainwindow = true;
 				}
+				// No settings?
+				else if(string.Compare(curarg, "-NOSETTINGS", true) == 0)
+				{
+					// Don't load or save program settings
+					nosettings = true;
+				}
 				// Map name info?
 				else if(string.Compare(curarg, "-MAP", true) == 0)
 				{
@@ -749,10 +829,126 @@ namespace CodeImp.DoomBuilder
 				}
 				// Config name info?
 				else if((string.Compare(curarg, "-CFG", true) == 0) ||
-					    (string.Compare(curarg, "-CONFIG", true) == 0))
+						(string.Compare(curarg, "-CONFIG", true) == 0))
 				{
 					// Store next arg as config filename information
 					autoloadconfig = argslist.Dequeue();
+				}
+				// Strict patches rules?
+				else if(string.Compare(curarg, "-STRICTPATCHES", true) == 0)
+				{
+					autoloadstrictpatches = true;
+				}
+				//mxd. Portable mode?
+				else if(string.Compare(curarg, "-PORTABLE", true) == 0)
+				{
+					// Can we write stuff to apppath?
+					try
+					{
+						WindowsIdentity identity = WindowsIdentity.GetCurrent();
+						if(identity != null)
+						{
+							WindowsPrincipal principal = new WindowsPrincipal(identity);
+							DirectorySecurity security = Directory.GetAccessControl(apppath);
+							AuthorizationRuleCollection authrules = security.GetAccessRules(true, true, typeof(SecurityIdentifier));
+
+							foreach(FileSystemAccessRule accessrule in authrules)
+							{
+								SecurityIdentifier id = accessrule.IdentityReference as SecurityIdentifier;
+								if(id == null || !principal.IsInRole(id)) continue;
+								if((FileSystemRights.WriteData & accessrule.FileSystemRights) != FileSystemRights.WriteData) continue;
+								
+								if(accessrule.AccessControlType == AccessControlType.Allow) 
+								{
+									portablemode = true;
+								} 
+								else if(accessrule.AccessControlType == AccessControlType.Deny) 
+								{
+									//Deny usually overrides any Allow
+									portablemode = false;
+									break;
+								}
+							}
+						}
+					} 
+					catch(Exception) { }
+
+					// Warn the user?
+					if(!portablemode) ShowWarningMessage("Failed to enable portable mode.\nMake sure you have write premission for \"" + apppath + "\" directory.", MessageBoxButtons.OK);
+				}
+				// Resource?
+				else if(string.Compare(curarg, "-RESOURCE", true) == 0)
+				{
+					DataLocation dl = new DataLocation();
+
+					// Parse resource type
+					string resourcetype = argslist.Dequeue();
+					if(string.Compare(resourcetype, "WAD", true) == 0)
+						dl.type = DataLocation.RESOURCE_WAD;
+					else if(string.Compare(resourcetype, "DIR", true) == 0)
+						dl.type = DataLocation.RESOURCE_DIRECTORY;
+					else if(string.Compare(resourcetype, "PK3", true) == 0)
+						dl.type = DataLocation.RESOURCE_PK3;
+					else
+					{
+						General.WriteLogLine("Unexpected resource type \"" + resourcetype + "\" in program parameters. Expected \"wad\", \"dir\" or \"pk3\".");
+						break;
+					}
+
+					// We continue parsing args until an existing filename is found
+					// all other arguments must be one of the optional keywords.
+					while(string.IsNullOrEmpty(dl.location))
+					{
+						curarg = argslist.Dequeue();
+
+						if((string.Compare(curarg, "ROOTTEXTURES", true) == 0) &&
+						   (dl.type == DataLocation.RESOURCE_DIRECTORY))
+						{
+							// Load images in the root directory of the resource as textures
+							dl.option1 = true;
+						}
+						else if((string.Compare(curarg, "ROOTFLATS", true) == 0) &&
+								(dl.type == DataLocation.RESOURCE_DIRECTORY))
+						{
+							// Load images in the root directory of the resource as flats
+							dl.option2 = true;
+						}
+						else if((string.Compare(curarg, "STRICTPATCHES", true) == 0) &&
+								(dl.type == DataLocation.RESOURCE_WAD))
+						{
+							// Use strict rules for patches
+							dl.option1 = true;
+						}
+						else if(string.Compare(curarg, "NOTEST", true) == 0)
+						{
+							// Exclude this resource from testing parameters
+							dl.notfortesting = true;
+						}
+						else
+						{
+							// This must be an existing file, or it is an invalid argument
+							if(dl.type == DataLocation.RESOURCE_DIRECTORY)
+							{
+								if(Directory.Exists(curarg))
+									dl.location = curarg;
+							}
+							else
+							{
+								if(File.Exists(curarg))
+									dl.location = curarg;
+							}
+							
+							if(string.IsNullOrEmpty(dl.location))
+							{
+								General.WriteLogLine("Unexpected argument \"" + curarg + "\" in program parameters. Expected a valid resource option or a resource filename.");
+								break;
+							}
+						}
+					}
+
+					// Add resource to list
+					if(!string.IsNullOrEmpty(dl.location))
+						autoloadresources.Add(dl);
 				}
 				// Every other arg
 				else
@@ -769,7 +965,7 @@ namespace CodeImp.DoomBuilder
 						else
 						{
 							// Note in the log that we cannot find this file
-							General.ErrorLogger.Add(ErrorType.Warning, "Cannot find the specified file \"" + curarg + "\"");
+							General.WriteLogLine("Cannot find the specified file \"" + curarg + "\"");
 						}
 					}
 				}
@@ -818,27 +1014,26 @@ namespace CodeImp.DoomBuilder
 				General.Actions.UnbindMethods(typeof(General));
 				
 				// Save colors
-				colors.SaveColors(settings.Config);
+				if(colors != null) colors.SaveColors(settings.Config);
 				
 				// Save action controls
 				actions.SaveSettings();
 				
 				// Save game configuration settings
-				foreach(ConfigurationInfo ci in configs) ci.SaveSettings();
+				if(configs != null) foreach(ConfigurationInfo ci in configs) ci.SaveSettings();
 				
 				// Save settings configuration
-				General.WriteLogLine("Saving program configuration...");
-				settings.Save(Path.Combine(settingspath, SETTINGS_FILE));
+				if(!General.NoSettings)
+					settings.Save(Path.Combine(settingspath, SETTINGS_FILE));
 				
 				// Clean up
-				if(map != null) map.Dispose(); map = null;
-				if(editing != null) editing.Dispose(); editing = null;
-				if(mainwindow != null) mainwindow.Dispose();
-				if(actions != null) actions.Dispose();
-				//if(clock != null) clock.Dispose();
-				if(plugins != null) plugins.Dispose();
-				if(types != null) types.Dispose();
-				try { D3DDevice.Terminate(); } catch(Exception) { }
+				if(map != null) { map.Dispose(); map = null; }
+				if(editing != null) { editing.Dispose(); editing = null; }
+				if(plugins != null) { plugins.Dispose(); plugins = null; }
+				if(mainwindow != null) { mainwindow.Dispose(); mainwindow = null; }
+				if(actions != null) { actions.Dispose(); actions = null; }
+				if(types != null) { types.Dispose(); types = null; }
+				try { D3DDevice.Terminate(); } catch { }
 
 				// Application ends here and now
 				General.WriteLogLine("Termination done");
@@ -864,17 +1059,15 @@ namespace CodeImp.DoomBuilder
 		internal static void NewMap()
 		{
 			MapOptions newoptions = new MapOptions();
-			MapOptionsForm optionswindow;
-			
+
 			// Cancel volatile mode, if any
-			General.Editing.DisengageVolatileMode();
+			editing.DisengageVolatileMode();
 			
 			// Ask the user to save changes (if any)
-			if(General.AskSaveMap())
+			if(AskSaveMap())
 			{
 				// Open map options dialog
-				optionswindow = new MapOptionsForm(newoptions);
-				optionswindow.IsForNewMap = true;
+				MapOptionsForm optionswindow = new MapOptionsForm(newoptions, true);
 				if(optionswindow.ShowDialog(mainwindow) == DialogResult.OK)
 				{
 					// Display status
@@ -883,6 +1076,7 @@ namespace CodeImp.DoomBuilder
 					
 					// Clear the display
 					mainwindow.ClearDisplay();
+					mainwindow.RemoveHintsDocker(); //mxd
 
 					// Trash the current map, if any
 					if(map != null) map.Dispose();
@@ -890,14 +1084,27 @@ namespace CodeImp.DoomBuilder
 					// Let the plugins know
 					plugins.OnMapNewBegin();
 
-					// Set this to false so we can see if errors are added
-					General.ErrorLogger.IsErrorAdded = false;
+					// Clear old errors (mxd)
+					errorlogger.Clear();
 					
 					// Create map manager with given options
 					map = new MapManager();
 					if(map.InitializeNewMap(newoptions))
 					{
-						// Done
+						settings.FindDefaultDrawSettings(); //mxd
+
+						// Let the plugins know
+						plugins.OnMapNewEnd();
+
+						// All done
+						mainwindow.SetupInterface();
+						mainwindow.RedrawDisplay();
+						mainwindow.UpdateThingsFilters();
+						mainwindow.UpdateLinedefColorPresets(); //mxd
+						mainwindow.UpdateInterface();
+						mainwindow.AddHintsDocker(); //mxd
+						mainwindow.UpdateGZDoomPanel(); //mxd
+						mainwindow.HideInfo(); //mxd
 					}
 					else
 					{
@@ -909,25 +1116,17 @@ namespace CodeImp.DoomBuilder
 						mainwindow.ShowSplashDisplay();
 					}
 
-					// Let the plugins know
-					plugins.OnMapNewEnd();
-
-					// All done
-					settings.FindDefaultDrawSettings();
-					mainwindow.SetupInterface();
-					mainwindow.RedrawDisplay();
-					mainwindow.UpdateThingsFilters();
-					mainwindow.UpdateInterface();
-					mainwindow.HideInfo();
-
 					if(errorlogger.IsErrorAdded)
 					{
 						// Show any errors if preferred
 						mainwindow.DisplayStatus(StatusType.Warning, "There were errors during loading!");
-						if(!delaymainwindow && General.Settings.ShowErrorsWindow) mainwindow.ShowErrors();
+						if(!delaymainwindow && settings.ShowErrorsWindow) mainwindow.ShowErrors();
 					}
 					else
 						mainwindow.DisplayReady();
+
+					//mxd. Also reset the clock...
+					MainWindow.ResetClock();
 					
 					Cursor.Current = Cursors.Default;
 				}
@@ -940,14 +1139,14 @@ namespace CodeImp.DoomBuilder
 		internal static bool CloseMap()
 		{
 			// Cancel volatile mode, if any
-			General.Editing.DisengageVolatileMode();
+			editing.DisengageVolatileMode();
 
 			// Ask the user to save changes (if any)
-			if(General.AskSaveMap())
+			if(AskSaveMap())
 			{
 				// Display status
 				mainwindow.DisplayStatus(StatusType.Busy, "Closing map...");
-				General.WriteLogLine("Unloading map...");
+				WriteLogLine("Unloading map...");
 				Cursor.Current = Cursors.WaitCursor;
 				
 				// Trash the current map
@@ -955,7 +1154,12 @@ namespace CodeImp.DoomBuilder
 				map = null;
 				
 				// Clear errors
-				General.ErrorLogger.Clear();
+				errorlogger.Clear();
+
+				//mxd. Clear Console
+#if DEBUG
+				DebugConsole.Clear();
+#endif
 				
 				// Show splash logo on display
 				mainwindow.ShowSplashDisplay();
@@ -967,9 +1171,13 @@ namespace CodeImp.DoomBuilder
 				mainwindow.RedrawDisplay();
 				mainwindow.HideInfo();
 				mainwindow.UpdateThingsFilters();
+				//mxd
+				mainwindow.UpdateLinedefColorPresets();
+				mainwindow.RemoveHintsDocker();
+				mainwindow.UpdateGZDoomPanel();
 				mainwindow.UpdateInterface();
 				mainwindow.DisplayReady();
-				General.WriteLogLine("Map unload done");
+				WriteLogLine("Map unload done");
 				return true;
 			}
 			else
@@ -983,15 +1191,18 @@ namespace CodeImp.DoomBuilder
 		[BeginAction("openmap")]
 		internal static void OpenMap()
 		{
-			OpenFileDialog openfile;
-
 			// Cancel volatile mode, if any
-			General.Editing.DisengageVolatileMode();
+			editing.DisengageVolatileMode();
 
 			// Open map file dialog
-			openfile = new OpenFileDialog();
+			OpenFileDialog openfile = new OpenFileDialog();
 			openfile.Filter = "Doom WAD Files (*.wad)|*.wad";
 			openfile.Title = "Open Map";
+			if(!string.IsNullOrEmpty(settings.LastUsedMapFolder) && Directory.Exists(settings.LastUsedMapFolder)) //mxd
+			{
+				openfile.RestoreDirectory = true;
+				openfile.InitialDirectory = settings.LastUsedMapFolder;
+			} 
 			openfile.AddExtension = false;
 			openfile.CheckFileExists = true;
 			openfile.Multiselect = false;
@@ -1002,25 +1213,103 @@ namespace CodeImp.DoomBuilder
 				mainwindow.Update();
 
 				// Open map file
-				OpenMapFile(openfile.FileName);
+				OpenMapFile(openfile.FileName, null);
 			}
 
 			openfile.Dispose();
 		}
-		
-		// This opens the specified file
-		internal static void OpenMapFile(string filename)
+
+		//mxd. This loads a different map from same wad file without reloading resources
+		[BeginAction("openmapincurrentwad")]
+		internal static void OpenMapInCurrentWad() 
 		{
-			OpenMapOptionsForm openmapwindow;
+			if(map == null || string.IsNullOrEmpty(map.FilePathName) || !File.Exists(map.FilePathName))
+			{
+				Interface.DisplayStatus(StatusType.Warning, "Unable to open map from current WAD!");
+				return;
+			}
 
 			// Cancel volatile mode, if any
-			General.Editing.DisengageVolatileMode();
+			Editing.DisengageVolatileMode();
+
+			// Ask the user to save changes (if any)
+			if(!AskSaveMap()) return;
+
+			// Open map options dialog
+			ChangeMapForm changemapwindow = new ChangeMapForm(map.FilePathName, map.Options);
+			if(changemapwindow.ShowDialog(mainwindow) != DialogResult.OK) return;
+
+			// Display status
+			mainwindow.DisplayStatus(StatusType.Busy, "Switching to map \"" + changemapwindow.Options.CurrentName + "\"...");
+			WriteLogLine("Switching to map \"" + changemapwindow.Options.CurrentName + "\"...");
+			
+			Cursor.Current = Cursors.WaitCursor;
+
+			// Let the plugins know
+			plugins.OnMapCloseBegin();
+
+			// Clear the display
+			mainwindow.ClearDisplay();
+			mainwindow.RemoveHintsDocker(); //mxd
+
+			//mxd. Close the script editor
+			map.CloseScriptEditor(false);
+
+			// Let the plugins know
+			plugins.OnMapCloseEnd();
+			plugins.OnMapOpenBegin();
+
+			// Clear old errors
+			ErrorLogger.Clear();
+
+			if(!map.InitializeSwitchMap(changemapwindow.Options)) return;
+
+			// Clear undo history
+			map.UndoRedo.ClearAllUndos();
+			map.UndoRedo.ClearAllRedos();
+
+			settings.FindDefaultDrawSettings(); //mxd
+
+			// Let the plugins know
+			plugins.OnMapOpenEnd();
+
+			// All done
+			mainwindow.SetupInterface();
+			mainwindow.RedrawDisplay();
+			mainwindow.UpdateThingsFilters();
+			mainwindow.UpdateLinedefColorPresets(); //mxd
+			mainwindow.UpdateInterface();
+			mainwindow.HideInfo();
+			mainwindow.AddHintsDocker(); //mxd
+			mainwindow.UpdateGZDoomPanel(); //mxd
+
+			if(errorlogger.IsErrorAdded)
+			{
+				// Show any errors if preferred
+				mainwindow.DisplayStatus(StatusType.Warning, "There were errors during loading!");
+				if(!delaymainwindow && Settings.ShowErrorsWindow)
+					mainwindow.ShowErrors();
+			} 
+			else 
+			{
+				mainwindow.DisplayReady();
+			}
+
+			Cursor.Current = Cursors.Default;
+		}
+
+		// This opens the specified file
+		internal static void OpenMapFile(string filename, MapOptions options)
+		{
+			// Cancel volatile mode, if any
+			editing.DisengageVolatileMode();
 			
 			// Ask the user to save changes (if any)
-			if(General.AskSaveMap())
+			if(AskSaveMap())
 			{
 				// Open map options dialog
-				openmapwindow = new OpenMapOptionsForm(filename);
+				OpenMapOptionsForm openmapwindow = (options != null ? new OpenMapOptionsForm(filename, options) : new OpenMapOptionsForm(filename));
+
 				if(openmapwindow.ShowDialog(mainwindow) == DialogResult.OK)
 					OpenMapFileWithOptions(filename, openmapwindow.Options);
 			}
@@ -1035,6 +1324,7 @@ namespace CodeImp.DoomBuilder
 
 			// Clear the display
 			mainwindow.ClearDisplay();
+			mainwindow.RemoveHintsDocker(); //mxd
 
 			// Trash the current map, if any
 			if(map != null) map.Dispose();
@@ -1042,8 +1332,8 @@ namespace CodeImp.DoomBuilder
 			// Let the plugins know
 			plugins.OnMapOpenBegin();
 
-			// Set this to false so we can see if errors are added
-			General.ErrorLogger.IsErrorAdded = false;
+			// mxd. Clear old errors
+			errorlogger.Clear();
 
 			// Create map manager with given options
 			map = new MapManager();
@@ -1051,6 +1341,34 @@ namespace CodeImp.DoomBuilder
 			{
 				// Add recent file
 				mainwindow.AddRecentFile(filename);
+
+				//mxd
+				mainwindow.UpdateGZDoomPanel();
+				settings.LastUsedMapFolder = Path.GetDirectoryName(filename);
+				settings.FindDefaultDrawSettings();
+
+				// Let the plugins know
+				plugins.OnMapOpenEnd();
+
+				// All done
+				mainwindow.SetupInterface();
+				mainwindow.UpdateThingsFilters();
+				mainwindow.UpdateLinedefColorPresets(); //mxd
+				mainwindow.UpdateInterface();
+				mainwindow.HideInfo();
+				mainwindow.AddHintsDocker(); //mxd
+
+				//mxd. Center map in screen or on stored coordinates. Done here to avoid the view jerking around when updating the interface.
+				ClassicMode mode = Editing.Mode as ClassicMode;
+				if(mode != null)
+				{
+					if(options != null && options.ViewPosition.IsFinite() && !float.IsNaN(options.ViewScale))
+						mode.CenterOnCoordinates(options.ViewPosition, options.ViewScale);
+					else
+						mode.CenterInScreen();
+				}
+
+				mainwindow.RedrawDisplay();
 			}
 			else
 			{
@@ -1062,22 +1380,11 @@ namespace CodeImp.DoomBuilder
 				mainwindow.ShowSplashDisplay();
 			}
 
-			// Let the plugins know
-			plugins.OnMapOpenEnd();
-
-			// All done
-			settings.FindDefaultDrawSettings();
-			mainwindow.SetupInterface();
-			mainwindow.RedrawDisplay();
-			mainwindow.UpdateThingsFilters();
-			mainwindow.UpdateInterface();
-			mainwindow.HideInfo();
-
 			if(errorlogger.IsErrorAdded)
 			{
 				// Show any errors if preferred
 				mainwindow.DisplayStatus(StatusType.Warning, "There were errors during loading!");
-				if(!delaymainwindow && General.Settings.ShowErrorsWindow) mainwindow.ShowErrors();
+				if(!delaymainwindow && settings.ShowErrorsWindow) mainwindow.ShowErrors();
 			}
 			else
 				mainwindow.DisplayReady();
@@ -1091,38 +1398,50 @@ namespace CodeImp.DoomBuilder
 		internal static void ActionSaveMap() { SaveMap(); }
 		internal static bool SaveMap()
 		{
+			if(map == null) return false;
 			bool result = false;
-
-			if(map == null)
-				return false;
 			
 			// Cancel volatile mode, if any
-			General.Editing.DisengageVolatileMode();
+			editing.DisengageVolatileMode();
 			
 			// Check if a wad file is known
-			if(map.FilePathName == "")
+			if(string.IsNullOrEmpty(map.FilePathName))
 			{
 				// Call to SaveMapAs
 				result = SaveMapAs();
 			}
 			else
 			{
+				//mxd. Do we need to save the map?
+				if(!map.MapSaveRequired(map.FilePathName, SavePurpose.Normal))
+				{
+					// Still save settings file
+					result = map.SaveSettingsFile(map.FilePathName);
+					
+					// Display status
+					mainwindow.DisplayStatus(StatusType.Info, "Map is up to date. Updated map settings file.");
+
+					// All done
+					mainwindow.UpdateInterface();
+					return result;
+				}
+				
 				// Display status
 				mainwindow.DisplayStatus(StatusType.Busy, "Saving map file...");
 				Cursor.Current = Cursors.WaitCursor;
 
 				// Set this to false so we can see if errors are added
-				General.ErrorLogger.IsErrorAdded = false;
+				errorlogger.IsErrorAdded = false;
 				
 				// Save the map
-				General.Plugins.OnMapSaveBegin(SavePurpose.Normal);
+				plugins.OnMapSaveBegin(SavePurpose.Normal);
 				if(map.SaveMap(map.FilePathName, SavePurpose.Normal))
 				{
 					// Add recent file
 					mainwindow.AddRecentFile(map.FilePathName);
 					result = true;
 				}
-				General.Plugins.OnMapSaveEnd(SavePurpose.Normal);
+				plugins.OnMapSaveEnd(SavePurpose.Normal);
 
 				// All done
 				mainwindow.UpdateInterface();
@@ -1131,13 +1450,22 @@ namespace CodeImp.DoomBuilder
 				{
 					// Show any errors if preferred
 					mainwindow.DisplayStatus(StatusType.Warning, "There were errors during saving!");
-					if(!delaymainwindow && General.Settings.ShowErrorsWindow) mainwindow.ShowErrors();
+					if(!delaymainwindow && settings.ShowErrorsWindow) mainwindow.ShowErrors();
+				}
+				else if(result)
+				{
+					mainwindow.DisplayStatus(StatusType.Info, "Map saved in " + map.FileTitle + ".");
 				}
 				else
-					mainwindow.DisplayStatus(StatusType.Info, "Map saved in " + map.FileTitle + ".");
+				{
+					mainwindow.DisplayStatus(StatusType.Info, "Map saving cancelled."); //mxd
+				}
 
 				Cursor.Current = Cursors.Default;
 			}
+
+			//mxd. Also reset the clock...
+			MainWindow.ResetClock();
 
 			return result;
 		}
@@ -1149,23 +1477,27 @@ namespace CodeImp.DoomBuilder
 		internal static void ActionSaveMapAs() { SaveMapAs(); }
 		internal static bool SaveMapAs()
 		{
-			SaveFileDialog savefile;
+			if(map == null) return false;
 			bool result = false;
 
-			if(map == null)
-				return false;
-
 			// Cancel volatile mode, if any
-			General.Editing.DisengageVolatileMode();
+			editing.DisengageVolatileMode();
 
 			// Show save as dialog
-			savefile = new SaveFileDialog();
+			SaveFileDialog savefile = new SaveFileDialog();
 			savefile.Filter = "Doom WAD Files (*.wad)|*.wad";
 			savefile.Title = "Save Map As";
 			savefile.AddExtension = true;
 			savefile.CheckPathExists = true;
 			savefile.OverwritePrompt = true;
 			savefile.ValidateNames = true;
+			savefile.FileName = map.FileTitle; //mxd
+			if(map.FilePathName.Length > 0) //mxd
+			{
+				savefile.RestoreDirectory = true;
+				savefile.InitialDirectory = Path.GetDirectoryName(map.FilePathName);
+			}
+
 			if(savefile.ShowDialog(mainwindow) == DialogResult.OK)
 			{
 				// Check if we're saving to the same file as the original.
@@ -1183,17 +1515,18 @@ namespace CodeImp.DoomBuilder
 					Cursor.Current = Cursors.WaitCursor;
 					
 					// Set this to false so we can see if errors are added
-					General.ErrorLogger.IsErrorAdded = false;
+					errorlogger.IsErrorAdded = false;
 					
 					// Save the map
-					General.Plugins.OnMapSaveBegin(SavePurpose.AsNewFile);
+					plugins.OnMapSaveBegin(SavePurpose.AsNewFile);
 					if(map.SaveMap(savefile.FileName, SavePurpose.AsNewFile))
 					{
 						// Add recent file
 						mainwindow.AddRecentFile(map.FilePathName);
+						settings.LastUsedMapFolder = Path.GetDirectoryName(map.FilePathName); //mxd
 						result = true;
 					}
-					General.Plugins.OnMapSaveEnd(SavePurpose.AsNewFile);
+					plugins.OnMapSaveEnd(SavePurpose.AsNewFile);
 					
 					// All done
 					mainwindow.UpdateInterface();
@@ -1202,16 +1535,26 @@ namespace CodeImp.DoomBuilder
 					{
 						// Show any errors if preferred
 						mainwindow.DisplayStatus(StatusType.Warning, "There were errors during saving!");
-						if(!delaymainwindow && General.Settings.ShowErrorsWindow) mainwindow.ShowErrors();
+						if(!delaymainwindow && settings.ShowErrorsWindow) mainwindow.ShowErrors();
+					}
+					else if(result)
+					{
+						mainwindow.DisplayStatus(StatusType.Info, "Map saved in " + map.FileTitle + ".");
 					}
 					else
-						mainwindow.DisplayStatus(StatusType.Info, "Map saved in " + map.FileTitle + ".");
+					{
+						mainwindow.DisplayStatus(StatusType.Info, "Map saving cancelled."); //mxd
+					}
 					
 					Cursor.Current = Cursors.Default;
 				}
 			}
 			
 			savefile.Dispose();
+
+			//mxd. Also reset the clock...
+			MainWindow.ResetClock();
+
 			return result;
 		}
 
@@ -1222,17 +1565,14 @@ namespace CodeImp.DoomBuilder
 		internal static void ActionSaveMapInto() { SaveMapInto(); }
 		internal static bool SaveMapInto()
 		{
-			SaveFileDialog savefile;
+			if(map == null) return false;
 			bool result = false;
 
-			if(map == null)
-				return false;
-
 			// Cancel volatile mode, if any
-			General.Editing.DisengageVolatileMode();
+			editing.DisengageVolatileMode();
 
 			// Show save as dialog
-			savefile = new SaveFileDialog();
+			SaveFileDialog savefile = new SaveFileDialog();
 			savefile.Filter = "Doom WAD Files (*.wad)|*.wad";
 			savefile.Title = "Save Map Into";
 			savefile.AddExtension = true;
@@ -1246,17 +1586,17 @@ namespace CodeImp.DoomBuilder
 				Cursor.Current = Cursors.WaitCursor;
 
 				// Set this to false so we can see if errors are added
-				General.ErrorLogger.IsErrorAdded = false;
+				errorlogger.IsErrorAdded = false;
 				
 				// Save the map
-				General.Plugins.OnMapSaveBegin(SavePurpose.IntoFile);
+				plugins.OnMapSaveBegin(SavePurpose.IntoFile);
 				if(map.SaveMap(savefile.FileName, SavePurpose.IntoFile))
 				{
 					// Add recent file
 					mainwindow.AddRecentFile(map.FilePathName);
 					result = true;
 				}
-				General.Plugins.OnMapSaveEnd(SavePurpose.IntoFile);
+				plugins.OnMapSaveEnd(SavePurpose.IntoFile);
 
 				// All done
 				mainwindow.UpdateInterface();
@@ -1265,15 +1605,25 @@ namespace CodeImp.DoomBuilder
 				{
 					// Show any errors if preferred
 					mainwindow.DisplayStatus(StatusType.Warning, "There were errors during saving!");
-					if(!delaymainwindow && General.Settings.ShowErrorsWindow) mainwindow.ShowErrors();
+					if(!delaymainwindow && settings.ShowErrorsWindow) mainwindow.ShowErrors();
+				}
+				else if(result)
+				{
+					mainwindow.DisplayStatus(StatusType.Info, "Map saved in " + map.FileTitle + ".");
 				}
 				else
-					mainwindow.DisplayStatus(StatusType.Info, "Map saved into " + map.FileTitle + ".");
+				{
+					mainwindow.DisplayStatus(StatusType.Info, "Map saving cancelled."); //mxd
+				}
 
 				Cursor.Current = Cursors.Default;
 			}
 
 			savefile.Dispose();
+
+			//mxd. Also reset the clock...
+			MainWindow.ResetClock();
+
 			return result;
 		}
 		
@@ -1281,15 +1631,13 @@ namespace CodeImp.DoomBuilder
 		// Returns false when action was cancelled
 		internal static bool AskSaveMap()
 		{
-			DialogResult result;
-			
 			// Map open and not saved?
 			if(map != null)
 			{
 				if(map.IsChanged)
 				{
 					// Ask to save changes
-					result = MessageBox.Show(mainwindow, "Do you want to save changes to " + map.FileTitle + " (" + map.Options.CurrentName + ")?", Application.ProductName, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+					DialogResult result = MessageBox.Show(mainwindow, "Do you want to save changes to " + map.FileTitle + " (" + map.Options.CurrentName + ")?", Application.ProductName, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
 					if(result == DialogResult.Yes)
 					{
 						// Save map
@@ -1334,17 +1682,24 @@ namespace CodeImp.DoomBuilder
 		// This shows a major failure
 		public static void Fail(string message)
 		{
-			General.WriteLogLine("FAIL: " + message);
+			WriteLogLine("FAIL: " + message);
+#if DEBUG
 			Debug.Fail(message);
+#else
+			//mxd. Lets notify the user about our Epic Failure before crashing...
+			ShowErrorMessage(message, MessageBoxButtons.OK);
+#endif
 			Terminate(false);
 		}
 		
 		// This outputs log information
 		public static void WriteLogLine(string line)
 		{
-			// Output to console
+#if DEBUG
+			// Output to consoles
 			Console.WriteLine(line);
-			
+			DebugConsole.WriteLine(DebugMessageType.LOG, line); //mxd
+#endif
 			// Write to log file
 			try { File.AppendAllText(logfile, line + Environment.NewLine); }
 			catch(Exception) { }
@@ -1353,8 +1708,11 @@ namespace CodeImp.DoomBuilder
 		// This outputs log information
 		public static void WriteLog(string text)
 		{
-			// Output to console
+#if DEBUG
+			// Output to consoles
 			Console.Write(text);
+			DebugConsole.Write(DebugMessageType.LOG, text);
+#endif
 
 			// Write to log file
 			try { File.AppendAllText(logfile, text); }
@@ -1376,7 +1734,7 @@ namespace CodeImp.DoomBuilder
 		// This calculates the bits needed for a number
 		public static int BitsForInt(int v)
 		{
-			int[] LOGTABLE = new int[] {
+			int[] LOGTABLE = new[] {
 			  0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
 			  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
 			  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
@@ -1426,6 +1784,34 @@ namespace CodeImp.DoomBuilder
 		{
 			return Math.Min(Math.Max(min, value), max);
 		}
+
+		//mxd. This clamps angle between 0 and 359
+		public static int ClampAngle(int angle) 
+		{
+			angle %= 360;
+			if(angle < 0) angle += 360;
+			return angle;
+		}
+
+		//mxd. This clamps angle between 0 and 359
+		public static float ClampAngle(float angle) 
+		{
+			angle %= 360;
+			if(angle < 0) angle += 360;
+			return angle;
+		}
+
+		//mxd
+		public static int Random(int min, int max) 
+		{
+			return random.Next(min, max + 1); //because max is never rolled
+		}
+
+		//mxd
+		public static float Random(float min, float max) 
+		{
+			return (float)Math.Round(min + (max - min) * random.NextDouble(), 2);
+		}
 		
 		// This returns an element from a collection by index
 		public static T GetByIndex<T>(ICollection<T> collection, int index)
@@ -1436,7 +1822,7 @@ namespace CodeImp.DoomBuilder
 		}
 
 		// This returns the next power of 2
-		public static int NextPowerOf2(int v)
+		/*public static int NextPowerOf2(int v)
 		{
 			int p = 0;
 
@@ -1445,6 +1831,20 @@ namespace CodeImp.DoomBuilder
 
 			// Return power
 			return (int)Math.Pow(2, p);
+		}*/
+
+		//mxd. This returns the next power of 2. Taken from http://bits.stephan-brumme.com/roundUpToNextPowerOfTwo.html
+		public static int NextPowerOf2(int x)
+		{
+			x--;
+			x |= x >> 1;  // handle  2 bit numbers
+			x |= x >> 2;  // handle  4 bit numbers
+			x |= x >> 4;  // handle  8 bit numbers
+			x |= x >> 8;  // handle 16 bit numbers
+			x |= x >> 16; // handle 32 bit numbers
+			x++;
+
+			return x;
 		}
 		
 		// Convert bool to integer
@@ -1462,20 +1862,23 @@ namespace CodeImp.DoomBuilder
 		// This shows a message and logs the message
 		public static DialogResult ShowErrorMessage(string message, MessageBoxButtons buttons)
 		{
-			Cursor oldcursor;
-			DialogResult result;
-			
-			// Log the message
-			WriteLogLine(message);
+			return ShowErrorMessage(message, buttons, true);
+		}
+
+		// This shows a message and logs the message
+		public static DialogResult ShowErrorMessage(string message, MessageBoxButtons buttons, bool log)
+		{
+			//mxd. Log the message?
+			if(log) WriteLogLine(message);
 			
 			// Use normal cursor
-			oldcursor = Cursor.Current;
+			Cursor oldcursor = Cursor.Current;
 			Cursor.Current = Cursors.Default;
 			
 			// Show message
 			IWin32Window window = null;
 			if((Form.ActiveForm != null) && Form.ActiveForm.Visible) window = Form.ActiveForm;
-			result = MessageBox.Show(window, message, Application.ProductName, buttons, MessageBoxIcon.Error);
+			DialogResult result = MessageBox.Show(window, message, Application.ProductName, buttons, MessageBoxIcon.Error);
 
 			// Restore old cursor
 			Cursor.Current = oldcursor;
@@ -1487,26 +1890,29 @@ namespace CodeImp.DoomBuilder
 		// This shows a message and logs the message
 		public static DialogResult ShowWarningMessage(string message, MessageBoxButtons buttons)
 		{
-			return ShowWarningMessage(message, buttons, MessageBoxDefaultButton.Button1);
+			return ShowWarningMessage(message, buttons, MessageBoxDefaultButton.Button1, true);
 		}
 
 		// This shows a message and logs the message
 		public static DialogResult ShowWarningMessage(string message, MessageBoxButtons buttons, MessageBoxDefaultButton defaultbutton)
 		{
-			Cursor oldcursor;
-			DialogResult result;
+			return ShowWarningMessage(message, buttons, defaultbutton, true);
+		}
 
-			// Log the message
-			WriteLogLine(message);
+		// This shows a message and logs the message
+		public static DialogResult ShowWarningMessage(string message, MessageBoxButtons buttons, MessageBoxDefaultButton defaultbutton, bool log)
+		{
+			//mxd. Log the message?
+			if(log) WriteLogLine(message);
 
 			// Use normal cursor
-			oldcursor = Cursor.Current;
+			Cursor oldcursor = Cursor.Current;
 			Cursor.Current = Cursors.Default;
 
 			// Show message
 			IWin32Window window = null;
 			if((Form.ActiveForm != null) && Form.ActiveForm.Visible) window = Form.ActiveForm;
-			result = MessageBox.Show(window, message, Application.ProductName, buttons, MessageBoxIcon.Warning, defaultbutton);
+			DialogResult result = MessageBox.Show(window, message, Application.ProductName, buttons, MessageBoxIcon.Warning, defaultbutton);
 
 			// Restore old cursor
 			Cursor.Current = oldcursor;
@@ -1552,15 +1958,13 @@ namespace CodeImp.DoomBuilder
 		internal static string MakeTempFilename(string tempdir, string extension)
 		{
 			string filename;
-			string chars = "abcdefghijklmnopqrstuvwxyz1234567890";
-			Random rnd = new Random();
-			int i;
+			const string chars = "abcdefghijklmnopqrstuvwxyz1234567890";
 
 			do
 			{
 				// Generate a filename
 				filename = "";
-				for(i = 0; i < 8; i++) filename += chars[rnd.Next(chars.Length)];
+				for(int i = 0; i < 8; i++) filename += chars[Random(0, chars.Length - 1)];
 				filename = Path.Combine(tempdir, filename + "." + extension);
 			}
 			// Continue while file is not unique
@@ -1575,14 +1979,12 @@ namespace CodeImp.DoomBuilder
 		{
 			string dirname;
 			const string chars = "abcdefghijklmnopqrstuvwxyz1234567890";
-			Random rnd = new Random();
-			int i;
 
 			do
 			{
 				// Generate a filename
 				dirname = "";
-				for(i = 0; i < 8; i++) dirname += chars[rnd.Next(chars.Length)];
+				for(int i = 0; i < 8; i++) dirname += chars[Random(0, chars.Length - 1)];
 				dirname = Path.Combine(temppath, dirname);
 			}
 			// Continue while file is not unique
@@ -1595,38 +1997,28 @@ namespace CodeImp.DoomBuilder
 		// This shows an image in a panel either zoomed or centered depending on size
 		public static void DisplayZoomedImage(Panel panel, Image image)
 		{
-			// Set the image
-			panel.BackgroundImage = image;
-			
 			// Image not null?
 			if(image != null)
 			{
-				// Small enough to fit in panel?
-				if((image.Size.Width < panel.ClientRectangle.Width) &&
-				   (image.Size.Height < panel.ClientRectangle.Height))
-				{
-					// Display centered
-					panel.BackgroundImageLayout = ImageLayout.Center;
-				}
-				else
-				{
-					// Display zoomed
-					panel.BackgroundImageLayout = ImageLayout.Zoom;
-				}
+				// Set the image
+				panel.BackgroundImage = image;
+
+				// Display zoomed
+				panel.BackgroundImageLayout = ImageLayout.Zoom;
 			}
 		}
 
 		// This calculates the new rectangle when one is scaled into another keeping aspect ratio
 		public static RectangleF MakeZoomedRect(Size source, RectangleF target)
 		{
-			return MakeZoomedRect(new SizeF((int)source.Width, (int)source.Height), target);
+			return MakeZoomedRect(new SizeF(source.Width, source.Height), target);
 		}
 
 		// This calculates the new rectangle when one is scaled into another keeping aspect ratio
 		public static RectangleF MakeZoomedRect(Size source, Rectangle target)
 		{
-			return MakeZoomedRect(new SizeF((int)source.Width, (int)source.Height),
-								  new RectangleF((int)target.Left, (int)target.Top, (int)target.Width, (int)target.Height));
+			return MakeZoomedRect(new SizeF(source.Width, source.Height),
+								  new RectangleF(target.Left, target.Top, target.Width, target.Height));
 		}
 		
 		// This calculates the new rectangle when one is scaled into another keeping aspect ratio
@@ -1635,8 +2027,7 @@ namespace CodeImp.DoomBuilder
 			float scale;
 			
 			// Image fits?
-			if((source.Width <= target.Width) &&
-			   (source.Height <= target.Height))
+			if((source.Width <= target.Width) && (source.Height <= target.Height))
 			{
 				// Just center
 				scale = 1.0f;
@@ -1662,6 +2053,13 @@ namespace CodeImp.DoomBuilder
 		// This opens a URL in the default browser
 		public static void OpenWebsite(string url)
 		{
+            // [ZZ] note: it may break. no idea why it was done like it was done.
+            string url2 = url.ToLowerInvariant();
+            if (!url2.StartsWith("http://") && !url2.StartsWith("https://") && !url2.StartsWith("ftp://") && !url2.StartsWith("mailto:"))
+                return;
+            System.Diagnostics.Process.Start(url);
+            /*
+
 			RegistryKey key = null;
 			Process p = null;
 			string browser;
@@ -1698,29 +2096,138 @@ namespace CodeImp.DoomBuilder
 			catch(Exception) { }
 
 			// Clean up
-			if(p != null) p.Dispose();
-		}
+			if(p != null) p.Dispose();*/
+        }
 		
 		// This returns the short path name for a file
 		public static string GetShortFilePath(string longpath)
 		{
-			int maxlen = 256;
+			const int maxlen = 256;
 			StringBuilder shortname = new StringBuilder(maxlen);
-			uint len = GetShortPathName(longpath, shortname, (uint)maxlen);
+			GetShortPathName(longpath, shortname, maxlen);
 			return shortname.ToString();
+		}
+
+		//mxd
+		internal static ScriptConfiguration GetScriptConfiguration(ScriptType type)
+		{
+			if(type == ScriptType.ACS)
+			{
+				// Return map-defined compiler
+				string compiler = (!string.IsNullOrEmpty(Map.Options.ScriptCompiler) ? Map.Options.ScriptCompiler : Map.ConfigSettings.DefaultScriptCompiler);
+				foreach(KeyValuePair<string, ScriptConfiguration> group in scriptconfigs)
+				{
+					if(group.Key == compiler) return group.Value;
+				}
+			}
+			else
+			{
+				// Just pick the first one from the list
+				foreach(ScriptConfiguration cfg in scriptconfigs.Values)
+				{
+					if(cfg.ScriptType == type) return cfg;
+				}
+			}
+
+			return null;
+		}
+
+		//mxd
+		public static bool CheckWritePremissions(string path)
+		{
+			try
+			{
+				DirectoryInfo di = new DirectoryInfo(path);
+				DirectorySecurity ds = di.GetAccessControl();
+				AuthorizationRuleCollection rules = ds.GetAccessRules(true, true, typeof(NTAccount));
+				WindowsIdentity currentuser = WindowsIdentity.GetCurrent();
+
+				if(currentuser != null)
+				{
+					WindowsPrincipal principal = new WindowsPrincipal(currentuser);
+					foreach(AuthorizationRule rule in rules)
+					{
+						FileSystemAccessRule fsar = rule as FileSystemAccessRule;
+						if(fsar != null && (fsar.FileSystemRights & FileSystemRights.WriteData) > 0)
+						{
+							NTAccount account = rule.IdentityReference as NTAccount;
+							if(account != null && principal.IsInRole(account.Value)) return true;
+						}
+					}
+				}
+			}
+			catch(UnauthorizedAccessException) { }
+
+			return false;
 		}
 		
 		#endregion
-		
-		/*
-		[BeginAction("testaction")]
-		internal static void TestAction()
+
+		#region ==================  mxd. Uncaught exceptions handling
+
+		// In some cases the program can remain operational after these
+		private static void Application_ThreadException(object sender, ThreadExceptionEventArgs e) 
 		{
-			ScriptEditorForm t = new ScriptEditorForm();
-			t.ShowDialog(mainwindow);
-			t.Dispose();
+			try 
+			{
+				// Try handling it in user-friendy way...
+				ExceptionDialog dlg = new ExceptionDialog(e);
+				dlg.Setup();
+				if(dlg.ShowDialog() == DialogResult.Cancel) Terminate(false);
+			} 
+			catch
+			{
+				string exceptionmsg;
+
+				// Try getting exception details...
+				try { exceptionmsg = "Fatal Windows Forms error occurred: " + e.Exception.Message + "\n\nStack Trace:\n" + e.Exception.StackTrace; }
+				catch(Exception exc) { exceptionmsg = "Failed to get initial exception details: " + exc.Message + "\n\nStack Trace:\n" + exc.StackTrace; }
+
+				// Try logging it...
+				try { WriteLogLine(exceptionmsg); } catch { }
+
+				// Try displaying it to the user...
+				try { MessageBox.Show(exceptionmsg, "Fatal Windows Forms Error", MessageBoxButtons.OK, MessageBoxIcon.Stop); }
+				finally { Process.GetCurrentProcess().Kill(); }
+			}
 		}
-		*/
+
+		// These are usually unrecoverable
+		private static void CurrentDomainOnUnhandledException(object sender, UnhandledExceptionEventArgs e) 
+		{
+			try
+			{
+				// Try handling it in user-friendy way...
+				ExceptionDialog dlg = new ExceptionDialog(e);
+				dlg.Setup();
+				if(dlg.ShowDialog() == DialogResult.Cancel) Terminate(false);
+			}
+			catch
+			{
+				string exceptionmsg;
+
+				// Try getting exception details...
+				try
+				{
+					Exception ex = (Exception)e.ExceptionObject;
+					exceptionmsg = "Fatal Non-UI error:\n" + ex.Message + "\n\nStack Trace:\n" + ex.StackTrace;
+				}
+				catch(Exception exc)
+				{
+					exceptionmsg = "Failed to get initial exception details:\n" + exc.Message + "\n\nStack Trace:\n" + exc.StackTrace;
+				}
+
+				// Try logging it...
+				try { WriteLogLine(exceptionmsg); } catch {}
+
+				// Try displaying it to the user...
+				try { MessageBox.Show(exceptionmsg, "Fatal Non-UI Error", MessageBoxButtons.OK, MessageBoxIcon.Stop); }
+				finally { Process.GetCurrentProcess().Kill(); }
+			}
+		}
+
+		#endregion
+
 	}
 }
 

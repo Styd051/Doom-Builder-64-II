@@ -17,15 +17,8 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Drawing;
-using System.Drawing.Imaging;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.IO;
 using System.IO;
+using CodeImp.DoomBuilder.IO;
 
 #endregion
 
@@ -39,7 +32,7 @@ namespace CodeImp.DoomBuilder.Data
 
 		#region ================== Variables
 
-		private string lumpname;
+		private readonly string lumpname;
 
 		#endregion
 
@@ -53,6 +46,7 @@ namespace CodeImp.DoomBuilder.Data
 			this.scale.y = scaley;
 			this.lumpname = lumpname;
 			SetName(name);
+			virtualname = "[Textures]/" + this.name; //mxd
 			
 			// We have no destructor
 			GC.SuppressFinalize(this);
@@ -65,11 +59,6 @@ namespace CodeImp.DoomBuilder.Data
 		// This loads the image
 		protected override void LocalLoadImage()
 		{
-			IImageReader reader;
-			MemoryStream mem;
-			Stream patchdata;
-			byte[] membytes;
-
 			// Checks
 			if(this.IsImageLoaded) return;
 
@@ -77,18 +66,24 @@ namespace CodeImp.DoomBuilder.Data
 			{
 				// Get the patch data stream
 				if(bitmap != null) bitmap.Dispose(); bitmap = null;
-				patchdata = General.Map.Data.GetTextureData(lumpname);
+				string patchlocation = string.Empty; //mxd
+				Stream patchdata = General.Map.Data.GetTextureData(lumpname, hasLongName, ref patchlocation);
 				if(patchdata != null)
 				{
 					// Copy patch data to memory
-					patchdata.Seek(0, SeekOrigin.Begin);
-					membytes = new byte[(int)patchdata.Length];
-					patchdata.Read(membytes, 0, (int)patchdata.Length);
-					mem = new MemoryStream(membytes);
+					byte[] membytes = new byte[(int)patchdata.Length];
+
+					lock(patchdata) //mxd
+					{
+						patchdata.Seek(0, SeekOrigin.Begin);
+						patchdata.Read(membytes, 0, (int)patchdata.Length);
+					}
+					
+					MemoryStream mem = new MemoryStream(membytes);
 					mem.Seek(0, SeekOrigin.Begin);
 
 					// Get a reader for the data
-					reader = ImageDataFormat.GetImageReader(mem, ImageDataFormat.DOOMPICTURE, General.Map.Data.Palette);
+					IImageReader reader = ImageDataFormat.GetImageReader(mem, ImageDataFormat.DOOMPICTURE, General.Map.Data.Palette);
 					if(!(reader is UnknownImageReader))
 					{
 						// Load the image
@@ -104,7 +99,7 @@ namespace CodeImp.DoomBuilder.Data
 					// Not loaded?
 					if(bitmap == null)
 					{
-						General.ErrorLogger.Add(ErrorType.Error, "Image lump '" + lumpname + "' data format could not be read, while loading texture '" + this.Name + "'. Does this lump contain valid picture data at all?");
+						General.ErrorLogger.Add(ErrorType.Error, "Image lump \"" + Path.Combine(patchlocation, lumpname) + "\" data format could not be read, while loading texture \"" + this.Name + "\". Does this lump contain valid picture data at all?");
 						loadfailed = true;
 					}
 					else
@@ -119,7 +114,7 @@ namespace CodeImp.DoomBuilder.Data
 				}
 				else
 				{
-					General.ErrorLogger.Add(ErrorType.Error, "Image lump '" + lumpname + "' could not be found, while loading texture '" + this.Name + "'. Did you forget to include required resources?");
+					General.ErrorLogger.Add(ErrorType.Error, "Image lump \"" + lumpname + "\" could not be found, while loading texture \"" + this.Name + "\". Did you forget to include required resources?");
 					loadfailed = true;
 				}
 				

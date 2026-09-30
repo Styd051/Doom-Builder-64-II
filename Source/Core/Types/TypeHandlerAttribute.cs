@@ -17,20 +17,12 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Data;
-using System.IO;
-using System.Diagnostics;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.Types
 {
-	internal class TypeHandlerAttribute : Attribute
+	public sealed class TypeHandlerAttribute : Attribute
 	{
 		#region ================== Constants
 
@@ -38,10 +30,10 @@ namespace CodeImp.DoomBuilder.Types
 
 		#region ================== Variables
 
-		private int index;
-		private string name;
+		private readonly int index;
+		private readonly string name;
 		private Type type;
-		private bool customusable;
+		private readonly bool customusable;
 		
 		#endregion
 

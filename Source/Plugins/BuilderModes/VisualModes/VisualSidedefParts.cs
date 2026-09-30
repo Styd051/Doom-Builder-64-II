@@ -16,21 +16,7 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Editing;
-using CodeImp.DoomBuilder.VisualModes;
 
 #endregion
 
@@ -39,22 +25,26 @@ namespace CodeImp.DoomBuilder.BuilderModes
 	internal struct VisualSidedefParts
 	{
 		// Members
-		public VisualUpper upper;
-		public VisualLower lower;
-		public VisualMiddleDouble middledouble;
-		public VisualMiddleSingle middlesingle;
-        public VisualSwitchDecal switchdecal;   // styd
-
-        // Constructor
-        public VisualSidedefParts(VisualUpper u, VisualLower l, VisualMiddleDouble m)
+		public readonly VisualUpper upper;
+		public readonly VisualLower lower;
+		public readonly VisualMiddleDouble middledouble;
+		public readonly VisualMiddleSingle middlesingle;
+		public readonly List<VisualMiddle3D> middle3d;
+		public readonly List<VisualMiddleBack> middleback; //mxd
+		public readonly VisualFogBoundary fogboundary; //mxd
+		
+		// Constructor
+		public VisualSidedefParts(VisualUpper u, VisualLower l, VisualMiddleDouble m, VisualFogBoundary f, List<VisualMiddle3D> e, List<VisualMiddleBack> eb)
 		{
 			this.upper = u;
 			this.lower = l;
 			this.middledouble = m;
 			this.middlesingle = null;
-            this.switchdecal = null;   // styd
-        }
-
+			this.fogboundary = f;
+			this.middle3d = e;
+			this.middleback = eb; //mxd
+		}
+		
 		// Constructor
 		public VisualSidedefParts(VisualMiddleSingle m)
 		{
@@ -62,36 +52,44 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			this.lower = null;
 			this.middledouble = null;
 			this.middlesingle = m;
-            this.switchdecal = null;   // styd
-        }
-
-        // styd: Constructor with switchdecal
-        public VisualSidedefParts(VisualUpper u, VisualLower l, VisualMiddleDouble m, VisualSwitchDecal sw)
-        {
-            this.upper = u;
-            this.lower = l;
-            this.middledouble = m;
-            this.middlesingle = null;
-            this.switchdecal = sw;
-        }
-
-        public VisualSidedefParts(VisualMiddleSingle m, VisualSwitchDecal sw)
-        {
-            this.upper = null;
-            this.lower = null;
-            this.middledouble = null;
-            this.middlesingle = m;
-            this.switchdecal = sw;
-        }
-
-        // This calls Setup() on all parts
-        public void SetupAllParts()
+			this.middle3d = null;
+			this.middleback = null; //mxd
+			this.fogboundary = null; //mxd
+		}
+		
+		// This calls Setup() on all parts
+		public void SetupAllParts()
 		{
 			if(lower != null) lower.Setup();
 			if(middledouble != null) middledouble.Setup();
 			if(middlesingle != null) middlesingle.Setup();
+			if(fogboundary != null) fogboundary.Setup(); //mxd
 			if(upper != null) upper.Setup();
-            if(switchdecal != null) switchdecal.Setup();   // styd
-        }
+			if(middle3d != null)
+			{
+				foreach(VisualMiddle3D m in middle3d) m.Setup();
+			}
+			if(middleback != null) //mxd
+			{
+				foreach(VisualMiddleBack m in middleback) m.Setup();
+			}
+		}
+
+		//mxd
+		public void DeselectAllParts() 
+		{
+			if(lower != null) lower.Selected = false;
+			if(middledouble != null) middledouble.Selected = false;
+			if(middlesingle != null) middlesingle.Selected = false;
+			if(upper != null) upper.Selected = false;
+			if(middle3d != null) 
+			{
+				foreach(VisualMiddle3D m in middle3d) m.Selected = false;
+			}
+			if(middleback != null) 
+			{
+				foreach(VisualMiddleBack m in middleback) m.Selected = false;
+			}
+		}
 	}
 }

@@ -16,18 +16,11 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.IO;
-
 #endregion
 
 namespace CodeImp.DoomBuilder.Types
 {
-	public enum UniversalType : int
+	public enum UniversalType
 	{
 		Integer = 0,
 		Float = 1,
@@ -48,6 +41,13 @@ namespace CodeImp.DoomBuilder.Types
 		EnumStrings = 16,
 		AngleDegreesFloat = 17,
 		ThingType = 18,
-		ThingClass = 19
+		ThingClass = 19,
+		RandomInteger = 20, //mxd
+		RandomFloat = 21, //mxd
+		AngleByte = 22, //mxd
+		ThingRadius = 23, //mxd
+		ThingHeight = 24, //mxd
+		PolyobjectNumber = 25, //mxd
+		EnumOptionAndBits = 26, //mxd
 	}
 }

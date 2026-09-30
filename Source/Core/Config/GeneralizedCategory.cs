@@ -1,8 +1,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using CodeImp.DoomBuilder.IO;
 
 namespace CodeImp.DoomBuilder.Config
@@ -25,7 +23,7 @@ namespace CodeImp.DoomBuilder.Config
 		private List<GeneralizedOption> options;
 		
 		// Disposing
-		private bool isdisposed = false;
+		private bool isdisposed;
 
 		#endregion
 
@@ -44,8 +42,6 @@ namespace CodeImp.DoomBuilder.Config
 		// Constructor
 		internal GeneralizedCategory(string structure, string name, Configuration cfg)
 		{
-			IDictionary opts;
-			
 			// Initialize
 			this.options = new List<GeneralizedOption>();
 			
@@ -55,15 +51,31 @@ namespace CodeImp.DoomBuilder.Config
 			this.length = cfg.ReadSetting(structure + "." + name + ".length", 0);
 			
 			// Read the options
-			opts = cfg.ReadSetting(structure + "." + name, new Hashtable());
+			IDictionary opts = cfg.ReadSetting(structure + "." + name, new Hashtable());
 			foreach(DictionaryEntry de in opts)
 			{
 				// Is this an option and not just some value?
-				if(de.Value is IDictionary)
+				IDictionary value = de.Value as IDictionary;
+				if(value != null)
 				{
 					// Add the option
-					this.options.Add(new GeneralizedOption(structure, name, de.Key.ToString(), (IDictionary)de.Value));
+					this.options.Add(new GeneralizedOption(structure, name, de.Key.ToString(), value));
 				}
+			}
+
+			//mxd. Sort by bits step
+			if(this.options.Count > 1)
+			{
+				this.options.Sort(delegate(GeneralizedOption o1, GeneralizedOption o2)
+				{
+					if(o1.BitsStep > o2.BitsStep) return 1;
+					if(o1.BitsStep == o2.BitsStep)
+					{
+						if(o1 != o2) General.ErrorLogger.Add(ErrorType.Error, "\"" + o1.Name + "\" and \"" + o2.Name + "\" generalized categories have the same bit step (" + o1.BitsStep + ")!");
+						return 0;
+					}
+					return -1;
+				});
 			}
 
 			// We have no destructor

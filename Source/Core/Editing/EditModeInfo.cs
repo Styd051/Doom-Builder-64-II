@@ -17,16 +17,13 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
+using System.Drawing;
 using System.IO;
-using System.Reflection;
+using System.Linq;
 using CodeImp.DoomBuilder.Actions;
 using CodeImp.DoomBuilder.Plugins;
-using System.Drawing;
+using CodeImp.DoomBuilder.Rendering;
 using CodeImp.DoomBuilder.VisualModes;
 
 #endregion
@@ -43,18 +40,20 @@ namespace CodeImp.DoomBuilder.Editing
 
 		// Mode type
 		private Plugin plugin;
-		private Type type;
-		private EditModeAttribute attribs;
+		private readonly Type type;
+		private readonly EditModeAttribute attribs;
 		
 		// Mode switching
-		private BeginActionAttribute switchactionattr = null;
-		private ActionDelegate switchactiondel = null;
+		private readonly BeginActionAttribute switchactionattr;
+		private ActionDelegate switchactiondel;
 
 		// Mode button
-		private Stream buttonimagestream = null;
-		private Image buttonimage = null;
-		private string buttondesc = null;
-		private int buttonorder = int.MaxValue;
+		private readonly Image buttonimage;
+		private readonly string buttondesc;
+		private readonly int buttonorder = int.MaxValue;
+
+		//mxd. Disposing
+		private bool isdisposed;
 		
 		#endregion
 
@@ -81,18 +80,20 @@ namespace CodeImp.DoomBuilder.Editing
 			this.attribs = attr;
 			
 			// Make switch action info
-			if((attribs.SwitchAction != null) && (attribs.SwitchAction.Length > 0))
+			if(!string.IsNullOrEmpty(attribs.SwitchAction))
 				switchactionattr = new BeginActionAttribute(attribs.SwitchAction);
 			
 			// Make button info
-			if(attr.ButtonImage != null)
+			if(!string.IsNullOrEmpty(attr.ButtonImage))
 			{
-				buttonimagestream = plugin.GetResourceStream(attr.ButtonImage);
-				if(buttonimagestream != null)
+				using(Stream stream = plugin.GetResourceStream(attr.ButtonImage))
 				{
-					buttonimage = Image.FromStream(buttonimagestream);
-					buttondesc = attr.DisplayName;
-					buttonorder = attr.ButtonOrder;
+					if(stream != null)
+					{
+						buttonimage = Image.FromStream(stream);
+						buttondesc = attr.DisplayName;
+						buttonorder = attr.ButtonOrder;
+					}
 				}
 			}
 			
@@ -103,13 +104,19 @@ namespace CodeImp.DoomBuilder.Editing
 		// Disposer
 		public void Dispose()
 		{
-			// Dispose
-			UnbindSwitchAction();
-			buttonimage.Dispose();
-			buttonimagestream.Dispose();
+			// Not already disposed?
+			if(!isdisposed)
+			{
+				// Dispose
+				UnbindSwitchAction();
+				if(buttonimage != null) buttonimage.Dispose();
 
-			// Clean up
-			plugin = null;
+				// Clean up
+				plugin = null;
+
+				// Done
+				isdisposed = true;
+			}
 		}
 		
 		#endregion
@@ -121,7 +128,7 @@ namespace CodeImp.DoomBuilder.Editing
 		{
 			if((switchactiondel == null) && (switchactionattr != null))
 			{
-				switchactiondel = new ActionDelegate(UserSwitchToMode);
+				switchactiondel = UserSwitchToMode;
 				General.Actions.BindBeginDelegate(plugin.Assembly, switchactiondel, switchactionattr);
 			}
 		}
@@ -136,35 +143,38 @@ namespace CodeImp.DoomBuilder.Editing
 			}
 		}
 		
-		// This switches to the mode by user command
-		// (when user presses shortcut key)
+		// This switches to the mode by user command (when user presses shortcut key)
 		public void UserSwitchToMode()
 		{
-			EditMode newmode;
-			
 			// Only when a map is opened
 			if(General.Map != null)
 			{
-				// Switching from volatile mode to volatile mode?
-				if((General.Editing.Mode != null) && General.Editing.Mode.Attributes.Volatile && this.attribs.Volatile)
+				//mxd. Not the same mode?
+				if(type != General.Editing.Mode.GetType())
 				{
-					// First cancel previous volatile mode
-					General.Editing.CancelVolatileMode();
+					// Switching from volatile mode to a different volatile mode?
+					if((General.Editing.Mode != null) && General.Editing.Mode.Attributes.Volatile && this.attribs.Volatile)
+					{
+						// First cancel previous volatile mode
+						General.Editing.CancelVolatileMode();
+					}
+					
+					// Create instance
+					EditMode newmode = plugin.CreateObject<EditMode>(type);
+
+					//mxd. Switch mode?
+					if(newmode != null) General.Editing.ChangeMode(newmode);
 				}
-				
-				// When in VisualMode and switching to the same VisualMode, then we switch back to the previous classic mode
-				if((General.Editing.Mode is VisualMode) && (type == General.Editing.Mode.GetType()))
+				// When in VisualMode and switching to the same VisualMode, switch back to the previous classic mode
+				else if(General.Editing.Mode is VisualMode)
 				{
 					// Switch back to last classic mode
 					General.Editing.ChangeMode(General.Editing.PreviousClassicMode.Name);
 				}
-				else
+				//mxd. Switch between view floor and view ceiling textures?
+				else if(General.Editing.Mode is ClassicMode && General.Settings.SwitchViewModes)
 				{
-					// Create instance
-					newmode = plugin.CreateObject<EditMode>(type);
-					
-					// Switch mode
-					General.Editing.ChangeMode(newmode);
+					ClassicMode.SetViewMode(General.Map.Renderer2D.ViewMode == ViewMode.FloorTextures ? ViewMode.CeilingTextures : ViewMode.FloorTextures);
 				}
 			}
 		}
@@ -172,29 +182,25 @@ namespace CodeImp.DoomBuilder.Editing
 		// This switches to the mode
 		public void SwitchToMode()
 		{
-			EditMode newmode;
-			
 			// Only when a map is opened
 			if(General.Map != null)
 			{
 				// Create instance
-				newmode = plugin.CreateObject<EditMode>(type);
+				EditMode newmode = plugin.CreateObject<EditMode>(type);
 
-				// Switch mode
-				General.Editing.ChangeMode(newmode);
+				//mxd. Switch mode?
+				if(newmode != null) General.Editing.ChangeMode(newmode);
 			}
 		}
 
 		// This switches to the mode with arguments
 		public void SwitchToMode(object[] args)
 		{
-			EditMode newmode;
-
 			// Only when a map is opened
 			if(General.Map != null)
 			{
 				// Create instance
-				newmode = plugin.CreateObjectA<EditMode>(type, args);
+				EditMode newmode = plugin.CreateObjectA<EditMode>(type, args);
 
 				// Switch mode
 				if(!General.Editing.ChangeMode(newmode))
@@ -215,8 +221,8 @@ namespace CodeImp.DoomBuilder.Editing
 		public int CompareTo(EditModeInfo other)
 		{
 			if(this.buttonorder > other.buttonorder) return 1;
-			else if(this.buttonorder < other.buttonorder) return -1;
-			else return 0;
+			if(this.buttonorder < other.buttonorder) return -1;
+			return 0;
 		}
 		
 		#endregion

@@ -20,15 +20,9 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
-using System.Text;
 using System.Windows.Forms;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.IO;
-using System.IO;
 using CodeImp.DoomBuilder.Config;
 using CodeImp.DoomBuilder.Editing;
-using CodeImp.DoomBuilder.Geometry;
 using CodeImp.DoomBuilder.Controls;
 
 #endregion
@@ -37,6 +31,27 @@ namespace CodeImp.DoomBuilder.Windows
 {
 	internal partial class ThingsFiltersForm : DelayedForm
 	{
+		#region ================== Structs
+
+		private class ThingCategoryData //mxd
+		{
+			public ThingCategory Category;
+			public string FullName;
+
+			public ThingCategoryData(ThingCategory category, string fullname)
+			{
+				Category = category;
+				FullName = fullname;
+			}
+
+			public override string ToString() 
+			{
+				return FullName;
+			}
+		}
+
+		#endregion
+
 		#region ================== Variables
 
 		private bool settingup;
@@ -61,22 +76,27 @@ namespace CodeImp.DoomBuilder.Windows
 			
 			// Fill the categories combobox
 			filtercategory.Items.Add("(any category)");
-			filtercategory.Items.AddRange(General.Map.Data.ThingCategories.ToArray());
+
+			//mxd. Add ThingCategories with subcategories
+			AddThingFilterCategories(General.Map.Data.ThingCategories, string.Empty);
 			
 			// Fill actions list
 			filteraction.GeneralizedCategories = General.Map.Config.GenActionCategories;
 			filteraction.AddInfo(General.Map.Config.SortedLinedefActions.ToArray());
 			
 			// Initialize custom fields editor
-			fieldslist.ListNoFixedFields();
-			fieldslist.Setup("thing");
-			
+			if(General.Map.FormatInterface.HasCustomFields) //mxd
+			{
+				fieldslist.ListNoFixedFields();
+				fieldslist.Setup("thing");
+			}
+
 			// Fill checkboxes list
 			foreach(KeyValuePair<string, string> flag in General.Map.Config.ThingFlags)
 			{
 				CheckBox box = filterfields.Add(flag.Value, flag.Key);
 				box.ThreeState = true;
-				box.CheckStateChanged += new EventHandler(filterfield_Check);
+				box.CheckStateChanged += filterfield_Check;
 			}
 			
 			// Fill list of filters
@@ -88,6 +108,7 @@ namespace CodeImp.DoomBuilder.Windows
 				// Make item in list
 				ListViewItem item = new ListViewItem(nf.Name);
 				item.Tag = nf;
+				item.ImageIndex = (nf.IsValid() ? -1 : 0); //mxd
 				listfilters.Items.Add(item);
 				
 				// Select item if this is the current filter
@@ -112,6 +133,28 @@ namespace CodeImp.DoomBuilder.Windows
 			settingup = false;
 		}
 
+		//mxd. This recursively adds ThingCategories
+		private void AddThingFilterCategories(List<ThingCategory> list, string fullname) 
+		{
+			foreach(ThingCategory cat in list)
+			{
+				string catname = (string.IsNullOrEmpty(fullname) ? cat.Title : fullname + " / " + cat.Title);
+				filtercategory.Items.Add(new ThingCategoryData(cat, catname));
+				AddThingFilterCategories(cat.Children, catname);
+			}
+		}
+
+		//mxd
+		private void ValidateFilter(ListViewItem item, ThingsFilter f)
+		{
+			int imageindex = (f.IsValid() ? -1 : 0);
+			if(item.ImageIndex != imageindex)
+			{
+				item.ImageIndex = imageindex;
+				listfilters.Invalidate();
+			}
+		}
+
 		#endregion
 
 		#region ================== Management
@@ -119,14 +162,26 @@ namespace CodeImp.DoomBuilder.Windows
 		// OK clicked
 		private void apply_Click(object sender, EventArgs e)
 		{
+			//mxd. Store current filter name
+			string currentfiltername = string.Empty;
+			if(!(General.Map.ThingsFilter is NullThingsFilter)) currentfiltername = General.Map.ThingsFilter.Name;
+			
 			// Clear all filters and add the new ones
 			General.Map.ConfigSettings.ThingsFilters.Clear();
+			ThingsFilter currentfilter = new NullThingsFilter(); //mxd
 			foreach(ListViewItem item in listfilters.Items)
-				General.Map.ConfigSettings.ThingsFilters.Add(item.Tag as ThingsFilter);
+			{
+				ThingsFilter f = item.Tag as ThingsFilter; //mxd
+				if(!string.IsNullOrEmpty(currentfiltername) && f.Name == currentfiltername) //mxd
+					currentfilter = f; 
+				General.Map.ConfigSettings.ThingsFilters.Add(f);
+			}
+				
 			
 			// Update stuff
-			General.Map.ChangeThingFilter(new NullThingsFilter());
+			General.Map.ChangeThingFilter(currentfilter);
 			General.MainWindow.UpdateThingsFilters();
+			General.Map.ConfigSettings.Changed = true;
 			
 			// Close
 			this.DialogResult = DialogResult.OK;
@@ -153,8 +208,8 @@ namespace CodeImp.DoomBuilder.Windows
 			item.Selected = true;
 
 			// Focus on the name field
-			filtername.Focus();
-			filtername.SelectAll();
+			//filtername.Focus();
+			//filtername.SelectAll();
 		}
 
 		// Delete Selected clicked
@@ -184,12 +239,18 @@ namespace CodeImp.DoomBuilder.Windows
 				
 				// Show name
 				filtername.Text = f.Name;
+
+				//mxd. Set display mode
+				filtermode.SelectedIndex = (int)f.DisplayMode;
+
+				//mxd. Invert?
+				invert.Checked = f.Invert;
 				
 				// Properties
 				foreach(object c in filtercategory.Items)
 				{
-					ThingCategory tc = (c as ThingCategory);
-					if((tc != null) && (tc.Name == f.CategoryName)) filtercategory.SelectedItem = tc;
+					ThingCategoryData tc = (c as ThingCategoryData); //mxd
+					if((tc != null) && (tc.Category.Name == f.CategoryName)) filtercategory.SelectedItem = tc;
 				}
 				if(filtercategory.SelectedIndex == -1) filtercategory.SelectedIndex = 0;
 				
@@ -245,10 +306,13 @@ namespace CodeImp.DoomBuilder.Windows
 				}
 				
 				// Custom fields
-				fieldslist.ClearFields();
-				fieldslist.Setup("thing");
-				fieldslist.SetValues(f.ThingCustomFields, true);
-				
+				if(General.Map.FormatInterface.HasCustomFields) //mxd 
+				{ 
+					fieldslist.ClearFields();
+					fieldslist.Setup("thing");
+					fieldslist.SetValues(f.ThingCustomFields, true);
+				}
+
 				// Done
 				settingup = false;
 			}
@@ -278,22 +342,24 @@ namespace CodeImp.DoomBuilder.Windows
 		private void filtercategory_SelectedIndexChanged(object sender, EventArgs e)
 		{
 			// Anything selected?
-			if(listfilters.SelectedItems.Count > 0)
+			if(!settingup && listfilters.SelectedItems.Count > 0)
 			{
 				// Get selected filter
 				ThingsFilter f = listfilters.SelectedItems[0].Tag as ThingsFilter;
 				
 				// Category selected
-				if((filtercategory.SelectedIndex > -1) && (filtercategory.SelectedItem is ThingCategory))
+				if((filtercategory.SelectedIndex > -1) && (filtercategory.SelectedItem is ThingCategoryData))
 				{
 					// Set new category name
-					f.CategoryName = (filtercategory.SelectedItem as ThingCategory).Name;
+					f.CategoryName = ((ThingCategoryData)filtercategory.SelectedItem).Category.Name; //mxd
 				}
 				else
 				{
 					// Unset category name
 					f.CategoryName = "";
 				}
+
+				ValidateFilter(listfilters.SelectedItems[0], f); //mxd
 			}
 		}
 		
@@ -307,6 +373,7 @@ namespace CodeImp.DoomBuilder.Windows
 				ThingsFilter f = listfilters.SelectedItems[0].Tag as ThingsFilter;
 
 				// Name changed?
+				if(string.IsNullOrEmpty(filtername.Text)) filtername.Text = ThingsFilter.DEFAULT_NAME; //mxd
 				if(f.Name != filtername.Text)
 				{
 					// Update name
@@ -315,6 +382,12 @@ namespace CodeImp.DoomBuilder.Windows
 					listfilters.Sort();
 				}
 			}
+		}
+
+		//mxd
+		private void filtername_Enter(object sender, EventArgs e)
+		{
+			if(filtername.Text == ThingsFilter.DEFAULT_NAME) filtername.Text = string.Empty;
 		}
 
 		// Field clicked
@@ -332,23 +405,25 @@ namespace CodeImp.DoomBuilder.Windows
 					// Get selected filter
 					ThingsFilter f = listfilters.SelectedItems[0].Tag as ThingsFilter;
 					
-					// New state is required?
-					if(box.CheckState == CheckState.Checked)
+					switch(box.CheckState)
 					{
-						f.ForbiddenFields.Remove(box.Tag.ToString());
-						if(!f.RequiredFields.Contains(box.Tag.ToString())) f.RequiredFields.Add(box.Tag.ToString());
+						// New state is required?
+						case CheckState.Checked:
+							f.ForbiddenFields.Remove(box.Tag.ToString());
+							if(!f.RequiredFields.Contains(box.Tag.ToString())) f.RequiredFields.Add(box.Tag.ToString());
+							break;
+						// New state is forbidden?
+						case CheckState.Unchecked:
+							f.RequiredFields.Remove(box.Tag.ToString());
+							if(!f.ForbiddenFields.Contains(box.Tag.ToString())) f.ForbiddenFields.Add(box.Tag.ToString());
+							break;
+						default:
+							f.ForbiddenFields.Remove(box.Tag.ToString());
+							f.RequiredFields.Remove(box.Tag.ToString());
+							break;
 					}
-					// New state is forbidden?
-					else if(box.CheckState == CheckState.Unchecked)
-					{
-						f.RequiredFields.Remove(box.Tag.ToString());
-						if(!f.ForbiddenFields.Contains(box.Tag.ToString())) f.ForbiddenFields.Add(box.Tag.ToString());
-					}
-					else
-					{
-						f.ForbiddenFields.Remove(box.Tag.ToString());
-						f.RequiredFields.Remove(box.Tag.ToString());
-					}
+
+					ValidateFilter(listfilters.SelectedItems[0], f); //mxd
 				}
 			}
 		}
@@ -364,6 +439,8 @@ namespace CodeImp.DoomBuilder.Windows
 					f.ThingType = -1;
 				else
 					f.ThingType = filtertype.GetValue();
+
+				ValidateFilter(listfilters.SelectedItems[0], f); //mxd
 			}
 		}
 		
@@ -380,6 +457,8 @@ namespace CodeImp.DoomBuilder.Windows
 				// Get selected filter
 				ThingsFilter f = listfilters.SelectedItems[0].Tag as ThingsFilter;
 				f.ThingAngle = filterangle.GetResult(-1);
+
+				ValidateFilter(listfilters.SelectedItems[0], f); //mxd
 			}
 		}
 		
@@ -399,13 +478,14 @@ namespace CodeImp.DoomBuilder.Windows
 				// Get selected filter
 				ThingsFilter f = listfilters.SelectedItems[0].Tag as ThingsFilter;
 				f.ThingZHeight = filterzheight.GetResult(int.MinValue);
+
+				ValidateFilter(listfilters.SelectedItems[0], f); //mxd
 			}
 		}
 
 		private void filteraction_ValueChanges(object sender, EventArgs e)
 		{
 			int showaction = 0;
-			ArgumentInfo[] arginfo;
 
 			// Anything selected?
 			if(listfilters.SelectedItems.Count > 0)
@@ -416,11 +496,13 @@ namespace CodeImp.DoomBuilder.Windows
 					f.ThingAction = -1;
 				else
 					f.ThingAction = filteraction.GetValue();
+
+				ValidateFilter(listfilters.SelectedItems[0], f); //mxd
 			}
 			
 			// Only when line type is known, otherwise use the thing arguments
 			if(General.Map.Config.LinedefActions.ContainsKey(filteraction.Value)) showaction = filteraction.Value;
-			arginfo = General.Map.Config.LinedefActions[showaction].Args;
+			ArgumentInfo[] arginfo = General.Map.Config.LinedefActions[showaction].Args;
 			
 			// Change the argument descriptions
 			arg0label.Text = arginfo[0].Title + ":";
@@ -433,11 +515,11 @@ namespace CodeImp.DoomBuilder.Windows
 			arg2label.Enabled = arginfo[2].Used;
 			arg3label.Enabled = arginfo[3].Used;
 			arg4label.Enabled = arginfo[4].Used;
-			if(arg0label.Enabled) arg0.ForeColor = SystemColors.WindowText; else arg0.ForeColor = SystemColors.GrayText;
-			if(arg1label.Enabled) arg1.ForeColor = SystemColors.WindowText; else arg1.ForeColor = SystemColors.GrayText;
-			if(arg2label.Enabled) arg2.ForeColor = SystemColors.WindowText; else arg2.ForeColor = SystemColors.GrayText;
-			if(arg3label.Enabled) arg3.ForeColor = SystemColors.WindowText; else arg3.ForeColor = SystemColors.GrayText;
-			if(arg4label.Enabled) arg4.ForeColor = SystemColors.WindowText; else arg4.ForeColor = SystemColors.GrayText;
+			arg0.ForeColor = (arg0label.Enabled ? SystemColors.WindowText : SystemColors.GrayText);
+			arg1.ForeColor = (arg1label.Enabled ? SystemColors.WindowText : SystemColors.GrayText);
+			arg2.ForeColor = (arg2label.Enabled ? SystemColors.WindowText : SystemColors.GrayText);
+			arg3.ForeColor = (arg3label.Enabled ? SystemColors.WindowText : SystemColors.GrayText);
+			arg4.ForeColor = (arg4label.Enabled ? SystemColors.WindowText : SystemColors.GrayText);
 			arg0.Setup(arginfo[0]);
 			arg1.Setup(arginfo[1]);
 			arg2.Setup(arginfo[2]);
@@ -458,6 +540,8 @@ namespace CodeImp.DoomBuilder.Windows
 				// Get selected filter
 				ThingsFilter f = listfilters.SelectedItems[0].Tag as ThingsFilter;
 				f.ThingTag = filtertag.GetResult(-1);
+
+				ValidateFilter(listfilters.SelectedItems[0], f); //mxd
 			}
 		}
 
@@ -473,6 +557,8 @@ namespace CodeImp.DoomBuilder.Windows
 				int.TryParse((sender as Control).Tag.ToString(), out index);
 				ArgumentBox filterarg = (sender as ArgumentBox);
 				f.ThingArgs[index] = filterarg.GetResult(-1);
+
+				ValidateFilter(listfilters.SelectedItems[0], f); //mxd
 			}
 		}
 		
@@ -484,6 +570,33 @@ namespace CodeImp.DoomBuilder.Windows
 				// Get selected filter
 				ThingsFilter f = listfilters.SelectedItems[0].Tag as ThingsFilter;
 				fieldslist.Apply(f.ThingCustomFields);
+
+				//mxd. Validate filter
+				ValidateFilter(listfilters.SelectedItems[0], f); //mxd
+			}
+		}
+
+		//mxd
+		private void invert_CheckedChanged(object sender, EventArgs e) 
+		{
+			// Anything selected?
+			if(!settingup && listfilters.SelectedItems.Count > 0) 
+			{
+				// Get selected filter
+				ThingsFilter f = listfilters.SelectedItems[0].Tag as ThingsFilter;
+				f.Invert = invert.Checked;
+			}
+		}
+
+		//mxd
+		private void filtermode_SelectedIndexChanged(object sender, EventArgs e)
+		{
+			// Anything selected?
+			if(!settingup && listfilters.SelectedItems.Count > 0 && filtermode.SelectedIndex != -1) 
+			{
+				// Get selected filter
+				ThingsFilter f = listfilters.SelectedItems[0].Tag as ThingsFilter;
+				f.DisplayMode = (ThingsFilterDisplayMode)filtermode.SelectedIndex;
 			}
 		}
 		

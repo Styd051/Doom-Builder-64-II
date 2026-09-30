@@ -17,16 +17,11 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Text;
 using System.IO;
 using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Geometry;
-using System.Windows.Forms;
 using CodeImp.DoomBuilder.Config;
-using CodeImp.DoomBuilder.Types;
 
 #endregion
 
@@ -67,7 +62,7 @@ namespace CodeImp.DoomBuilder.IO
 			foreach(string rn in resnames)
 			{
 				// Found it?
-				if(rn.EndsWith(UDMF_CONFIG_NAME, StringComparison.InvariantCultureIgnoreCase))
+				if(rn.EndsWith(UDMF_CONFIG_NAME, StringComparison.OrdinalIgnoreCase))
 				{
 					// Get a stream from the resource
 					Stream udmfcfg = General.ThisAssembly.GetManifestResourceStream(rn);
@@ -88,13 +83,24 @@ namespace CodeImp.DoomBuilder.IO
 					foreach(LinedefActivateInfo activate in General.Map.Config.LinedefActivates)
 						config.WriteSetting("managedfields.linedef." + activate.Key, true);
 
+					//mxd. Add sidedef flags
+					foreach(KeyValuePair<string, string> flag in General.Map.Config.SidedefFlags)
+						config.WriteSetting("managedfields.sidedef." + flag.Key, true);
+
+					//mxd. Add sector flags
+					foreach(KeyValuePair<string, string> flag in General.Map.Config.SectorFlags)
+						config.WriteSetting("managedfields.sector." + flag.Key, true);
+					foreach(KeyValuePair<string, string> flag in General.Map.Config.CeilingPortalFlags)
+						config.WriteSetting("managedfields.sector." + flag.Key, true);
+					foreach(KeyValuePair<string, string> flag in General.Map.Config.FloorPortalFlags)
+						config.WriteSetting("managedfields.sector." + flag.Key, true);
+
 					// Add thing flags
 					foreach(KeyValuePair<string, string> flag in General.Map.Config.ThingFlags)
 						config.WriteSetting("managedfields.thing." + flag.Key, true);
 
 					// Done
 					udmfcfgreader.Dispose();
-					udmfcfg.Dispose();
 					break;
 				}
 			}
@@ -124,14 +130,17 @@ namespace CodeImp.DoomBuilder.IO
 			// Begin with fields that must be at the top
 			if(writenamespace != null) textmap.Root.Add("namespace", writenamespace);
 
-			Dictionary<Vertex, int> vertexids = new Dictionary<Vertex, int>();
-			Dictionary<Sidedef, int> sidedefids = new Dictionary<Sidedef, int>();
-			Dictionary<Sector, int> sectorids = new Dictionary<Sector, int>();
+			Dictionary<Vertex, int> vertexids = new Dictionary<Vertex, int>(vertices.Count); //mxd
+			Dictionary<Sidedef, int> sidedefids = new Dictionary<Sidedef, int>(sidedefs.Count); //mxd
+			Dictionary<Sector, int> sectorids = new Dictionary<Sector, int>(sectors.Count); //mxd
 
 			// Index the elements in the data structures
-			foreach(Vertex v in vertices) vertexids.Add(v, vertexids.Count);
-			foreach(Sidedef sd in sidedefs) sidedefids.Add(sd, sidedefids.Count);
-			foreach(Sector s in sectors) sectorids.Add(s, sectorids.Count);
+			int counter = 0; //mxd
+			foreach(Vertex v in vertices) vertexids.Add(v, counter++);
+			counter = 0; //mxd
+			foreach(Sidedef sd in sidedefs) sidedefids.Add(sd, counter++);
+			counter = 0; //mxd
+			foreach(Sector s in sectors) sectorids.Add(s, counter++);
 
 			// If we write the custom field types again, then forget
 			// all previous field types (this gets rid of unused field types)
@@ -163,6 +172,8 @@ namespace CodeImp.DoomBuilder.IO
 				UniversalCollection coll = new UniversalCollection();
 				coll.Add("x", v.Position.x);
 				coll.Add("y", v.Position.y);
+				if(!float.IsNaN(v.ZCeiling)) coll.Add("zceiling", v.ZCeiling); //mxd
+				if(!float.IsNaN(v.ZFloor)) coll.Add("zfloor", v.ZFloor); //mxd
 				coll.Comment = v.Index.ToString();
 
 				// Add custom fields
@@ -185,6 +196,17 @@ namespace CodeImp.DoomBuilder.IO
 				coll.Add("v1", vertexids[l.Start]);
 				coll.Add("v2", vertexids[l.End]);
 				coll.Comment = l.Index.ToString();
+
+				//mxd. MoreIDs
+				if(l.Tags.Count > 1) //first entry is saved as "id"
+				{
+					string[] moreidscol = new string[l.Tags.Count - 1];
+					for(int i = 1; i < l.Tags.Count; i++)
+					{
+						moreidscol[i - 1] = l.Tags[i].ToString();
+					}
+					coll.Add("moreids", string.Join(" ", moreidscol));
+				}
 				
 				// Sidedef references
 				if((l.Front != null) && sidedefids.ContainsKey(l.Front))
@@ -199,8 +221,6 @@ namespace CodeImp.DoomBuilder.IO
 				
 				// Special
 				if(l.Action != 0) coll.Add("special", l.Action);
-                if (l.Activate != 0) coll.Add("activate", l.Activate);  // villsa 9/13/11
-                if (l.SwitchMask != 0) coll.Add("switchmask", l.SwitchMask);    // villsa 9/13/11
 				if(l.Args[0] != 0) coll.Add("arg0", l.Args[0]);
 				if(l.Args[1] != 0) coll.Add("arg1", l.Args[1]);
 				if(l.Args[2] != 0) coll.Add("arg2", l.Args[2]);
@@ -225,8 +245,6 @@ namespace CodeImp.DoomBuilder.IO
 			// Go for all sidedefs
 			foreach(Sidedef s in sidedefs)
 			{
-				int sectorid = (s.Sector != null) ? sectorids[s.Sector] : -1;
-
 				// Make collection
 				UniversalCollection coll = new UniversalCollection();
 				if(s.OffsetX != 0) coll.Add("offsetx", s.OffsetX);
@@ -236,6 +254,10 @@ namespace CodeImp.DoomBuilder.IO
 				if(s.LongMiddleTexture != MapSet.EmptyLongName) coll.Add("texturemiddle", s.MiddleTexture);
 				coll.Add("sector", sectorids[s.Sector]);
 				coll.Comment = s.Index.ToString();
+
+				//mxd. Flags
+				foreach(KeyValuePair<string, bool> flag in s.Flags)
+					if(flag.Value) coll.Add(flag.Key, flag.Value);
 				
 				// Add custom fields
 				AddCustomFields(s, "sidedef", coll);
@@ -260,19 +282,41 @@ namespace CodeImp.DoomBuilder.IO
 				coll.Add("lightlevel", s.Brightness);
 				if(s.Effect != 0) coll.Add("special", s.Effect);
 				if(s.Tag != 0) coll.Add("id", s.Tag);
-
-                // villsa 9/14/11 (builder64)
-                coll.Add("color1", s.FloorColor.color.ToInt());
-                coll.Add("color2", s.CeilColor.color.ToInt());
-                coll.Add("color3", s.ThingColor.color.ToInt());
-                coll.Add("color4", s.TopColor.color.ToInt());
-                coll.Add("color5", s.LowerColor.color.ToInt());
-
-                // villsa 9/13/11 - Flags
-                foreach (KeyValuePair<string, bool> flag in s.Flags)
-                    if (flag.Value) coll.Add(flag.Key, flag.Value);
-
 				coll.Comment = s.Index.ToString();
+
+				//mxd. MoreIDs
+				if(s.Tags.Count > 1) //first entry is saved as "id"
+				{
+					string[] moreidscol = new string[s.Tags.Count - 1];
+					for(int i = 1; i < s.Tags.Count; i++) 
+					{
+						moreidscol[i - 1] = s.Tags[i].ToString();
+					}
+					coll.Add("moreids", string.Join(" ", moreidscol));
+				}
+
+				//mxd. Slopes
+				if(s.FloorSlope.GetLengthSq() > 0) 
+				{
+					coll.Add("floorplane_a", Math.Round(s.FloorSlope.x, Sector.SLOPE_DECIMALS));
+					coll.Add("floorplane_b", Math.Round(s.FloorSlope.y, Sector.SLOPE_DECIMALS));
+					coll.Add("floorplane_c", Math.Round(s.FloorSlope.z, Sector.SLOPE_DECIMALS));
+					coll.Add("floorplane_d",
+						(float.IsNaN(s.FloorSlopeOffset) ? 0f : Math.Round(s.FloorSlopeOffset, Sector.SLOPE_DECIMALS)));
+				}
+
+				if(s.CeilSlope.GetLengthSq() > 0) 
+				{
+					coll.Add("ceilingplane_a", Math.Round(s.CeilSlope.x, Sector.SLOPE_DECIMALS));
+					coll.Add("ceilingplane_b", Math.Round(s.CeilSlope.y, Sector.SLOPE_DECIMALS));
+					coll.Add("ceilingplane_c", Math.Round(s.CeilSlope.z, Sector.SLOPE_DECIMALS));
+					coll.Add("ceilingplane_d",
+						(float.IsNaN(s.CeilSlopeOffset) ? 0f : Math.Round(s.CeilSlopeOffset, Sector.SLOPE_DECIMALS)));
+				}
+
+				//mxd. Flags
+				foreach(KeyValuePair<string, bool> flag in s.Flags)
+					if(flag.Value) coll.Add(flag.Key, flag.Value);
 
 				// Add custom fields
 				AddCustomFields(s, "sector", coll);
@@ -293,8 +337,12 @@ namespace CodeImp.DoomBuilder.IO
 				if(t.Tag != 0) coll.Add("id", t.Tag);
 				coll.Add("x", t.Position.x);
 				coll.Add("y", t.Position.y);
-				if(t.Position.z != 0.0f) coll.Add("height", (float)t.Position.z);
-				coll.Add("angle", Angle2D.RealToDoom(t.Angle));
+				if(t.Position.z != 0.0f) coll.Add("height", t.Position.z);
+				coll.Add("angle", t.AngleDoom);
+				if(t.Pitch != 0) coll.Add("pitch", t.Pitch); //mxd
+				if(t.Roll != 0) coll.Add("roll", t.Roll); //mxd
+				if(t.ScaleX != 0 && t.ScaleX != 1.0f) coll.Add("scalex", t.ScaleX); //mxd
+				if(t.ScaleY != 0 && t.ScaleY != 1.0f) coll.Add("scaley", t.ScaleY); //mxd
 				coll.Add("type", t.Type);
 				if(t.Action != 0) coll.Add("special", t.Action);
 				if(t.Args[0] != 0) coll.Add("arg0", t.Args[0]);

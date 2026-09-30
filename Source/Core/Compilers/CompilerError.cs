@@ -16,14 +16,6 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Runtime.InteropServices;
-using System.Diagnostics;
-
 #endregion
 
 namespace CodeImp.DoomBuilder.Compilers
@@ -60,6 +52,12 @@ namespace CodeImp.DoomBuilder.Compilers
 			this.description = description;
 			this.filename = filename;
 			this.linenumber = linenumber;
+		}
+
+		//mxd
+		public bool Equals(CompilerError other)
+		{
+			return description == other.description && filename == other.filename && linenumber == other.linenumber;
 		}
 	}
 }

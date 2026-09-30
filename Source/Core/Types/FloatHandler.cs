@@ -17,14 +17,7 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Text;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Data;
-using System.IO;
-using System.Diagnostics;
 
 #endregion
 
@@ -51,8 +44,6 @@ namespace CodeImp.DoomBuilder.Types
 
 		public override void SetValue(object value)
 		{
-			float result;
-
 			// Null?
 			if(value == null)
 			{
@@ -67,6 +58,7 @@ namespace CodeImp.DoomBuilder.Types
 			else
 			{
 				// Try parsing as string
+				float result;
 				if(float.TryParse(value.ToString(), NumberStyles.Float, CultureInfo.CurrentCulture, out result))
 				{
 					this.value = result;
@@ -91,6 +83,11 @@ namespace CodeImp.DoomBuilder.Types
 		public override string GetStringValue()
 		{
 			return this.value.ToString();
+		}
+
+		public override object GetDefaultValue()
+		{
+			return 0f;
 		}
 
 		#endregion

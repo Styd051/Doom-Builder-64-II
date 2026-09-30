@@ -28,7 +28,9 @@ namespace CodeImp.DoomBuilder.Controls
 		/// </summary>
 		private void InitializeComponent()
 		{
+			this.components = new System.ComponentModel.Container();
 			this.buttons = new System.Windows.Forms.VScrollBar();
+			this.tooltip = new System.Windows.Forms.ToolTip(this.components);
 			this.textbox = new CodeImp.DoomBuilder.Controls.NumericTextbox();
 			this.SuspendLayout();
 			// 
@@ -48,6 +50,7 @@ namespace CodeImp.DoomBuilder.Controls
 			this.textbox.AllowDecimal = false;
 			this.textbox.AllowNegative = false;
 			this.textbox.AllowRelative = false;
+			this.textbox.ForeColor = System.Drawing.SystemColors.WindowText;
 			this.textbox.ImeMode = System.Windows.Forms.ImeMode.Off;
 			this.textbox.Location = new System.Drawing.Point(0, 2);
 			this.textbox.Name = "textbox";
@@ -75,5 +78,6 @@ namespace CodeImp.DoomBuilder.Controls
 
 		private NumericTextbox textbox;
 		private System.Windows.Forms.VScrollBar buttons;
+		private System.Windows.Forms.ToolTip tooltip;
 	}
 }

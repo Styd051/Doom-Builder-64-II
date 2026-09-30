@@ -1,10 +1,5 @@
 #region ================== Namespaces
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using CodeImp.DoomBuilder.Geometry;
 using CodeImp.DoomBuilder.Map;
 
@@ -34,6 +29,7 @@ namespace CodeImp.DoomBuilder.VisualModes
 		private Vector3D movemultiplier;
 		private float anglexy, anglez;
 		private Sector sector;
+		private float gravity = 1.0f; //mxd
 		
 		#endregion
 
@@ -43,8 +39,9 @@ namespace CodeImp.DoomBuilder.VisualModes
 		public Vector3D Target { get { return target; } }
 		public float AngleXY { get { return anglexy; } set { anglexy = value; } }
 		public float AngleZ { get { return anglez; } set { anglez = value; } }
-		public Sector Sector { get { return sector; } internal set { sector = value; } }
+		public Sector Sector { get { return sector; } internal set { sector = value; UpdateGravity(); } } //mxd
 		public Vector3D MoveMultiplier { get { return movemultiplier; } set { movemultiplier = value; } }
+		public float Gravity { get { return gravity; } } //mxd
 		
 		#endregion
 
@@ -54,11 +51,10 @@ namespace CodeImp.DoomBuilder.VisualModes
 		public VisualCamera()
 		{
 			// Initialize
-			this.movemultiplier = new Vector3D(1.0f, 1.0f, 1.0f);
-			this.position = position;
-			this.anglexy = 0.0f;
-			this.anglez = Angle2D.PI;
-			this.sector = null;
+			movemultiplier = new Vector3D(1.0f, 1.0f, 1.0f);
+			anglexy = 0.0f;
+			anglez = Angle2D.PI;
+			sector = null;
 			
 			PositionAtThing();
 		}
@@ -103,24 +99,29 @@ namespace CodeImp.DoomBuilder.VisualModes
 		// Returns false when it couldn't find a 3D Camera Thing
 		public virtual bool PositionAtThing()
 		{
+			if(General.Settings.GZSynchCameras) return true; //mxd
 			Thing modething = null;
-			Vector3D delta;
-			
+
 			// Find a 3D Mode thing
 			foreach(Thing t in General.Map.Map.Things)
-				if(t.Type == General.Map.Config.Start3DModeThingType) modething = t;
+			{
+				if(t.Type == General.Map.Config.Start3DModeThingType)
+				{
+					modething = t;
+					break; //mxd
+				}
+			}
 
 			// Found one?
 			if(modething != null)
 			{
 				modething.DetermineSector();
 				float z = modething.Position.z;
-				if(modething.Sector != null)
-					z = modething.Position.z + (float)modething.Sector.FloorHeight;
+				if(modething.Sector != null) z += modething.Sector.FloorHeight;
 				
 				// Position camera here
 				Vector3D wantedposition = new Vector3D(modething.Position.x, modething.Position.y, z + THING_Z_OFFSET);
-				delta = position - wantedposition;
+				Vector3D delta = position - wantedposition;
 				if(delta.GetLength() > 1.0f) position = wantedposition;
 				
 				// Change angle
@@ -132,38 +133,47 @@ namespace CodeImp.DoomBuilder.VisualModes
 				}
 				return true;
 			}
-			else
-			{
-				return false;
-			}
+
+			return false;
 		}
 		
 		// This applies the camera position and angle to the 3D Camera Thing
 		// Returns false when it couldn't find a 3D Camera Thing
 		public virtual bool ApplyToThing()
 		{
+			if(General.Settings.GZSynchCameras) return true; //mxd
 			Thing modething = null;
 			
 			// Find a 3D Mode thing
 			foreach(Thing t in General.Map.Map.Things)
-				if(t.Type == General.Map.Config.Start3DModeThingType) modething = t;
+			{
+				if(t.Type == General.Map.Config.Start3DModeThingType)
+				{
+					modething = t;
+					break; //mxd
+				}
+			}
 
 			// Found one?
 			if(modething != null)
 			{
-				int z = 0;
-				if(sector != null)
-					z = (int)position.z - sector.FloorHeight;
+				int z = (int)position.z; //mxd
+				if(sector != null) z -= sector.FloorHeight;
 
 				// Position the thing to match camera
 				modething.Move((int)position.x, (int)position.y, z - THING_Z_OFFSET);
 				modething.Rotate(anglexy - Angle2D.PI);
 				return true;
 			}
-			else
-			{
-				return false;
-			}
+
+			return false;
+		}
+
+		//mxd
+		private void UpdateGravity() 
+		{
+			if(!General.Map.UDMF || sector == null) return;
+			gravity = sector.Fields.GetValue("gravity", 1.0f);
 		}
 		
 		#endregion

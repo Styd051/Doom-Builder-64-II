@@ -17,10 +17,7 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using System.Drawing;
 using System.Drawing.Imaging;
 using CodeImp.DoomBuilder.Rendering;
@@ -42,15 +39,17 @@ namespace CodeImp.DoomBuilder.Data
 		#region ================== Constructor / Disposer
 
 		// Constructor
-		public TextureImage(string name, int width, int height, float scalex, float scaley)
+		public TextureImage(string group, string name, int width, int height, float scalex, float scaley, bool worldpanning)
 		{
 			// Initialize
 			this.width = width;
 			this.height = height;
 			this.scale.x = scalex;
 			this.scale.y = scaley;
+			this.worldpanning = worldpanning; //mxd
 			this.patches = new List<TexturePatch>();
 			SetName(name);
+			virtualname = "[" + group + "]/" + this.name; //mxd
 			
 			// We have no destructor
 			GC.SuppressFinalize(this);
@@ -65,21 +64,18 @@ namespace CodeImp.DoomBuilder.Data
 		{
 			// Add it
 			patches.Add(patch);
+
+			if(patch.LumpName == Name) hasPatchWithSameName = true; //mxd
 		}
 		
 		// This loads the image
 		protected override void LocalLoadImage()
 		{
-			IImageReader reader;
-			BitmapData bitmapdata = null;
-			MemoryStream mem;
-			PixelColor* pixels = (PixelColor*)0;
-			Stream patchdata;
-			byte[] membytes;
-			
 			// Checks
-			if(this.IsImageLoaded) return;
-			if((width == 0) || (height == 0)) return;
+			if(this.IsImageLoaded || width == 0 || height == 0) return;
+
+			BitmapData bitmapdata = null;
+			PixelColor* pixels = (PixelColor*)0;
 			
 			lock(this)
 			{
@@ -95,9 +91,11 @@ namespace CodeImp.DoomBuilder.Data
 				catch(Exception e)
 				{
 					// Unable to make bitmap
-					General.ErrorLogger.Add(ErrorType.Error, "Unable to load texture image '" + this.Name + "'. " + e.GetType().Name + ": " + e.Message);
+					General.ErrorLogger.Add(ErrorType.Error, "Unable to load texture image \"" + this.Name + "\". " + e.GetType().Name + ": " + e.Message);
 					loadfailed = true;
 				}
+
+				int missingpatches = 0; //mxd
 
 				if(!loadfailed)
 				{
@@ -105,34 +103,51 @@ namespace CodeImp.DoomBuilder.Data
 					foreach(TexturePatch p in patches)
 					{
 						// Get the patch data stream
-						patchdata = General.Map.Data.GetPatchData(p.lumpname);
+						string patchlocation = string.Empty; //mxd
+						Stream patchdata = General.Map.Data.GetPatchData(p.LumpName, p.HasLongName, ref patchlocation);
 						if(patchdata != null)
 						{
 							// Copy patch data to memory
-							patchdata.Seek(0, SeekOrigin.Begin);
-							membytes = new byte[(int)patchdata.Length];
-							patchdata.Read(membytes, 0, (int)patchdata.Length);
-							mem = new MemoryStream(membytes);
+							byte[] membytes = new byte[(int)patchdata.Length];
+
+							lock(patchdata) //mxd
+							{
+								patchdata.Seek(0, SeekOrigin.Begin);
+								patchdata.Read(membytes, 0, (int)patchdata.Length);
+							}
+							
+							MemoryStream mem = new MemoryStream(membytes);
 							mem.Seek(0, SeekOrigin.Begin);
 
 							// Get a reader for the data
-							reader = ImageDataFormat.GetImageReader(mem, ImageDataFormat.DOOMPICTURE, General.Map.Data.Palette);
+							IImageReader reader = ImageDataFormat.GetImageReader(mem, ImageDataFormat.DOOMPICTURE, General.Map.Data.Palette);
 							if(reader is UnknownImageReader)
 							{
-								// Data is in an unknown format!
-								General.ErrorLogger.Add(ErrorType.Error, "Patch lump '" + p.lumpname + "' data format could not be read, while loading texture '" + this.Name + "'. Does this lump contain valid picture data at all?");
-								loadfailed = true;
+								//mxd. Probably that's a flat?..
+								if(General.Map.Config.MixTexturesFlats) 
+								{
+									reader = ImageDataFormat.GetImageReader(mem, ImageDataFormat.DOOMFLAT, General.Map.Data.Palette);
+								}
+								if(reader is UnknownImageReader) 
+								{
+									// Data is in an unknown format!
+									General.ErrorLogger.Add(ErrorType.Error, "Patch lump \"" + Path.Combine(patchlocation, p.LumpName) + "\" data format could not be read, while loading texture \"" + this.Name + "\". Does this lump contain valid picture data at all?");
+									loadfailed = true;
+									missingpatches++; //mxd
+								}
 							}
-							else
+
+							if(!(reader is UnknownImageReader))
 							{
 								// Draw the patch
 								mem.Seek(0, SeekOrigin.Begin);
-								try { reader.DrawToPixelData(mem, pixels, width, height, p.x, p.y); }
+								try { reader.DrawToPixelData(mem, pixels, width, height, p.X, p.Y); }
 								catch(InvalidDataException)
 								{
 									// Data cannot be read!
-									General.ErrorLogger.Add(ErrorType.Error, "Patch lump '" + p.lumpname + "' data format could not be read, while loading texture '" + this.Name + "'. Does this lump contain valid picture data at all?");
+									General.ErrorLogger.Add(ErrorType.Error, "Patch lump \"" + p.LumpName + "\" data format could not be read, while loading texture \"" + this.Name + "\". Does this lump contain valid picture data at all?");
 									loadfailed = true;
+									missingpatches++; //mxd
 								}
 							}
 
@@ -142,8 +157,9 @@ namespace CodeImp.DoomBuilder.Data
 						else
 						{
 							// Missing a patch lump!
-							General.ErrorLogger.Add(ErrorType.Error, "Missing patch lump '" + p.lumpname + "' while loading texture '" + this.Name + "'. Did you forget to include required resources?");
+							General.ErrorLogger.Add(ErrorType.Error, "Missing patch lump \"" + p.LumpName + "\" while loading texture \"" + this.Name + "\". Did you forget to include required resources?");
 							loadfailed = true;
+							missingpatches++; //mxd
 						}
 					}
 
@@ -152,10 +168,11 @@ namespace CodeImp.DoomBuilder.Data
 				}
 				
 				// Dispose bitmap if load failed
-				if(loadfailed && (bitmap != null))
+				if((bitmap != null) && (loadfailed || missingpatches >= patches.Count)) //mxd. We can still display texture if at least one of the patches was loaded
 				{
 					bitmap.Dispose();
 					bitmap = null;
+					loadfailed = true;
 				}
 
 				// Pass on to base

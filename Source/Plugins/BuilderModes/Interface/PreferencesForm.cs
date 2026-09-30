@@ -16,31 +16,17 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Geometry;
-using System.Drawing;
-using CodeImp.DoomBuilder.Editing;
+using CodeImp.DoomBuilder.Windows;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.BuilderModes
 {
-	public partial class PreferencesForm : Form
+	public partial class PreferencesForm : DelayedForm
 	{
 		#region ================== Variables
-
-		private PreferencesController controller;
 
 		#endregion
 
@@ -64,9 +50,18 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			highlightrange.Text = General.Settings.ReadPluginSetting("highlightrange", 20).ToString();
 			highlightthingsrange.Text = General.Settings.ReadPluginSetting("highlightthingsrange", 10).ToString();
 			splitlinedefsrange.Text = General.Settings.ReadPluginSetting("splitlinedefsrange", 10).ToString();
+			splitbehavior.SelectedIndex = (int)General.Settings.SplitLineBehavior; //mxd
 			autoclearselection.Checked = BuilderPlug.Me.AutoClearSelection;
 			visualmodeclearselection.Checked = BuilderPlug.Me.VisualModeClearSelection;
 			autodragonpaste.Checked = BuilderPlug.Me.AutoDragOnPaste;
+			autoaligntexturesoncreate.Checked = BuilderPlug.Me.AutoAlignTextureOffsetsOnCreate; //mxd
+			dontMoveGeometryOutsideBounds.Checked = BuilderPlug.Me.DontMoveGeometryOutsideMapBoundary; //mxd
+			syncSelection.Checked = BuilderPlug.Me.SyncSelection; //mxd
+			switchviewmodes.Checked = General.Settings.SwitchViewModes; //mxd
+			autodrawonedit.Checked = BuilderPlug.Me.AutoDrawOnEdit;
+			defaultbrightness.Text = General.Settings.DefaultBrightness.ToString(); //mxd
+			defaultceilheight.Text = General.Settings.DefaultCeilingHeight.ToString();//mxd
+			defaultfloorheight.Text = General.Settings.DefaultFloorHeight.ToString(); //mxd
 		}
 
 		#endregion
@@ -88,6 +83,22 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			General.Settings.WritePluginSetting("autoclearselection", autoclearselection.Checked);
 			General.Settings.WritePluginSetting("visualmodeclearselection", visualmodeclearselection.Checked);
 			General.Settings.WritePluginSetting("autodragonpaste", autodragonpaste.Checked);
+			General.Settings.WritePluginSetting("autodrawonedit", autodrawonedit.Checked); //mxd
+			General.Settings.WritePluginSetting("autoaligntextureoffsetsoncreate", autoaligntexturesoncreate.Checked);//mxd
+			General.Settings.WritePluginSetting("dontmovegeometryoutsidemapboundary", dontMoveGeometryOutsideBounds.Checked);//mxd
+			General.Settings.WritePluginSetting("syncselection", syncSelection.Checked);//mxd
+			General.Settings.SwitchViewModes = switchviewmodes.Checked; //mxd
+			General.Settings.SplitLineBehavior = (SplitLineBehavior)splitbehavior.SelectedIndex;//mxd
+
+			//default sector values
+			General.Settings.DefaultBrightness = General.Clamp(defaultbrightness.GetResult(192), 0, 255);
+			
+			int ceilHeight = defaultceilheight.GetResult(128);
+			int floorHeight = defaultfloorheight.GetResult(0);
+			if(ceilHeight < floorHeight) General.Swap(ref ceilHeight, ref floorHeight);
+
+			General.Settings.DefaultCeilingHeight = ceilHeight;
+			General.Settings.DefaultFloorHeight = floorHeight;
 		}
 		
 		// When Cancel is pressed on the preferences dialog
@@ -102,8 +113,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// This sets up the form with the preferences controller
 		public void Setup(PreferencesController controller)
 		{
-			this.controller = controller;
-
 			// Add tab pages
 			foreach(TabPage p in tabs.TabPages)
 			{

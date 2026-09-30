@@ -17,15 +17,7 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using System.Drawing;
-using System.Drawing.Imaging;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.IO;
-using System.IO;
 
 #endregion
 
@@ -35,7 +27,7 @@ namespace CodeImp.DoomBuilder.Data
 	{
 		#region ================== Variables
 
-		private Bitmap loadbitmap = null;
+		private readonly Bitmap loadbitmap;
 		
 		#endregion
 		
@@ -63,6 +55,9 @@ namespace CodeImp.DoomBuilder.Data
 		// This 'loads' the image
 		protected override void LocalLoadImage()
 		{
+			//mxd. Leave when already loaded
+			if(this.IsImageLoaded) return;
+			
 			bitmap = loadbitmap;
 			base.LocalLoadImage();
 		}

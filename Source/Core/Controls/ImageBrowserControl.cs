@@ -18,19 +18,10 @@
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
-using System.Text;
 using System.Windows.Forms;
-using Microsoft.Win32;
-using System.Diagnostics;
-using CodeImp.DoomBuilder.Actions;
 using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.Config;
-using CodeImp.DoomBuilder.Rendering;
-using SlimDX.Direct3D9;
-using System.Drawing.Imaging;
-using System.Drawing.Drawing2D;
+using CodeImp.DoomBuilder.Windows;
 
 #endregion
 
@@ -40,12 +31,14 @@ namespace CodeImp.DoomBuilder.Controls
 	{
 		#region ================== Constants
 		
+		private static readonly HashSet<char> AllowedSpecialChars = new HashSet<char>("!@#$%^&*()-_=+<>,.?/'\"\\;:[]{}`~".ToCharArray()); //mxd
+
 		#endregion
 		
 		#region ================== Delegates / Events
 
-		public delegate void SelectedItemChangedDelegate();
-		public delegate void SelectedItemDoubleClickDelegate();
+		public delegate void SelectedItemChangedDelegate(ImageBrowserItem item);
+		public delegate void SelectedItemDoubleClickDelegate(ImageBrowserItem item);
 
 		public event SelectedItemChangedDelegate SelectedItemChanged;
 		public event SelectedItemDoubleClickDelegate SelectedItemDoubleClicked;
@@ -56,16 +49,24 @@ namespace CodeImp.DoomBuilder.Controls
 		
 		// Properties
 		private bool preventselection;
+        private int imagesize;
 		
 		// States
-		private bool updating;
 		private int keepselected;
+		private bool browseflats; //mxd
+		private bool uselongtexturenames; //mxd
+		private bool blockupdate; //mxd
 		
-		// All items
+		//mxd. All items
 		private List<ImageBrowserItem> items;
+		private string usedfirstgroup;
+		private string availgroup;
 
-		// Items visible in the list
+		// Filtered items
 		private List<ImageBrowserItem> visibleitems;
+
+		//mxd
+		private int texturetype;
 		
 		#endregion
 
@@ -73,9 +74,24 @@ namespace CodeImp.DoomBuilder.Controls
 
 		public bool PreventSelection { get { return preventselection; } set { preventselection = value; } }
 		public bool HideInputBox { get { return splitter.Panel2Collapsed; } set { splitter.Panel2Collapsed = value; } }
-		public string LabelText { get { return label.Text; } set { label.Text = value; objectname.Left = label.Right + label.Margin.Right + objectname.Margin.Left; } }
-		public ListViewItem SelectedItem { get { if(list.SelectedItems.Count > 0) return list.SelectedItems[0]; else return null; } }
-		
+		public List<ImageBrowserItem> SelectedItems { get { return list.SelectedItems; } } //mxd
+		public ImageBrowserItem SelectedItem { get { return (list.SelectedItems.Count > 0 ? list.SelectedItems[0] : null); } }
+		public string ElementName //mxd
+		{
+			set
+			{
+				usedfirstgroup = "Available " + value + " (used first):";
+				availgroup = "Available " + value + ":";
+                list.ContentType = value;
+            }
+		}
+
+        public int ImageSize
+        {
+            get { return imagesize; }
+            set { imagesize = value; }
+        }
+
 		#endregion
 
 		#region ================== Constructor / Disposer
@@ -86,11 +102,43 @@ namespace CodeImp.DoomBuilder.Controls
 			// Initialize
 			InitializeComponent();
 			items = new List<ImageBrowserItem>();
-			
-			// Move textbox with label
-			objectname.Left = label.Right + label.Margin.Right + objectname.Margin.Left;
+
+			//mxd
+			StepsList sizes = new StepsList { 4, 8, 16, 32, 48, 64, 96, 128, 196, 256, 512, 1024 };
+			filterWidth.StepValues = sizes;
+			filterHeight.StepValues = sizes;
+
+			//mxd. Looks like SplitterDistance is unaffected by DPI scaling. Let's fix that...
+			if(MainForm.DPIScaler.Height != 1.0f)
+			{
+				splitter.SplitterDistance = splitter.Height - splitter.Panel2.Height - (int)Math.Round(splitter.SplitterWidth * MainForm.DPIScaler.Height);
+			}
+
+			//mxd
+			list.SelectionChanged += list_SelectionChanged;
 		}
-		
+
+		// This applies the application settings
+		public void ApplySettings(string settingpath, bool browseflats)
+		{
+			blockupdate = true;
+
+			this.browseflats = browseflats;
+            uselongtexturenames = General.Map.Options.UseLongTextureNames;
+			texturetype = General.Settings.ReadSetting(settingpath + ".texturetype", 0);
+            ElementName = (texturetype == 2 || (texturetype == 3 && browseflats)) ? "flats" : "textures";
+            list.UsedTexturesFirst = usedtexturesfirst.Checked = General.Settings.ReadSetting(settingpath + ".showusedtexturesfirst", false);
+            list.ClassicView = classicview.Checked = General.Settings.ReadSetting(settingpath + ".classicview", false);
+			
+			int _imagesize = General.Settings.ReadSetting(settingpath + ".imagesize", 128);
+			sizecombo.Text = (_imagesize == 0 ? sizecombo.Items[0].ToString() : _imagesize.ToString());
+			list.ImageSize = _imagesize;
+
+			ApplySettings();
+
+			blockupdate = false;
+		}
+
 		// This applies the application settings
 		public void ApplySettings()
 		{
@@ -101,9 +149,47 @@ namespace CodeImp.DoomBuilder.Controls
 				list.ForeColor = Color.White;
 			}
 
-			// Size of preview images
+			// Set the size of preview images
 			if(General.Map != null)
-				list.TileSize = new Size(General.Map.Data.Previews.MaxImageWidth + 26, General.Map.Data.Previews.MaxImageHeight + 26);
+			{
+				//mxd
+				if(General.Map.Config.MixTexturesFlats) 
+				{
+					texturetypecombo.SelectedIndex = texturetype;
+				} 
+				else 
+				{
+					labelMixMode.Enabled = false;
+					texturetypecombo.Enabled = false;
+					texturetype = 0;
+				}
+
+				//mxd. Use long texture names?
+				longtexturenames.Checked = (uselongtexturenames && General.Map.Config.UseLongTextureNames);
+				longtexturenames.Enabled = General.Map.Config.UseLongTextureNames;
+			}
+			else
+			{
+				longtexturenames.Enabled = false; //mxd
+				uselongtexturenames = false; //mxd
+			}
+
+            // If we have override for preview images, set this here.
+            if (imagesize > 0) list.ImageSize = imagesize;
+
+			//mxd
+			objectname.CharacterCasing = (longtexturenames.Checked ? CharacterCasing.Normal : CharacterCasing.Upper);
+		}
+
+		//mxd. Save settings
+		public virtual void OnClose(string settingpath)
+		{
+			General.Settings.WriteSetting(settingpath + ".showusedtexturesfirst", usedtexturesfirst.Checked);
+            General.Settings.WriteSetting(settingpath + ".classicview", classicview.Checked);
+			General.Settings.WriteSetting(settingpath + ".imagesize", list.ImageSize);
+			if(General.Map.Config.UseLongTextureNames) General.Map.Options.UseLongTextureNames = uselongtexturenames;
+
+			CleanUp();
 		}
 
 		// This cleans everything up
@@ -117,36 +203,27 @@ namespace CodeImp.DoomBuilder.Controls
 
 		#region ================== Rendering
 
-		// Draw item
-		private void list_DrawItem(object sender, DrawListViewItemEventArgs e)
-		{
-			if(!updating) (e.Item as ImageBrowserItem).Draw(e.Graphics, e.Bounds);
-		}
-
 		// Refresher
 		private void refreshtimer_Tick(object sender, EventArgs e)
 		{
 			bool allpreviewsloaded = true;
+			bool redrawneeded = false; //mxd
 			
 			// Go for all items
 			foreach(ImageBrowserItem i in list.Items)
 			{
 				// Check if there are still previews that are not loaded
 				allpreviewsloaded &= i.IsPreviewLoaded;
-				
-				// Items needs to be redrawn?
-				if(i.CheckRedrawNeeded())
-				{
-					// Refresh item in list
-					//list.RedrawItems(i.Index, i.Index, false);
-					list.Invalidate();
-				}
+
+				//mxd. Item needs to be redrawn?
+				redrawneeded |= i.CheckRedrawNeeded();
 			}
 
 			// If all previews were loaded, stop this timer
 			if(allpreviewsloaded) refreshtimer.Stop();
-			
-			UpdateTextureSizeLabel();
+
+			// Redraw the list if needed
+			if(redrawneeded) list.Invalidate();
 		}
 
 		#endregion
@@ -170,228 +247,195 @@ namespace CodeImp.DoomBuilder.Controls
 		// Key pressed in textbox
 		private void objectname_KeyDown(object sender, KeyEventArgs e)
 		{
-			// Check what key is pressed
-			switch(e.KeyData)
-			{
-				// Cursor keys
-				case Keys.Left: SelectNextItem(SearchDirectionHint.Left); e.SuppressKeyPress = true; break;
-				case Keys.Right: SelectNextItem(SearchDirectionHint.Right); e.SuppressKeyPress = true; break;
-				case Keys.Up: SelectNextItem(SearchDirectionHint.Up); e.SuppressKeyPress = true;  break;
-				case Keys.Down: SelectNextItem(SearchDirectionHint.Down); e.SuppressKeyPress = true; break;
-
-				// Tab
-				case Keys.Tab: GoToNextSameTexture(); e.SuppressKeyPress = true; break;
-			}
-		}
-
-		// Key pressed in list
-		private void list_KeyDown(object sender, KeyEventArgs e)
-		{
+			// Toggle used items sorting
 			if(e.KeyData == Keys.Tab)
 			{
-				GoToNextSameTexture();
+				usedtexturesfirst.Checked = !usedtexturesfirst.Checked;
+				e.SuppressKeyPress = true;
+			}
+			//mxd. Clear text field instead of typing strange chars...
+			else if(e.KeyData == (Keys.Back | Keys.Control))
+			{
+				if(objectname.Text.Length > 0) objectname.Clear();
 				e.SuppressKeyPress = true;
 			}
 		}
+
+		//mxd
+		private void objectclear_Click(object sender, EventArgs e)
+		{
+			objectname.Clear();
+			list.Focus();
+		}
+
+		//mxd
+		private void filterSize_WhenTextChanged(object sender, EventArgs e) 
+		{
+			objectname_TextChanged(sender, e);
+		}
+
+		//mxd
+		protected override bool ProcessTabKey(bool forward)
+		{
+			usedtexturesfirst.Checked = !usedtexturesfirst.Checked;
+			return false;
+		}
 		
 		// Selection changed
-		private void list_ItemSelectionChanged(object sender, ListViewItemSelectionChangedEventArgs e)
+		private void list_SelectionChanged(object sender, List<ImageBrowserItem> selection)
 		{
 			// Prevent selecting?
 			if(preventselection)
 			{
-				foreach(ListViewItem i in list.SelectedItems) i.Selected = false;
+				if(selection.Count > 0) list.ClearSelection(); //mxd
 			}
 			else
 			{
 				// Raise event
-				if(SelectedItemChanged != null) SelectedItemChanged();
+				if(SelectedItemChanged != null)
+					SelectedItemChanged(list.SelectedItems.Count > 0 ? list.SelectedItems[0] : null);
 			}
-
-			UpdateTextureSizeLabel();
 		}
 		
 		// Doublelicking an item
-		private void list_DoubleClick(object sender, EventArgs e)
+		private void list_ItemDoubleClicked(object sender, ImageBrowserItem item)
 		{
 			if(!preventselection && (list.SelectedItems.Count > 0))
-				if(SelectedItemDoubleClicked != null) SelectedItemDoubleClicked();
-		}
-		
-		// Control is resized
-		private void ImageBrowserControl_Resize(object sender, EventArgs e)
-		{
-			UpdateTextureSizeLabel();
+				if(SelectedItemDoubleClicked != null) SelectedItemDoubleClicked(item);
 		}
 
-		// This hides the texture size label
-		private void texturesizetimer_Tick(object sender, EventArgs e)
+		//mxd. Transfer input to Filter textbox
+		private void list_KeyPress(object sender, KeyPressEventArgs e)
 		{
-			texturesizetimer.Stop();
-			texturesize.Visible = false;
-			texturesizelabel.Visible = false;
-		}
-		
-		#endregion
-
-		#region ================== Methods
-
-		// This selects the next texture with the same name as the selected texture
-		public void GoToNextSameTexture()
-		{
-			if(list.SelectedItems.Count > 0)
+			if(e.KeyChar == 8) // Backspace
 			{
-				ListViewItem selected = list.SelectedItems[0];
-				bool foundselected = false;
-				foreach(ListViewItem n in visibleitems)
+				if(objectname.Text.Length > 0)
 				{
-					if((n.Text == selected.Text) && foundselected)
+					if(objectname.SelectionLength > 0)
 					{
-						// This is the next item
-						n.Selected = true;
-						n.EnsureVisible();
-						return;
+						objectname.Text = objectname.Text.Substring(0, objectname.SelectionStart) +
+							objectname.Text.Substring(objectname.SelectionStart + objectname.SelectionLength);
 					}
-					
-					if(n == selected)
-						foundselected = true;
+					else
+					{
+						objectname.Text = objectname.Text.Substring(0, objectname.Text.Length - 1);
+					}
 				}
-
-				// Start from the top
-				foreach(ListViewItem n in visibleitems)
+			}
+			else if(e.KeyChar == 127) // Ctrl-Backspace
+			{
+				if(objectname.Text.Length > 0) objectname.Clear();
+			}
+			else if((e.KeyChar >= 'a' && e.KeyChar <= 'z') || (e.KeyChar >= '0' && e.KeyChar <= '9') || AllowedSpecialChars.Contains(e.KeyChar))
+			{
+				if(objectname.SelectionLength > 0)
 				{
-					if((n.Text == selected.Text) && foundselected)
-					{
-						// This is the next item
-						n.Selected = true;
-						n.EnsureVisible();
-						return;
-					}
+					objectname.Text = objectname.Text.Substring(0, objectname.SelectionStart) +
+										 e.KeyChar +
+										 objectname.Text.Substring(objectname.SelectionStart + objectname.SelectionLength);
+				}
+				else
+				{
+					objectname.Text += e.KeyChar;
 				}
 			}
 		}
 
-		// This selects an item by name
-		public void SelectItem(string name, ListViewGroup preferredgroup)
+		//mxd
+		private void texturetypecombo_SelectedIndexChanged(object sender, EventArgs e) 
 		{
-			ListViewItem lvi = null;
+			texturetype = texturetypecombo.SelectedIndex;
+            ElementName = (texturetype == 2 || (texturetype == 3 && browseflats)) ? "flats" : "textures";
 
+            RefillList(false);
+		}
+
+		//mxd
+		private void sizecombo_SelectedIndexChanged(object sender, EventArgs e)
+		{
+			if(blockupdate) return;
+			list.ImageSize = (sizecombo.SelectedIndex == 0 ? 0 : Convert.ToInt32(sizecombo.SelectedItem));
+			list.Focus();
+        }
+
+		//mxd
+		private void longtexturenames_CheckedChanged(object sender, EventArgs e)
+		{
+			if(!blockupdate)
+			{
+				uselongtexturenames = longtexturenames.Checked;
+				objectname.CharacterCasing = (uselongtexturenames ? CharacterCasing.Normal : CharacterCasing.Upper);
+
+				foreach(var item in items) item.ShowFullName = uselongtexturenames;
+				list.UpdateRectangles();
+				list.Focus();
+			}
+		}
+
+		//mxd
+		private void usedtexturesfirst_CheckedChanged(object sender, EventArgs e)
+		{
+			if(!blockupdate)
+			{
+                list.UsedTexturesFirst = usedtexturesfirst.Checked;
+                RefillList(false);
+				list.Focus();
+			}
+		}
+
+        //
+        private void classicview_CheckedChanged(object sender, EventArgs e)
+        {
+            if(!blockupdate)
+            {
+                list.ClassicView = classicview.Checked;
+                list.Focus();
+            }
+        }
+
+        #endregion
+
+        #region ================== Methods
+
+        // This selects an item by longname (mxd - changed from name to longname)
+        public void SelectItem(long longname)
+		{
 			// Not when selecting is prevented
 			if(preventselection) return;
 
-			// Search in preferred group first
-			if(preferredgroup != null)
+			// Search for item
+			ImageBrowserItem target = null; //mxd
+			foreach(ImageBrowserItem item in items)
 			{
-				foreach(ListViewItem item in list.Items)
+				if(item.Icon.LongName == longname) //mxd
 				{
-					if(string.Compare(item.Text, name, true) == 0)
-					{
-						lvi = item;
-						if(item.Group == preferredgroup) break;
-					}
+					target = item;
+					break;
 				}
 			}
 			
-			// Select the item
-			if(lvi != null)
+			if(target != null)
 			{
-				// Select this item
-				list.SelectedItems.Clear();
-				lvi.Selected = true;
-				lvi.EnsureVisible();
+				// Select the item
+				list.SetSelectedItem(target);
 			}
-
-			UpdateTextureSizeLabel();
-		}
-		
-		// This performs item sleection by keys
-		private void SelectNextItem(SearchDirectionHint dir)
-		{
-			ListViewItem lvi;
-			Point spos;
-			
-			// Not when selecting is prevented
-			if(preventselection) return;
-			
-			// Nothing selected?
-			if(list.SelectedItems.Count == 0)
-			{
-				// Select first
-				SelectFirstItem();
-			}
-			else
-			{
-				// Get selected item
-				lvi = list.SelectedItems[0];
-				Rectangle lvirect = list.GetItemRect(lvi.Index, ItemBoundsPortion.Entire);
-				spos = new Point(lvirect.Location.X + lvirect.Width / 2, lvirect.Y + lvirect.Height / 2);
-				
-				// Try finding 5 times in the given direction
-				for(int i = 0; i < 5; i++)
-				{
-					// Move point in given direction
-					switch(dir)
-					{
-						case SearchDirectionHint.Left: spos.X -= list.TileSize.Width / 2; break;
-						case SearchDirectionHint.Right: spos.X += list.TileSize.Width / 2; break;
-						case SearchDirectionHint.Up: spos.Y -= list.TileSize.Height / 2; break;
-						case SearchDirectionHint.Down: spos.Y += list.TileSize.Height / 2; break;
-					}
-					
-					// Test position
-					lvi = list.GetItemAt(spos.X, spos.Y);
-					if(lvi != null)
-					{
-						// Select item
-						list.SelectedItems.Clear();
-						lvi.Selected = true;
-						break;
-					}
-				}
-				
-				// Make selection visible
-				if(list.SelectedItems.Count > 0) list.SelectedItems[0].EnsureVisible();
-			}
-			
-			UpdateTextureSizeLabel();
 		}
 		
 		// This selectes the first item
 		private void SelectFirstItem()
 		{
-			ListViewItem lvi;
-			
 			// Not when selecting is prevented
 			if(preventselection) return;
 			
 			// Select first
-			if(list.Items.Count > 0)
-			{
-				list.SelectedItems.Clear();
-				lvi = list.GetItemAt(list.TileSize.Width / 2, list.TileSize.Height / 2);
-				if(lvi != null)
-				{
-					lvi.Selected = true;
-					lvi.EnsureVisible();
-				}
-			}
-
-			UpdateTextureSizeLabel();
-		}
-		
-		// This adds a group
-		public ListViewGroup AddGroup(string name)
-		{
-			ListViewGroup grp = new ListViewGroup(name);
-			list.Groups.Add(grp);
-			return grp;
+			if(list.Items.Count > 0) list.SetSelectedItem(list.Items[0]);
 		}
 		
 		// This begins adding items
 		public void BeginAdding(bool keepselectedindex)
 		{
 			if(keepselectedindex && (list.SelectedItems.Count > 0))
-				keepselected = list.SelectedIndices[0];
+				keepselected = list.Items.IndexOf(list.SelectedItems[0]);
 			else
 				keepselected = -1;
 			
@@ -411,118 +455,191 @@ namespace CodeImp.DoomBuilder.Controls
 			// Start updating
 			refreshtimer.Enabled = true;
 		}
-		
-		// This adds an item
-		public void Add(string text, ImageData image, object tag, ListViewGroup group)
+
+		//mxd. This adds a category item
+		public void AddFolder(ImageBrowserItemType itemtype, string categoryname)
 		{
-			ImageBrowserItem i = new ImageBrowserItem(text, image, tag);
-			i.ListGroup = group;
-			i.Group = group;
-			items.Add(i);
+			switch(itemtype)
+			{
+				case ImageBrowserItemType.FOLDER: case ImageBrowserItemType.FOLDER_UP:
+					items.Add(new ImageBrowserCategoryItem(itemtype, categoryname));
+					break;
+
+				default: throw new Exception("Unsupported ImageBrowserItemType");
+			}
 		}
 		
 		// This adds an item
-		public void Add(string text, ImageData image, object tag, ListViewGroup group, string tooltiptext)
+        // [ZZ] having nice string.Empty does not justify having two functions doing the same thing, with one parameter difference.
+        //      C# not Java.
+		public void AddItem(ImageData image, string tooltip = "")
 		{
-			ImageBrowserItem i = new ImageBrowserItem(text, image, tag);
-			i.ListGroup = group;
-			i.Group = group;
-			i.ToolTipText = tooltiptext;
-			items.Add(i);
+			items.Add(new ImageBrowserItem(image, tooltip, uselongtexturenames));
 		}
 
 		// This fills the list based on the objectname filter
 		private void RefillList(bool selectfirst)
 		{
 			visibleitems = new List<ImageBrowserItem>();
-			
-			// Begin updating list
-			updating = true;
-			//list.SuspendLayout();
-			list.BeginUpdate();
-			
+
+			//mxd. Store info about currently selected item
+			string selectedname = string.Empty;
+			if(!selectfirst && keepselected == -1 && list.SelectedItems.Count > 0)
+			{
+				selectedname = list.SelectedItems[0].Icon.Name;
+			}
+
 			// Clear list first
-			// Group property of items will be set to null, we will restore it later
-			list.Items.Clear();
+			list.Clear();
+			list.Title = (usedtexturesfirst.Checked ? usedfirstgroup : availgroup);
+
+			//mxd. Anything to do?
+			if(items.Count == 0) return;
+
+			//mxd. Filtering by texture size?
+			int w = filterWidth.GetResult(-1);
+			int h = filterHeight.GetResult(-1);
 			
 			// Go for all items
-			foreach(ImageBrowserItem i in items)
+			ImageBrowserItem previtem = null; //mxd
+			for(int i = items.Count - 1; i > -1; i--)
 			{
 				// Add item if valid
-				if(ValidateItem(i))
+				items[i].ShowFullName = uselongtexturenames; //mxd
+				switch(items[i].ItemType)
 				{
-					i.Group = i.ListGroup;
-					i.Selected = false;
-					visibleitems.Add(i);
+					case ImageBrowserItemType.IMAGE:
+						if(ValidateItem(items[i], previtem) && ValidateItemSize(items[i], w, h))
+						{
+							visibleitems.Add(items[i]);
+							previtem = items[i];
+						}
+						break;
+
+					case ImageBrowserItemType.FOLDER_UP: //mxd. "Browse Up" items are always valid
+						visibleitems.Add(items[i]);
+						break;
+
+					case ImageBrowserItemType.FOLDER: //mxd. Only apply name filtering to "Folder" items
+						if(items[i].TextureName.ToUpperInvariant().Contains(objectname.Text.ToUpperInvariant()))
+							visibleitems.Add(items[i]);
+						break;
+
+					default: throw new NotImplementedException("Unknown ImageBrowserItemType");
 				}
 			}
 			
 			// Fill list
-			visibleitems.Sort();
-			ListViewItem[] array = new ListViewItem[visibleitems.Count];
-			for(int i = 0; i < visibleitems.Count; i++) array[i] = visibleitems[i];
-			list.Items.AddRange(array);
-			
-			// Done updating list
-			updating = false;
-			list.EndUpdate();
-			list.Invalidate();
-			//list.ResumeLayout();
+			visibleitems.Sort(SortItems);
+			list.SetItems(visibleitems);
 			
 			// Make selection?
-			if(!preventselection && (list.Items.Count > 0))
+			if(!preventselection && list.Items.Count > 0)
 			{
 				// Select specific item?
 				if(keepselected > -1)
 				{
-					list.Items[keepselected].Selected = true;
-					list.Items[keepselected].EnsureVisible();
+					list.SetSelectedItem(list.Items[keepselected]);
 				}
 				// Select first item?
 				else if(selectfirst)
 				{
 					SelectFirstItem();
 				}
+				//mxd. Try reselecting the same/next closest item
+				else if(!string.IsNullOrEmpty(selectedname))
+				{
+					ImageBrowserItem bestmatch = null;
+					int charsmatched = 1;
+					foreach(ImageBrowserItem item in list.Items)
+					{
+						if(item.ItemType == ImageBrowserItemType.IMAGE && item.Icon.Name[0] == selectedname[0])
+						{
+							if(item.Icon.Name == selectedname)
+							{
+								bestmatch = item;
+								break;
+							}
+
+							for(int i = 1; i < Math.Min(item.Icon.Name.Length, selectedname.Length); i++)
+							{
+								if(item.Icon.Name[i] != selectedname[i])
+								{
+									if(i > charsmatched)
+									{
+										bestmatch = item;
+										charsmatched = i;
+									}
+									break;
+								}
+							}
+						}
+					}
+
+					// Select found item
+					if(bestmatch != null)
+					{
+						list.SetSelectedItem(bestmatch);
+					}
+					else
+					{
+						SelectFirstItem();
+					}
+				}
 			}
 			
 			// Raise event
-			if((SelectedItemChanged != null) && !preventselection) SelectedItemChanged();
-			UpdateTextureSizeLabel();
+			if((SelectedItemChanged != null) && !preventselection)
+				SelectedItemChanged(list.SelectedItems.Count > 0 ? list.SelectedItems[0] : null);
 		}
 
 		// This validates an item
-		private bool ValidateItem(ImageBrowserItem i)
+		private bool ValidateItem(ImageBrowserItem item, ImageBrowserItem previtem)
 		{
-			return i.Text.Contains(objectname.Text);
-		}
-		
-		// This sends the focus to the textbox
-		public void FocusTextbox()
-		{
-			objectname.Focus();
-		}
-		
-		// This updates the texture size label
-		private void UpdateTextureSizeLabel()
-		{
-			if((list.SelectedItems.Count == 0) ||
-			   (splitter.Panel2.ClientSize.Width < (texturesize.Location.X + texturesize.Size.Width)))
+			//mxd. Don't show duplicate items
+			if(previtem != null && item.TextureName == previtem.TextureName) return false; //mxd
+			
+			//mxd. mixMode: 0 = All, 1 = Textures, 2 = Flats, 3 = Based on BrowseFlats
+			if(!splitter.Panel2Collapsed) 
 			{
-				texturesizetimer.Start();
+				if(texturetype == 1 && item.Icon.IsFlat) return false;
+				if(texturetype == 2 && !item.Icon.IsFlat) return false;
+				if(texturetype == 3 && (browseflats != item.Icon.IsFlat)) return false;
 			}
-			else
+
+			return item.TextureName.ToUpperInvariant().Contains(objectname.Text.ToUpperInvariant());
+		}
+
+		//mxd. This validates an item's texture size
+		private static bool ValidateItemSize(ImageBrowserItem i, int w, int h) 
+		{
+			if(!i.Icon.IsPreviewLoaded) return true;
+			if(w > 0 && i.Icon.Width != w) return false;
+			if(h > 0 && i.Icon.Height != h) return false;
+			return true;
+		}
+
+		//mxd
+		private int SortItems(ImageBrowserItem item1, ImageBrowserItem item2)
+		{
+			if(usedtexturesfirst.Checked 
+				&& item1.ItemType == ImageBrowserItemType.IMAGE 
+				&& item2.ItemType == ImageBrowserItemType.IMAGE 
+				&& item1.Icon.UsedInMap != item2.Icon.UsedInMap)
 			{
-				texturesizetimer.Stop();
-				ImageBrowserItem lvi = (list.SelectedItems[0] as ImageBrowserItem);
-				if(lvi.icon.IsPreviewLoaded)
-					texturesize.Text = lvi.icon.Width + " x " + lvi.icon.Height;
-				else
-					texturesize.Text = "unknown";
-				texturesize.Visible = true;
-				texturesizelabel.Visible = true;
+				// Push used items to the top
+				return (item1.Icon.UsedInMap ? -1 : 1);
 			}
+
+			return item1.CompareTo(item2);
 		}
 		
-		#endregion
-	}
+		//mxd. This sends the focus to the textures list
+		public void FocusList()
+		{
+			list.Focus();
+		}
+
+        #endregion
+    }
 }

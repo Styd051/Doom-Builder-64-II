@@ -18,39 +18,54 @@
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
-using System.Text;
 using System.Windows.Forms;
 using CodeImp.DoomBuilder.Geometry;
 using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.IO;
-using System.IO;
-using CodeImp.DoomBuilder.Config;
-using CodeImp.DoomBuilder.Editing;
-using CodeImp.DoomBuilder.Controls;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.Windows
 {
-	public partial class VertexEditForm : DelayedForm
+	internal partial class VertexEditForm : DelayedForm
 	{
 		#region ================== Constants
 
-		#endregion
-
-		#region ================== Variables
-
-		private ICollection<Vertex> vertices;
+		private const string CLEAR_VALUE = "Unused"; //mxd
 
 		#endregion
 
-		#region ================== Properties
+		#region ================== Events
+
+		public event EventHandler OnValuesChanged; //mxd
 
 		#endregion
 		
+		#region ================== Variables
+
+		private ICollection<Vertex> vertices;
+		private bool preventchanges; //mxd
+		private bool undocreated; //mxd
+		private List<VertexProperties> vertexprops; //mxd
+
+		private struct VertexProperties //mxd
+		{
+			public readonly float X;
+			public readonly float Y;
+			public readonly float ZCeiling;
+			public readonly float ZFloor;
+
+			public VertexProperties(Vertex v) 
+			{
+				X = v.Position.x;
+				Y = v.Position.y;
+				ZCeiling = v.ZCeiling;
+				ZFloor = v.ZFloor;
+			}
+		}
+
+		#endregion
+
 		#region ================== Constructor
 
 		// Constructor
@@ -58,22 +73,41 @@ namespace CodeImp.DoomBuilder.Windows
 		{
 			InitializeComponent();
 
-			// Fill universal fields list
-			fieldslist.ListFixedFields(General.Map.Config.VertexFields);
+			//mxd. Load settings
+			if(General.Settings.StoreSelectedEditTab)
+			{
+				int activetab = General.Settings.ReadSetting("windows." + configname + ".activetab", 0);
+				tabs.SelectTab(activetab);
+			}
 
-			// Custom fields?
-			if(!General.Map.FormatInterface.HasCustomFields)
+			if(General.Map.FormatInterface.HasCustomFields) //mxd
+			{ 
+				// Initialize custom fields editor
+				fieldslist.Setup("vertex");
+
+				// Fill universal fields list
+				fieldslist.ListFixedFields(General.Map.Config.VertexFields);
+			} 
+			else 
+			{
 				tabs.TabPages.Remove(tabcustom);
+				panelHeightControls.Visible = false;
+			}
 			
 			// Decimals allowed?
 			if(General.Map.FormatInterface.VertexDecimals > 0)
 			{
 				positionx.AllowDecimal = true;
 				positiony.AllowDecimal = true;
-			}
+				positionx.ButtonStepSmall = 0.1f;
+				positiony.ButtonStepSmall = 0.1f;
+				positionx.UpdateButtonsTooltip();
+				positiony.UpdateButtonsTooltip();
 
-			// Initialize custom fields editor
-			fieldslist.Setup("vertex");
+				//mxd
+				zceiling.AllowDecimal = true;
+				zfloor.AllowDecimal = true;
+			}
 		}
 
 		#endregion
@@ -81,11 +115,14 @@ namespace CodeImp.DoomBuilder.Windows
 		#region ================== Methods
 
 		// This sets up the form to edit the given vertices
-		public void Setup(ICollection<Vertex> vertices)
+		public void Setup(ICollection<Vertex> vertices, bool allowPositionChange)
 		{
+			preventchanges = true; //mxd
+			
 			// Keep this list
 			this.vertices = vertices;
 			if(vertices.Count > 1) this.Text = "Edit Vertices (" + vertices.Count + ")";
+			vertexprops = new List<VertexProperties>(); //mxd
 
 			////////////////////////////////////////////////////////////////////////
 			// Set all options to the first vertex properties
@@ -97,9 +134,14 @@ namespace CodeImp.DoomBuilder.Windows
 			// Position
 			positionx.Text = vc.Position.x.ToString();
 			positiony.Text = vc.Position.y.ToString();
+
+			//mxd
+			positionx.Enabled = allowPositionChange;
+			positiony.Enabled = allowPositionChange;
 			
 			// Custom fields
-			fieldslist.SetValues(vc.Fields, true);
+			if(General.Map.FormatInterface.HasCustomFields) //mxd
+				fieldslist.SetValues(vc.Fields, true);
 			
 			////////////////////////////////////////////////////////////////////////
 			// Now go for all sectors and change the options when a setting is different
@@ -113,46 +155,199 @@ namespace CodeImp.DoomBuilder.Windows
 				if(positiony.Text != v.Position.y.ToString()) positiony.Text = "";
 
 				// Custom fields
-				fieldslist.SetValues(v.Fields, false);
+				if(General.Map.FormatInterface.HasCustomFields) 
+				{
+					fieldslist.SetValues(v.Fields, false);
+				}
+
+				//mxd. Store initial properties
+				vertexprops.Add(new VertexProperties(v));
+			}
+
+			//mxd. Height offsets
+			if(General.Map.UDMF) 
+			{
+				zceiling.Text = (float.IsNaN(vc.ZCeiling) ? CLEAR_VALUE : vc.ZCeiling.ToString());
+				zfloor.Text = (float.IsNaN(vc.ZFloor) ? CLEAR_VALUE : vc.ZFloor.ToString());
+
+				foreach(Vertex v in vertices) 
+				{
+					string zc = (float.IsNaN(v.ZCeiling) ? CLEAR_VALUE : v.ZCeiling.ToString());
+					string zf = (float.IsNaN(v.ZFloor) ? CLEAR_VALUE : v.ZFloor.ToString());
+
+					if(zceiling.Text != zc)	zceiling.Text = "";
+					if(zfloor.Text != zf) zfloor.Text = "";
+				}
+			}
+
+			preventchanges = false; //mxd
+		}
+
+		//mxd
+		private void MakeUndo()
+		{
+			if(undocreated) return;
+			undocreated = true;
+
+			//mxd. Make undo
+			General.Map.UndoRedo.CreateUndo("Edit " + (vertices.Count > 1 ? vertices.Count + " vertices" : "vertex"));
+
+			if(General.Map.FormatInterface.HasCustomFields)
+			{
+				foreach(Vertex v in vertices) v.Fields.BeforeFieldsChange();
 			}
 		}
 		
 		#endregion
-		
+
+		#region ================== mxd. Realtime Events
+
+		private void positionx_WhenTextChanged(object sender, EventArgs e) 
+		{
+			if(preventchanges) return;
+			MakeUndo();
+
+			// Restore values
+			if(string.IsNullOrEmpty(positionx.Text)) 
+			{
+				// Apply position
+				int i = 0;
+				foreach(Vertex v in vertices) v.Move(new Vector2D(vertexprops[i++].X, v.Position.y));
+			}
+			// Update values
+			else 
+			{ 
+				int i = 0;
+				foreach(Vertex v in vertices)
+				{
+					// Verify the coordinates
+					float px = positionx.GetResultFloat(vertexprops[i++].X);
+
+					// Apply new position
+					v.Move(new Vector2D(Math.Max(General.Map.FormatInterface.MinCoordinate, Math.Min(General.Map.FormatInterface.MaxCoordinate, px)), v.Position.y));
+				}
+			}
+
+			General.Map.IsChanged = true;
+			if(OnValuesChanged != null) OnValuesChanged(this, EventArgs.Empty);
+		}
+
+		private void positiony_WhenTextChanged(object sender, EventArgs e) 
+		{
+			if(preventchanges) return;
+			MakeUndo();
+
+			// Restore values
+			if(string.IsNullOrEmpty(positiony.Text)) 
+			{
+				// Apply position
+				int i = 0;
+				foreach(Vertex v in vertices) v.Move(new Vector2D(v.Position.x, vertexprops[i++].Y));
+			}
+			// Update values
+			else 
+			{ 
+				int i = 0;
+				foreach(Vertex v in vertices)
+				{
+					// Verify the coordinates
+					float py = positiony.GetResultFloat(vertexprops[i++].Y);
+
+					// Apply new position
+					v.Move(new Vector2D(v.Position.x, Math.Max(General.Map.FormatInterface.MinCoordinate, Math.Min(General.Map.FormatInterface.MaxCoordinate, py))));
+				}
+			}
+
+			General.Map.IsChanged = true;
+			if(OnValuesChanged != null) OnValuesChanged(this, EventArgs.Empty);
+		}
+
+		private void zceiling_WhenTextChanged(object sender, EventArgs e) 
+		{
+			if(preventchanges) return;
+			MakeUndo();
+			int i = 0;
+
+			//restore values
+			if(string.IsNullOrEmpty(zceiling.Text)) 
+			{
+				foreach(Vertex v in vertices) v.ZCeiling = vertexprops[i++].ZCeiling;
+
+			} 
+			else if(zceiling.Text == CLEAR_VALUE) //clear values
+			{ 
+				foreach(Vertex v in vertices) v.ZCeiling = float.NaN;
+
+			} 
+			else //update values
+			{ 
+				foreach(Vertex v in vertices)
+					v.ZCeiling = zceiling.GetResultFloat(vertexprops[i++].ZCeiling);
+			}
+
+			General.Map.IsChanged = true;
+			if(OnValuesChanged != null) OnValuesChanged(this, EventArgs.Empty);
+		}
+
+		private void zfloor_WhenTextChanged(object sender, EventArgs e) 
+		{
+			if(preventchanges) return;
+			MakeUndo();
+			int i = 0;
+
+			//restore values
+			if(string.IsNullOrEmpty(zfloor.Text)) 
+			{
+				foreach(Vertex v in vertices)
+					v.ZFloor = vertexprops[i++].ZFloor;
+			
+			} 
+			else if(zfloor.Text == CLEAR_VALUE) //clear values
+			{
+				foreach(Vertex v in vertices) v.ZFloor = float.NaN;
+			} 
+			else //update values
+			{ 
+				foreach(Vertex v in vertices)
+					v.ZFloor = zfloor.GetResultFloat(vertexprops[i++].ZFloor);
+			}
+
+			General.Map.IsChanged = true;
+			if(OnValuesChanged != null) OnValuesChanged(this, EventArgs.Empty);
+		}
+
+		//mxd
+		private void clearZFloor_Click(object sender, EventArgs e) 
+		{
+			zfloor.Text = CLEAR_VALUE;
+		}
+
+		//mxd
+		private void clearZCeiling_Click(object sender, EventArgs e) 
+		{
+			zceiling.Text = CLEAR_VALUE;
+		}
+
+		#endregion
+
 		#region ================== Events
 
 		// OK clicked
 		private void apply_Click(object sender, EventArgs e)
 		{
-			string undodesc = "vertex";
-
-			// Verify the coordinates
-			if((positionx.GetResultFloat(0.0f) < General.Map.FormatInterface.MinCoordinate) || (positionx.GetResultFloat(0.0f) > General.Map.FormatInterface.MaxCoordinate) ||
-			   (positiony.GetResultFloat(0.0f) < General.Map.FormatInterface.MinCoordinate) || (positiony.GetResultFloat(0.0f) > General.Map.FormatInterface.MaxCoordinate))
+			//mxd. Make undo if required
+			MakeUndo();
+			
+			// Apply custom fields
+			if(General.Map.FormatInterface.HasCustomFields) 
 			{
-				General.ShowWarningMessage("Vertex coordinates must be between " + General.Map.FormatInterface.MinCoordinate + " and " + General.Map.FormatInterface.MaxCoordinate + ".", MessageBoxButtons.OK);
-				return;
+				foreach(Vertex v in vertices) fieldslist.Apply(v.Fields); //mxd
 			}
 			
-			// Make undo
-			if(vertices.Count > 1) undodesc = vertices.Count + " vertices";
-			General.Map.UndoRedo.CreateUndo("Edit " + undodesc);
-
-			// Go for all vertices
-			foreach(Vertex v in vertices)
-			{
-				// Apply position
-				Vector2D p = new Vector2D();
-				p.x = General.Clamp(positionx.GetResultFloat(v.Position.x), (float)General.Map.FormatInterface.MinCoordinate, (float)General.Map.FormatInterface.MaxCoordinate);
-				p.y = General.Clamp(positiony.GetResultFloat(v.Position.y), (float)General.Map.FormatInterface.MinCoordinate, (float)General.Map.FormatInterface.MaxCoordinate);
-				v.Move(p);
-				
-				// Custom fields
-				fieldslist.Apply(v.Fields);
-			}
+			General.Map.IsChanged = true;
+			if(OnValuesChanged != null)	OnValuesChanged(this, EventArgs.Empty);
 			
 			// Done
-			General.Map.IsChanged = true;
 			this.DialogResult = DialogResult.OK;
 			this.Close();
 		}
@@ -160,15 +355,31 @@ namespace CodeImp.DoomBuilder.Windows
 		// Cancel clicked
 		private void cancel_Click(object sender, EventArgs e)
 		{
-			// Just close
+			//mxd. Perform undo if required
+			if(undocreated) General.Map.UndoRedo.WithdrawUndo();
+			
+			// And close
 			this.DialogResult = DialogResult.Cancel;
 			this.Close();
+		}
+
+		//mxd
+		private void tabcustom_MouseEnter(object sender, EventArgs e) 
+		{
+			fieldslist.Focus();
+		}
+
+		//mxd
+		private void VertexEditForm_FormClosing(object sender, FormClosingEventArgs e) 
+		{
+			// Save settings
+			General.Settings.WriteSetting("windows." + configname + ".activetab", tabs.SelectedIndex);
 		}
 
 		// Help requested
 		private void VertexEditForm_HelpRequested(object sender, HelpEventArgs hlpevent)
 		{
-			General.ShowHelp("w_vertexeditor.html");
+			General.ShowHelp("w_vertexedit.html");
 			hlpevent.Handled = true;
 		}
 

@@ -17,14 +17,10 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.Drawing;
-using System.Text;
 using System.Windows.Forms;
-using Microsoft.Win32;
 using CodeImp.DoomBuilder.Config;
-using CodeImp.DoomBuilder.Rendering;
+using CodeImp.DoomBuilder.Geometry;
 using CodeImp.DoomBuilder.Types;
 using System.Globalization;
 
@@ -40,11 +36,13 @@ namespace CodeImp.DoomBuilder.Controls
 		#region ================== Variables
 		
 		private TypeHandler typehandler;
-		private bool ignorebuttonchange = false;
+		private bool ignorebuttonchange;
 		
 		#endregion
 
 		#region ================== Properties
+
+		public override string Text { get { return combobox.Text; }	} //mxd
 
 		#endregion
 
@@ -88,9 +86,8 @@ namespace CodeImp.DoomBuilder.Controls
 		private void combobox_Validating(object sender, CancelEventArgs e)
 		{
 			string str = combobox.Text.Trim().ToLowerInvariant();
-			str = str.TrimStart('+', '-');
-			int num;
-			
+			str = str.TrimStart('+', '-', '<', '>');
+
 			// Anything in the box?
 			if(combobox.Text.Trim().Length > 0)
 			{
@@ -98,6 +95,7 @@ namespace CodeImp.DoomBuilder.Controls
 				if(CheckIsRelative())
 				{
 					// Try parsing to number
+					int num;
 					if(!int.TryParse(str, NumberStyles.Integer, CultureInfo.CurrentCulture, out num))
 					{
 						// Invalid relative number
@@ -131,6 +129,13 @@ namespace CodeImp.DoomBuilder.Controls
 		private void combobox_TextChanged(object sender, EventArgs e)
 		{
 			scrollbuttons.Enabled = !CheckIsRelative();
+
+			//mxd. Update button image?
+			if(typehandler.DynamicImage)
+			{
+				combobox_Validating(sender, new CancelEventArgs());
+				button.Image = typehandler.BrowseImage;
+			}
 		}
 
 		// Mouse wheel used
@@ -184,13 +189,14 @@ namespace CodeImp.DoomBuilder.Controls
 			combobox.Items.Clear();
 
 			// Check if this supports enumerated options
-			if(typehandler.IsEnumerable)
+			if(typehandler.IsEnumerable) 
 			{
 				// Show the combobox
 				button.Visible = false;
 				scrollbuttons.Visible = false;
 				combobox.DropDownStyle = ComboBoxStyle.DropDown;
 				combobox.Items.AddRange(typehandler.GetEnumList().ToArray());
+				combobox.DropDownWidth = Tools.GetDropDownWidth(combobox); //mxd
 			}
 			// Check if browsable
 			else if(typehandler.IsBrowseable)
@@ -208,18 +214,39 @@ namespace CodeImp.DoomBuilder.Controls
 				scrollbuttons.Visible = true;
 				combobox.DropDownStyle = ComboBoxStyle.Simple;
 			}
+
+			//mxd
+			if(typehandler.IsEnumerable) 
+			{
+				combobox.AutoCompleteMode = AutoCompleteMode.Suggest;
+				combobox.AutoCompleteSource = AutoCompleteSource.ListItems;
+			} 
+			else 
+			{
+				combobox.AutoCompleteMode = AutoCompleteMode.None;
+				combobox.AutoCompleteSource = AutoCompleteSource.None;
+			}
 			
 			// Setup layout
 			ArgumentBox_Resize(this, EventArgs.Empty);
 			
-			// Re-apply value
-			SetValue(oldvalue);
+			//mxd. If not mixed values, re-apply the old value
+			if(!string.IsNullOrEmpty(combobox.Text)) SetValue(oldvalue);
 		}
 
 		// This sets the value
 		public void SetValue(int value)
 		{
 			typehandler.SetValue(value);
+			combobox.SelectedItem = null;
+			combobox.Text = typehandler.GetStringValue();
+			combobox_Validating(this, new CancelEventArgs());
+		}
+
+		//mxd. this sets default value
+		public void SetDefaultValue() 
+		{
+			typehandler.ApplyDefaultValue();
 			combobox.SelectedItem = null;
 			combobox.Text = typehandler.GetStringValue();
 			combobox_Validating(this, new CancelEventArgs());
@@ -236,35 +263,72 @@ namespace CodeImp.DoomBuilder.Controls
 		// This checks if the number is relative
 		public bool CheckIsRelative()
 		{
-			// Prefixed with ++ or --?
-			return (combobox.Text.Trim().StartsWith("++") || combobox.Text.Trim().StartsWith("--"));
+			// Prefixed with +++, ---, <, >, ++ or --?
+			string str = combobox.Text.Trim();
+			return (str.StartsWith("+++") || str.StartsWith("---") 
+				|| str.StartsWith("++") || str.StartsWith("--") 
+				|| str.StartsWith("<") || str.StartsWith(">"));
 		}
 		
 		// This returns the selected value
-		public int GetResult(int original)
+		public int GetResult(int original) { return GetResult(original, 0); } //mxd
+		public int GetResult(int original, int step)
 		{
-			int result = 0;
+			int result;
 			
 			// Strip prefixes
 			string str = combobox.Text.Trim().ToLowerInvariant();
-			str = str.TrimStart('+', '-');
-			int num = original;
+			string numstr = str.TrimStart('+', '-', '<', '>'); //mxd
 
 			// Anything in the box?
-			if(combobox.Text.Trim().Length > 0)
+			if(numstr.Length > 0)
 			{
+				//mxd. Prefixed with +++?
+				if(str.StartsWith("+++"))
+				{
+					// Add offset to number
+					int num;
+					if(!int.TryParse(numstr, out num)) num = 0;
+					result = original + num * step;
+				}
+				//mxd. Prefixed with ---?
+				else if(str.StartsWith("---"))
+				{
+					// Subtract offset from number
+					int num;
+					if(!int.TryParse(numstr, out num)) num = 0;
+					result = original - num * step;
+				}
+				// mxd. Prefixed with <?
+				else if(str.StartsWith("<"))
+				{
+					// Incremental decrease
+					int num;
+					if(!int.TryParse(numstr, out num)) num = 0;
+					result = num - step;
+				}
+				// mxd. Prefixed with >?
+				else if(str.StartsWith(">"))
+				{
+					// Incremental increase
+					int num;
+					if(!int.TryParse(numstr, out num)) num = 0;
+					result = num + step;
+				}
 				// Prefixed with ++?
-				if(combobox.Text.Trim().StartsWith("++"))
+				else if(str.StartsWith("++"))
 				{
 					// Add number to original
-					if(!int.TryParse(str, out num)) num = 0;
+					int num;
+					if(!int.TryParse(numstr, out num)) num = 0;
 					result = original + num;
 				}
 				// Prefixed with --?
-				else if(combobox.Text.Trim().StartsWith("--"))
+				else if(str.StartsWith("--"))
 				{
 					// Subtract number from original
-					if(!int.TryParse(str, out num)) num = 0;
+					int num;
+					if(!int.TryParse(numstr, out num)) num = 0;
 					result = original - num;
 				}
 				else
@@ -280,6 +344,19 @@ namespace CodeImp.DoomBuilder.Controls
 			}
 
 			return General.Clamp(result, General.Map.FormatInterface.MinArgument, General.Map.FormatInterface.MaxArgument);
+		}
+
+		//mxd. Very tricky way to close parent control by pressing ENTER or ESCAPE key when combobox.DropDownStyle == ComboBoxStyle.Simple
+		protected override bool ProcessCmdKey(ref Message msg, Keys keyData) 
+		{
+			if(this.ActiveControl == combobox && combobox.DropDownStyle == ComboBoxStyle.Simple 
+				&& (keyData == Keys.Return || keyData == Keys.Escape)) 
+			{
+				combobox.DropDownStyle = ComboBoxStyle.DropDown;
+				return false;
+			}
+
+			return base.ProcessCmdKey(ref msg, keyData);
 		}
 		
 		#endregion

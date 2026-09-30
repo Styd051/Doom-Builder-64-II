@@ -17,14 +17,11 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Text;
 using System.IO;
 using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Geometry;
-using System.Windows.Forms;
 using CodeImp.DoomBuilder.Config;
 using CodeImp.DoomBuilder.Types;
 
@@ -43,9 +40,10 @@ namespace CodeImp.DoomBuilder.IO
 
 		#region ================== Variables
 
-		private Configuration config;
+		private readonly Configuration config;
 		private bool setknowncustomtypes;
 		private bool strictchecking = true;
+		private readonly Dictionary<MapElementType, Dictionary<string, UniversalType>> uifields; //mxd
 		
 		#endregion
 
@@ -59,8 +57,10 @@ namespace CodeImp.DoomBuilder.IO
 		#region ================== Constructor / Disposer
 
 		// Constructor
-		public UniversalStreamReader()
+		public UniversalStreamReader(Dictionary<MapElementType, Dictionary<string, UniversalType>> uifields)
 		{
+			this.uifields = uifields;
+			
 			// Make configuration
 			config = new Configuration();
 			
@@ -69,7 +69,7 @@ namespace CodeImp.DoomBuilder.IO
 			foreach(string rn in resnames)
 			{
 				// Found it?
-				if(rn.EndsWith(UDMF_CONFIG_NAME, StringComparison.InvariantCultureIgnoreCase))
+				if(rn.EndsWith(UDMF_CONFIG_NAME, StringComparison.OrdinalIgnoreCase))
 				{
 					// Get a stream from the resource
 					Stream udmfcfg = General.ThisAssembly.GetManifestResourceStream(rn);
@@ -97,6 +97,18 @@ namespace CodeImp.DoomBuilder.IO
 							config.WriteSetting("managedfields.linedef." + fn, true);
 					}
 
+					//mxd. Add sidedef flags
+					foreach(KeyValuePair<string, string> flag in General.Map.Config.SidedefFlags)
+						config.WriteSetting("managedfields.sidedef." + flag.Key, true);
+
+					//mxd. Add sector flags
+					foreach(KeyValuePair<string, string> flag in General.Map.Config.SectorFlags)
+						config.WriteSetting("managedfields.sector." + flag.Key, true);
+					foreach(KeyValuePair<string, string> flag in General.Map.Config.CeilingPortalFlags)
+						config.WriteSetting("managedfields.sector." + flag.Key, true);
+					foreach(KeyValuePair<string, string> flag in General.Map.Config.FloorPortalFlags)
+						config.WriteSetting("managedfields.sector." + flag.Key, true);
+
 					// Add thing flags
 					foreach(KeyValuePair<string, string> flag in General.Map.Config.ThingFlags)
 						config.WriteSetting("managedfields.thing." + flag.Key, true);
@@ -110,7 +122,6 @@ namespace CodeImp.DoomBuilder.IO
 
 					// Done
 					udmfcfgreader.Dispose();
-					udmfcfg.Dispose();
 					break;
 				}
 			}
@@ -121,40 +132,31 @@ namespace CodeImp.DoomBuilder.IO
 		#region ================== Reading
 
 		// This reads from a stream
-		public MapSet Read(MapSet map, Stream stream)
+		public void Read(MapSet map, Stream stream)
 		{
 			StreamReader reader = new StreamReader(stream, Encoding.ASCII);
-			Dictionary<int, Vertex> vertexlink;
-			Dictionary<int, Sector> sectorlink;
 			UniversalParser textmap = new UniversalParser();
 			textmap.StrictChecking = strictchecking;
 			
-			try
-			{
-				// Read UDMF from stream
-				textmap.InputConfiguration(reader.ReadToEnd());
+			// Read UDMF from stream
+			List<string> data = new List<string>(1000);
+			while(!reader.EndOfStream) data.Add(reader.ReadLine());
 
-				// Check for errors
-				if(textmap.ErrorResult != 0)
-				{
-					// Show parse error
-					General.ShowErrorMessage("Error on line " + textmap.ErrorLine + " while parsing UDMF map data:\n" + textmap.ErrorDescription, MessageBoxButtons.OK);
-				}
-				else
-				{
-					// Read the map
-					vertexlink = ReadVertices(map, textmap);
-					sectorlink = ReadSectors(map, textmap);
-					ReadLinedefs(map, textmap, vertexlink, sectorlink);
-					ReadThings(map, textmap);
-				}
-			}
-			catch(Exception e)
+			// Parse it
+			textmap.InputConfiguration(data.ToArray());
+
+			// Check for errors
+			if(textmap.ErrorResult != 0)
 			{
-				General.ShowErrorMessage("Unexpected error reading UDMF map data. " + e.GetType().Name + ": " + e.Message, MessageBoxButtons.OK);
+				//mxd. Throw parse error
+				throw new Exception("Error on line " + textmap.ErrorLine + " while parsing UDMF map data:\n" + textmap.ErrorDescription);
 			}
 
-			return map;
+			// Read the map
+			Dictionary<int, Vertex> vertexlink = ReadVertices(map, textmap);
+			Dictionary<int, Sector> sectorlink = ReadSectors(map, textmap);
+			ReadLinedefs(map, textmap, vertexlink, sectorlink);
+			ReadThings(map, textmap);
 		}
 
 		// This reads the things
@@ -171,34 +173,45 @@ namespace CodeImp.DoomBuilder.IO
 				UniversalCollection c = collections[i];
 				int[] args = new int[Linedef.NUM_ARGS];
 				string where = "thing " + i;
-				float x = GetCollectionEntry<float>(c, "x", true, 0.0f, where);
-				float y = GetCollectionEntry<float>(c, "y", true, 0.0f, where);
-				float height = GetCollectionEntry<float>(c, "height", false, 0.0f, where);
-				int tag = GetCollectionEntry<int>(c, "id", false, 0, where);
-				int angledeg = GetCollectionEntry<int>(c, "angle", false, 0, where);
-				int type = GetCollectionEntry<int>(c, "type", true, 0, where);
-				int special = GetCollectionEntry<int>(c, "special", false, 0, where);
-				args[0] = GetCollectionEntry<int>(c, "arg0", false, 0, where);
-				args[1] = GetCollectionEntry<int>(c, "arg1", false, 0, where);
-				args[2] = GetCollectionEntry<int>(c, "arg2", false, 0, where);
-				args[3] = GetCollectionEntry<int>(c, "arg3", false, 0, where);
-				args[4] = GetCollectionEntry<int>(c, "arg4", false, 0, where);
+				float x = GetCollectionEntry(c, "x", true, 0.0f, where);
+				float y = GetCollectionEntry(c, "y", true, 0.0f, where);
+				float height = GetCollectionEntry(c, "height", false, 0.0f, where);
+				int tag = GetCollectionEntry(c, "id", false, 0, where);
+				int angledeg = GetCollectionEntry(c, "angle", false, 0, where);
+				int pitch = GetCollectionEntry(c, "pitch", false, 0, where); //mxd
+				int roll = GetCollectionEntry(c, "roll", false, 0, where); //mxd
+				float scaleX = GetCollectionEntry(c, "scalex", false, 1.0f, where); //mxd
+				float scaleY = GetCollectionEntry(c, "scaley", false, 1.0f, where); //mxd
+				float scale = GetCollectionEntry(c, "scale", false, 0f, where); //mxd
+				int type = GetCollectionEntry(c, "type", true, 0, where);
+				int special = GetCollectionEntry(c, "special", false, 0, where);
+				args[0] = GetCollectionEntry(c, "arg0", false, 0, where);
+				args[1] = GetCollectionEntry(c, "arg1", false, 0, where);
+				args[2] = GetCollectionEntry(c, "arg2", false, 0, where);
+				args[3] = GetCollectionEntry(c, "arg3", false, 0, where);
+				args[4] = GetCollectionEntry(c, "arg4", false, 0, where);
+
+				if(scale != 0) //mxd
+				{
+					scaleX = scale;
+					scaleY = scale;
+				}
 
 				// Flags
-				Dictionary<string, bool> stringflags = new Dictionary<string, bool>();
+				Dictionary<string, bool> stringflags = new Dictionary<string, bool>(StringComparer.Ordinal);
 				foreach(KeyValuePair<string, string> flag in General.Map.Config.ThingFlags)
-					stringflags[flag.Key] = GetCollectionEntry<bool>(c, flag.Key, false, false, where);
+					stringflags[flag.Key] = GetCollectionEntry(c, flag.Key, false, false, where);
 				foreach(FlagTranslation ft in General.Map.Config.ThingFlagsTranslation)
 				{
 					foreach(string field in ft.Fields)
-						stringflags[field] = GetCollectionEntry<bool>(c, field, false, false, where);
+						stringflags[field] = GetCollectionEntry(c, field, false, false, where);
 				}
 
 				// Create new item
 				Thing t = map.CreateThing();
 				if(t != null)
 				{
-					t.Update(type, x, y, height, Angle2D.DoomToReal(angledeg), stringflags, tag, special, args);
+					t.Update(type, x, y, height, angledeg, pitch, roll, scaleX, scaleY, stringflags, tag, special, args);
 
 					// Custom fields
 					ReadCustomFields(c, t, "thing");
@@ -216,82 +229,97 @@ namespace CodeImp.DoomBuilder.IO
 
 			// Go for all lines
 			map.SetCapacity(0, map.Linedefs.Count + linescolls.Count, map.Sidedefs.Count + sidescolls.Count, 0, 0);
+			char[] splitter = { ' ' }; //mxd
 			for(int i = 0; i < linescolls.Count; i++)
 			{
 				// Read fields
 				UniversalCollection lc = linescolls[i];
 				int[] args = new int[Linedef.NUM_ARGS];
 				string where = "linedef " + i;
-				int tag = GetCollectionEntry<int>(lc, "id", false, 0, where);
-				int v1 = GetCollectionEntry<int>(lc, "v1", true, 0, where);
-				int v2 = GetCollectionEntry<int>(lc, "v2", true, 0, where);
-				int special = GetCollectionEntry<int>(lc, "special", false, 0, where);
-                int acti = GetCollectionEntry<int>(lc, "activate", false, 0, where);    // villsa 9/13/11
-                int switchmask = GetCollectionEntry<int>(lc, "switchmask", false, 0, where);    // villsa 9/13/11
-				args[0] = GetCollectionEntry<int>(lc, "arg0", false, 0, where);
-				args[1] = GetCollectionEntry<int>(lc, "arg1", false, 0, where);
-				args[2] = GetCollectionEntry<int>(lc, "arg2", false, 0, where);
-				args[3] = GetCollectionEntry<int>(lc, "arg3", false, 0, where);
-				args[4] = GetCollectionEntry<int>(lc, "arg4", false, 0, where);
-				int s1 = GetCollectionEntry<int>(lc, "sidefront", true, -1, where);
-				int s2 = GetCollectionEntry<int>(lc, "sideback", false, -1, where);
+				int v1 = GetCollectionEntry(lc, "v1", true, 0, where);
+				int v2 = GetCollectionEntry(lc, "v2", true, 0, where);
+
+				if(!vertexlink.ContainsKey(v1) || !vertexlink.ContainsKey(v2))
+				{ //mxd
+					General.ErrorLogger.Add(ErrorType.Warning, "Linedef " + i + " references one or more invalid vertices. Linedef has been removed.");
+					continue;
+				}
+
+				int tag = GetCollectionEntry(lc, "id", false, 0, where);
+				int special = GetCollectionEntry(lc, "special", false, 0, where);
+				args[0] = GetCollectionEntry(lc, "arg0", false, 0, where);
+				args[1] = GetCollectionEntry(lc, "arg1", false, 0, where);
+				args[2] = GetCollectionEntry(lc, "arg2", false, 0, where);
+				args[3] = GetCollectionEntry(lc, "arg3", false, 0, where);
+				args[4] = GetCollectionEntry(lc, "arg4", false, 0, where);
+				int s1 = GetCollectionEntry(lc, "sidefront", false, -1, where);
+				int s2 = GetCollectionEntry(lc, "sideback", false, -1, where);
+
+				//mxd. MoreIDs
+				List<int> tags = new List<int> { tag };
+				string moreids = GetCollectionEntry(lc, "moreids", false, string.Empty, where);
+				if(!string.IsNullOrEmpty(moreids))
+				{
+					string[] moreidscol = moreids.Split(splitter, StringSplitOptions.RemoveEmptyEntries);
+					foreach(string sid in moreidscol)
+					{
+						int id;
+						if(int.TryParse(sid.Trim(), out id) && id != 0 && !tags.Contains(id))
+						{
+							tags.Add(id);
+						}
+					}
+				}
+				if(tag == 0 && tags.Count > 1) tags.RemoveAt(0);
 
 				// Flags
-				Dictionary<string, bool> stringflags = new Dictionary<string, bool>();
+				Dictionary<string, bool> stringflags = new Dictionary<string, bool>(StringComparer.Ordinal);
 				foreach(KeyValuePair<string, string> flag in General.Map.Config.LinedefFlags)
-					stringflags[flag.Key] = GetCollectionEntry<bool>(lc, flag.Key, false, false, where);
-
+					stringflags[flag.Key] = GetCollectionEntry(lc, flag.Key, false, false, where);
 				foreach(FlagTranslation ft in General.Map.Config.LinedefFlagsTranslation)
 				{
 					foreach(string field in ft.Fields)
-						stringflags[field] = GetCollectionEntry<bool>(lc, field, false, false, where);
+						stringflags[field] = GetCollectionEntry(lc, field, false, false, where);
 				}
 				
 				// Activations
 				foreach(LinedefActivateInfo activate in General.Map.Config.LinedefActivates)
-					stringflags[activate.Key] = GetCollectionEntry<bool>(lc, activate.Key, false, false, where);
-				
-				// Create new linedef
-				if(vertexlink.ContainsKey(v1) && vertexlink.ContainsKey(v2))
+					stringflags[activate.Key] = GetCollectionEntry(lc, activate.Key, false, false, where);
+
+				// Check if not zero-length
+				if(Vector2D.ManhattanDistance(vertexlink[v1].Position, vertexlink[v2].Position) > 0.0001f) 
 				{
-					// Check if not zero-length
-					if(Vector2D.ManhattanDistance(vertexlink[v1].Position, vertexlink[v2].Position) > 0.0001f)
+					// Create new linedef
+					Linedef l = map.CreateLinedef(vertexlink[v1], vertexlink[v2]);
+					if(l != null)
 					{
-						Linedef l = map.CreateLinedef(vertexlink[v1], vertexlink[v2]);
-						if(l != null)
+						l.Update(stringflags, 0, tags, special, args);
+						l.UpdateCache();
+
+						// Custom fields
+						ReadCustomFields(lc, l, "linedef");
+
+						// Read sidedefs and connect them to the line
+						if(s1 > -1)
 						{
-                            l.Update(stringflags, acti, tag, special, switchmask, args);
-							l.UpdateCache();
+							if(s1 < sidescolls.Count) 
+								ReadSidedef(map, sidescolls[s1], l, true, sectorlink, s1);
+							else
+								General.ErrorLogger.Add(ErrorType.Warning, "Linedef " + i + " references invalid front sidedef " + s1 + ". Sidedef has been removed.");
+						}
 
-							// Custom fields
-							ReadCustomFields(lc, l, "linedef");
-
-							// Read sidedefs and connect them to the line
-							if(s1 > -1)
-							{
-								if(s1 < sidescolls.Count)
-									ReadSidedef(map, sidescolls[s1], l, true, sectorlink, s1);
-								else
-									General.ErrorLogger.Add(ErrorType.Warning, "Linedef " + i + " references invalid front sidedef " + s1 + ". Sidedef has been removed.");
-							}
-
-							if(s2 > -1)
-							{
-								if(s2 < sidescolls.Count)
-									ReadSidedef(map, sidescolls[s2], l, false, sectorlink, s2);
-								else
-									General.ErrorLogger.Add(ErrorType.Warning, "Linedef " + i + " references invalid back sidedef " + s1 + ". Sidedef has been removed.");
-							}
+						if(s2 > -1)
+						{
+							if(s2 < sidescolls.Count) 
+								ReadSidedef(map, sidescolls[s2], l, false, sectorlink, s2);
+							else
+								General.ErrorLogger.Add(ErrorType.Warning, "Linedef " + i + " references invalid back sidedef " + s1 + ". Sidedef has been removed.");
 						}
 					}
-					else
-					{
-						General.ErrorLogger.Add(ErrorType.Warning, "Linedef " + i + " is zero-length. Linedef has been removed.");
-					}
-				}
-				else
+				} 
+				else 
 				{
-					General.ErrorLogger.Add(ErrorType.Warning, "Linedef " + i + " references one or more invalid vertices. Linedef has been removed.");
+					General.ErrorLogger.Add(ErrorType.Warning, "Linedef " + i + " is zero-length. Linedef has been removed.");
 				}
 			}
 		}
@@ -302,12 +330,17 @@ namespace CodeImp.DoomBuilder.IO
 		{
 			// Read fields
 			string where = "linedef " + ld.Index + (front ? " front sidedef " : " back sidedef ") + index;
-			int offsetx = GetCollectionEntry<int>(sc, "offsetx", false, 0, where);
-			int offsety = GetCollectionEntry<int>(sc, "offsety", false, 0, where);
-			string thigh = GetCollectionEntry<string>(sc, "texturetop", false, "-", where);
-			string tlow = GetCollectionEntry<string>(sc, "texturebottom", false, "-", where);
-			string tmid = GetCollectionEntry<string>(sc, "texturemiddle", false, "-", where);
-			int sector = GetCollectionEntry<int>(sc, "sector", true, 0, where);
+			int offsetx = GetCollectionEntry(sc, "offsetx", false, 0, where);
+			int offsety = GetCollectionEntry(sc, "offsety", false, 0, where);
+			string thigh = GetCollectionEntry(sc, "texturetop", false, "-", where);
+			string tlow = GetCollectionEntry(sc, "texturebottom", false, "-", where);
+			string tmid = GetCollectionEntry(sc, "texturemiddle", false, "-", where);
+			int sector = GetCollectionEntry(sc, "sector", true, 0, where);
+
+			//mxd. Flags
+			Dictionary<string, bool> stringflags = new Dictionary<string, bool>(StringComparer.Ordinal);
+			foreach(KeyValuePair<string, string> flag in General.Map.Config.SidedefFlags)
+				stringflags[flag.Key] = GetCollectionEntry(sc, flag.Key, false, false, where);
 
 			// Create sidedef
 			if(sectorlink.ContainsKey(sector))
@@ -315,7 +348,7 @@ namespace CodeImp.DoomBuilder.IO
 				Sidedef s = map.CreateSidedef(ld, front, sectorlink[sector]);
 				if(s != null)
 				{
-					s.Update(offsetx, offsety, thigh, tmid, tlow);
+					s.Update(offsetx, offsety, thigh, tmid, tlow, stringflags);
 
 					// Custom fields
 					ReadCustomFields(sc, s, "sidedef");
@@ -330,47 +363,70 @@ namespace CodeImp.DoomBuilder.IO
 		// This reads the sectors
 		private Dictionary<int, Sector> ReadSectors(MapSet map, UniversalParser textmap)
 		{
-			Dictionary<int, Sector> link;
-
 			// Get list of entries
 			List<UniversalCollection> collections = GetNamedCollections(textmap.Root, "sector");
 
 			// Create lookup table
-			link = new Dictionary<int, Sector>(collections.Count);
+			Dictionary<int, Sector> link = new Dictionary<int, Sector>(collections.Count);
 
 			// Go for all collections
 			map.SetCapacity(0, 0, 0, map.Sectors.Count + collections.Count, 0);
+			char[] splitter = new[] { ' ' }; //mxd
 			for(int i = 0; i < collections.Count; i++)
 			{
 				// Read fields
 				UniversalCollection c = collections[i];
 				string where = "sector " + i;
-                int[] colors = new int[Sector.NUM_COLORS];
-				int hfloor = GetCollectionEntry<int>(c, "heightfloor", false, 0, where);
-				int hceil = GetCollectionEntry<int>(c, "heightceiling", false, 0, where);
-				string tfloor = GetCollectionEntry<string>(c, "texturefloor", true, "-", where);
-				string tceil = GetCollectionEntry<string>(c, "textureceiling", true, "-", where);
-				int bright = GetCollectionEntry<int>(c, "lightlevel", false, 160, where);
-				int special = GetCollectionEntry<int>(c, "special", false, 0, where);
-				int tag = GetCollectionEntry<int>(c, "id", false, 0, where);
+				int hfloor = GetCollectionEntry(c, "heightfloor", false, 0, where);
+				int hceil = GetCollectionEntry(c, "heightceiling", false, 0, where);
+				string tfloor = GetCollectionEntry(c, "texturefloor", true, "-", where);
+				string tceil = GetCollectionEntry(c, "textureceiling", true, "-", where);
+				int bright = GetCollectionEntry(c, "lightlevel", false, 160, where);
+				int special = GetCollectionEntry(c, "special", false, 0, where);
+				int tag = GetCollectionEntry(c, "id", false, 0, where);
 
-                // villsa 9/14/11 (builder64)
-                colors[0] = GetCollectionEntry<int>(c, "color1", false, 0, where);
-                colors[1] = GetCollectionEntry<int>(c, "color2", false, 0, where);
-                colors[2] = GetCollectionEntry<int>(c, "color3", false, 0, where);
-                colors[3] = GetCollectionEntry<int>(c, "color4", false, 0, where);
-                colors[4] = GetCollectionEntry<int>(c, "color5", false, 0, where);
+				//mxd. MoreIDs
+				List<int> tags = new List<int> { tag };
+				string moreids = GetCollectionEntry(c, "moreids", false, string.Empty, where);
+				if(!string.IsNullOrEmpty(moreids)) 
+				{
+					string[] moreidscol = moreids.Split(splitter, StringSplitOptions.RemoveEmptyEntries);
+					foreach(string sid in moreidscol)
+					{
+						int id;
+						if(int.TryParse(sid.Trim(), out id) && id != 0 && !tags.Contains(id)) 
+						{
+							tags.Add(id);
+						}
+					}
+				}
+				if(tag == 0 && tags.Count > 1) tags.RemoveAt(0);
 
-                // villsa 9/13/11 - Flags
-                Dictionary<string, bool> stringflags = new Dictionary<string, bool>();
-                foreach (KeyValuePair<string, string> flag in General.Map.Config.SectorFlags)
-                    stringflags[flag.Key] = GetCollectionEntry<bool>(c, flag.Key, false, false, where);
+				//mxd. Read slopes
+				float fslopex = GetCollectionEntry(c, "floorplane_a", false, 0.0f, where);
+				float fslopey = GetCollectionEntry(c, "floorplane_b", false, 0.0f, where);
+				float fslopez = GetCollectionEntry(c, "floorplane_c", false, 0.0f, where);
+				float foffset = GetCollectionEntry(c, "floorplane_d", false, float.NaN, where);
+
+				float cslopex = GetCollectionEntry(c, "ceilingplane_a", false, 0.0f, where);
+				float cslopey = GetCollectionEntry(c, "ceilingplane_b", false, 0.0f, where);
+				float cslopez = GetCollectionEntry(c, "ceilingplane_c", false, 0.0f, where);
+				float coffset = GetCollectionEntry(c, "ceilingplane_d", false, float.NaN, where);
+
+				//mxd. Read flags
+				Dictionary<string, bool> stringflags = new Dictionary<string, bool>(StringComparer.Ordinal);
+				foreach(KeyValuePair<string, string> flag in General.Map.Config.SectorFlags)
+					stringflags[flag.Key] = GetCollectionEntry(c, flag.Key, false, false, where);
+				foreach(KeyValuePair<string, string> flag in General.Map.Config.CeilingPortalFlags)
+					stringflags[flag.Key] = GetCollectionEntry(c, flag.Key, false, false, where);
+				foreach(KeyValuePair<string, string> flag in General.Map.Config.FloorPortalFlags)
+					stringflags[flag.Key] = GetCollectionEntry(c, flag.Key, false, false, where);
 
 				// Create new item
 				Sector s = map.CreateSector();
 				if(s != null)
 				{
-                    s.Update(stringflags, hfloor, hceil, tfloor, tceil, special, tag, colors);
+					s.Update(hfloor, hceil, tfloor, tceil, special, stringflags, tags, bright, foffset, new Vector3D(fslopex, fslopey, fslopez).GetNormal(), coffset, new Vector3D(cslopex, cslopey, cslopez).GetNormal());
 
 					// Custom fields
 					ReadCustomFields(c, s, "sector");
@@ -387,13 +443,11 @@ namespace CodeImp.DoomBuilder.IO
 		// This reads the vertices
 		private Dictionary<int, Vertex> ReadVertices(MapSet map, UniversalParser textmap)
 		{
-			Dictionary<int, Vertex> link;
-
 			// Get list of entries
 			List<UniversalCollection> collections = GetNamedCollections(textmap.Root, "vertex");
 
 			// Create lookup table
-			link = new Dictionary<int, Vertex>(collections.Count);
+			Dictionary<int, Vertex> link = new Dictionary<int, Vertex>(collections.Count);
 
 			// Go for all collections
 			map.SetCapacity(map.Vertices.Count + collections.Count, 0, 0, 0, 0);
@@ -402,13 +456,17 @@ namespace CodeImp.DoomBuilder.IO
 				// Read fields
 				UniversalCollection c = collections[i];
 				string where = "vertex " + i;
-				float x = GetCollectionEntry<float>(c, "x", true, 0.0f, where);
-				float y = GetCollectionEntry<float>(c, "y", true, 0.0f, where);
+				float x = GetCollectionEntry(c, "x", true, 0.0f, where);
+				float y = GetCollectionEntry(c, "y", true, 0.0f, where);
 
 				// Create new item
 				Vertex v = map.CreateVertex(new Vector2D(x, y));
 				if(v != null)
 				{
+					//mxd. zoffsets
+					v.ZCeiling = GetCollectionEntry(c, "zceiling", false, float.NaN, where); //mxd
+					v.ZFloor = GetCollectionEntry(c, "zfloor", false, float.NaN, where); //mxd
+					
 					// Custom fields
 					ReadCustomFields(c, v, "vertex");
 
@@ -429,20 +487,64 @@ namespace CodeImp.DoomBuilder.IO
 			// Go for all the elements in the collection
 			foreach(UniversalEntry e in collection)
 			{
-				// Check if not a managed field
-				if(!config.SettingExists("managedfields." + elementname + "." + e.Key))
+				// mxd. Check if uifield
+				if(uifields.ContainsKey(element.ElementType) && uifields[element.ElementType].ContainsKey(e.Key)) 
+				{
+					int type = (int)uifields[element.ElementType][e.Key];
+
+					//mxd. Check type
+					object value = e.Value;
+
+					// Let's be kind and cast any int to a float if needed
+					if(type == (int)UniversalType.Float && e.Value is int) 
+					{
+						value = (float)(int)e.Value;
+					} 
+					else if(!e.IsValidType(e.Value.GetType())) 
+					{
+						General.ErrorLogger.Add(ErrorType.Warning, element + ": the value of entry \"" + e.Key + "\" is of incompatible type (expected " + e.GetType().Name + ", but got " + e.Value.GetType().Name + "). If you save the map, this value will be ignored.");
+						continue;
+					}
+
+					// Make custom field
+					element.Fields[e.Key] = new UniValue(type, value);
+
+				} // Check if not a managed field
+				else if(!config.SettingExists("managedfields." + elementname + "." + e.Key)) 
 				{
 					int type = (int)UniversalType.Integer;
 
-					// Determine default type
-					if(e.Value.GetType() == typeof(int)) type = (int)UniversalType.Integer;
-					else if(e.Value.GetType() == typeof(float)) type = (int)UniversalType.Float;
-					else if(e.Value.GetType() == typeof(bool)) type = (int)UniversalType.Boolean;
-					else if(e.Value.GetType() == typeof(string)) type = (int)UniversalType.String;
+					//mxd. Try to find the type from configuration
+					if(setknowncustomtypes) 
+					{
+						type = General.Map.Options.GetUniversalFieldType(elementname, e.Key, -1);
 
-					// Try to find the type from configuration
-					if(setknowncustomtypes)
-						type = General.Map.Options.GetUniversalFieldType(elementname, e.Key, type);
+						if(type != -1) 
+						{
+							object value = e.Value;
+
+							// Let's be kind and cast any int to a float if needed
+							if(type == (int)UniversalType.Float && e.Value is int) 
+							{
+								value = (float)(int)e.Value;
+							} 
+							else if(!e.IsValidType(e.Value.GetType())) 
+							{
+								General.ErrorLogger.Add(ErrorType.Warning, element + ": the value of entry \"" + e.Key + "\" is of incompatible type (expected " + e.GetType().Name + ", but got " + e.Value.GetType().Name + "). If you save the map, this value will be ignored.");
+								continue;
+							}
+
+							// Make custom field
+							element.Fields[e.Key] = new UniValue(type, value);
+							continue;
+						}
+					}
+
+					// Determine default type
+					if(e.Value is int) type = (int)UniversalType.Integer;
+					else if(e.Value is float) type = (int)UniversalType.Float;
+					else if(e.Value is bool) type = (int)UniversalType.Boolean;
+					else if(e.Value is string) type = (int)UniversalType.String;
 
 					// Make custom field
 					element.Fields[e.Key] = new UniValue(type, e.Value);
@@ -451,7 +553,7 @@ namespace CodeImp.DoomBuilder.IO
 		}
 
 		// This validates and returns an entry
-		private T GetCollectionEntry<T>(UniversalCollection c, string entryname, bool required, T defaultvalue, string where)
+		private static T GetCollectionEntry<T>(UniversalCollection c, string entryname, bool required, T defaultvalue, string where)
 		{
 			T result = default(T);
 			bool found = false;
@@ -463,8 +565,7 @@ namespace CodeImp.DoomBuilder.IO
 				if(e.Key == entryname)
 				{
 					// Let's be kind and cast any int to a float if needed
-					if((typeof(T) == typeof(float)) &&
-					   (e.Value.GetType() == typeof(int)))
+					if((typeof(T) == typeof(float)) && (e.Value is int))
 					{
 						// Make it a float
 						object fvalue = (float)(int)e.Value;
@@ -489,7 +590,7 @@ namespace CodeImp.DoomBuilder.IO
 			{
 				// Report error when entry is required!
 				if(required)
-					General.ErrorLogger.Add(ErrorType.Error, "Error while reading UDMF map data: Missing required field '" + entryname + "' at " + where + ".");
+					General.ErrorLogger.Add(ErrorType.Error, "Error while reading UDMF map data: Missing required field \"" + entryname + "\" at " + where + ".");
 
 				// Make default entry
 				result = defaultvalue;
@@ -500,13 +601,16 @@ namespace CodeImp.DoomBuilder.IO
 		}
 
 		// This makes a list of all collections with the given name
-		private List<UniversalCollection> GetNamedCollections(UniversalCollection collection, string entryname)
+		private static List<UniversalCollection> GetNamedCollections(UniversalCollection collection, string entryname)
 		{
 			List<UniversalCollection> list = new List<UniversalCollection>();
 
 			// Make list
-			foreach(UniversalEntry e in collection)
-				if((e.Value is UniversalCollection) && (e.Key == entryname)) list.Add(e.Value as UniversalCollection);
+			foreach(UniversalEntry e in collection) 
+			{
+				UniversalCollection uc = e.Value as UniversalCollection;
+				if(uc != null && e.Key == entryname) list.Add(uc);
+			}
 
 			return list;
 		}

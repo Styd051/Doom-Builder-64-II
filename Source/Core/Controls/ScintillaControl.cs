@@ -18,14 +18,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
-using System.Text;
 using System.Windows.Forms;
-using Microsoft.Win32;
-using System.Diagnostics;
-using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.Map;
 using System.Runtime.InteropServices;
 
 #endregion
@@ -108,8 +102,8 @@ namespace CodeImp.DoomBuilder.Controls
 		public event MarginClickHandler MarginClick;
 		public event NeedShownHandler NeedShown;
 		public event PaintedHandler Painted;
-		public event UserListSelectionHandler UserListSelection;
-		public event URIDroppedHandler URIDropped;
+		//public event UserListSelectionHandler UserListSelection;
+		//public event URIDroppedHandler URIDropped;
 		public event DwellStartHandler DwellStart;
 		public event DwellEndHandler DwellEnd;
 		public event ZoomHandler Zoom;
@@ -139,11 +133,7 @@ namespace CodeImp.DoomBuilder.Controls
 
 		// This ignores key combinations so that they are passed
 		// on to the other controls on the parent form
-		private Dictionary<int, int> ignoredkeys;
-		
-		// States
-		private ScriptMarginType indexmargintype;
-		private ScriptIndicatorStyle indexindicatorstyle;
+		private readonly Dictionary<int, int> ignoredkeys;
 		
 		#endregion
 
@@ -169,16 +159,6 @@ namespace CodeImp.DoomBuilder.Controls
 		}
 
 		/// <summary>
-		/// The type of a margin.
-		/// </summary>
-		public ScriptMarginType MarginType { get { return indexmargintype; } }
-
-		/// <summary>
-		/// The type of a margin.
-		/// </summary>
-		public ScriptIndicatorStyle IndicatorStyle { get { return indexindicatorstyle; } }
-
-		/// <summary>
 		/// Are there any redoable actions in the undo history?
 		/// 
 		/// </summary>
@@ -187,7 +167,7 @@ namespace CodeImp.DoomBuilder.Controls
 		{
 			get
 			{
-				return FastPerform(2016, 0, 0) != 0 ? true : false;
+				return FastPerform(2016, 0, 0) != 0;
 			}
 		}
 
@@ -200,7 +180,7 @@ namespace CodeImp.DoomBuilder.Controls
 		{
 			get
 			{
-				return FastPerform(2102, 0, 0) != 0 ? true : false;
+				return FastPerform(2102, 0, 0) != 0;
 			}
 		}
 
@@ -226,7 +206,7 @@ namespace CodeImp.DoomBuilder.Controls
 		{
 			get
 			{
-				return FastPerform(2173, 0, 0) != 0 ? true : false;
+				return FastPerform(2173, 0, 0) != 0;
 			}
 		}
 
@@ -239,7 +219,7 @@ namespace CodeImp.DoomBuilder.Controls
 		{
 			get
 			{
-				return FastPerform(2174, 0, 0) != 0 ? true : false;
+				return FastPerform(2174, 0, 0) != 0;
 			}
 		}
 
@@ -252,7 +232,7 @@ namespace CodeImp.DoomBuilder.Controls
 		{
 			get
 			{
-				return FastPerform(2202, 0, 0) != 0 ? true : false;
+				return FastPerform(2202, 0, 0) != 0;
 			}
 		}
 
@@ -1847,7 +1827,7 @@ namespace CodeImp.DoomBuilder.Controls
 
 		/// <summary>
 		/// Change the way control characters are displayed:
-		/// If symbol is < 32, keep the drawn way, else, use the given character.
+		/// If symbol is less than 32, keep the drawn way, else, use the given character.
 		/// Get the way control characters are displayed.
 		/// 
 		/// </summary>
@@ -2301,7 +2281,7 @@ namespace CodeImp.DoomBuilder.Controls
 		{
 			if(controlptr != IntPtr.Zero)
 			{
-				return (UInt32)Perform(directptr, message, (UInt32)wParam, (UInt32)lParam);
+				return (UInt32)Perform(directptr, message, wParam, lParam);
 			}
 			else
 			{
@@ -2315,19 +2295,19 @@ namespace CodeImp.DoomBuilder.Controls
 			this.ignoredkeys.Add(key, key);
 		}
 
-		public void AddIgnoredKey(System.Windows.Forms.Keys key, System.Windows.Forms.Keys modifier)
+		public void AddIgnoredKey(Keys key, Keys modifier)
 		{
 			this.ignoredkeys.Add((int)key + (int)modifier, (int)key + (int)modifier);
 		}
 
-		private void addShortcuts(Menu m)
+		private void AddShortcuts(Menu m)
 		{
 			foreach(MenuItem mi in m.MenuItems)
 			{
 				if(mi.Shortcut != Shortcut.None)
 					AddIgnoredKey(mi.Shortcut);
 				if(mi.MenuItems.Count > 0)
-					addShortcuts(mi);
+					AddShortcuts(mi);
 			}
 		}
 
@@ -2335,7 +2315,7 @@ namespace CodeImp.DoomBuilder.Controls
 		{
 			if((parentForm != null) && (parentForm.Menu != null))
 			{
-				addShortcuts(parentForm.Menu);
+				AddShortcuts(parentForm.Menu);
 			}
 		}
 
@@ -2376,7 +2356,7 @@ namespace CodeImp.DoomBuilder.Controls
 		#region ================== Message Pump
 		
 		// This handles messages
-		protected override void WndProc(ref System.Windows.Forms.Message m)
+		protected override void WndProc(ref Message m)
 		{
 			// Notify message?
 			if(m.Msg == WM_NOTIFY)
@@ -2525,23 +2505,23 @@ namespace CodeImp.DoomBuilder.Controls
 								if(BeforeDelete != null)
 									BeforeDelete(this, scn.position, scn.length);
 
-                            if(Modified != null)
-                            {
-                                string textstr = null;
-                                try
-                                {
-                                    textstr = System.Runtime.InteropServices.Marshal.PtrToStringAuto(scn.text);
-                                }
-                                catch (IndexOutOfRangeException e)
-                                {
-                                    // I don't know why this is happening, but I don't need the text here anyways
-                                }
+								if(Modified != null)
+								{
+									string textstr = null;
+									try
+									{
+										textstr = Marshal.PtrToStringAuto(scn.text);
+									}
+									catch(IndexOutOfRangeException)
+									{
+										// I don't know why this is happening, but I don't need the text here anyways
+									}
+									
+									Modified(this, scn.position, scn.modificationType, textstr, scn.length, scn.linesAdded, scn.line, scn.foldLevelNow, scn.foldLevelPrev);
+								}
+							break;
 
-                                Modified(this, scn.position, scn.modificationType, textstr, scn.length, scn.linesAdded, scn.line, scn.foldLevelNow, scn.foldLevelPrev);
-                            }
-                            break;
-
-                    }
+					}
 				}
 
 			}
@@ -3133,7 +3113,7 @@ namespace CodeImp.DoomBuilder.Controls
 
 			byte[] buffer = new byte[sz + 1];
 			fixed(byte* b = buffer)
-				FastPerform(2153, (uint)line + 1, (uint)b);
+				FastPerform(2153, (uint)line, (uint)b);
 			return System.Text.UTF8Encoding.UTF8.GetString(buffer, 0, sz);
 		}
 

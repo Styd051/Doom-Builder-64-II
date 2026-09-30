@@ -16,23 +16,7 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Geometry;
-using System.Drawing;
-using SlimDX;
-using CodeImp.DoomBuilder.Editing;
 
 #endregion
 
@@ -46,6 +30,7 @@ namespace CodeImp.DoomBuilder.Map
 		private List<Linedef> lines;
 		private List<Thing> things;
 		private List<Sector> sectors;
+		private List<Vertex> verts; //mxd
 		
 		#endregion
 		
@@ -54,6 +39,7 @@ namespace CodeImp.DoomBuilder.Map
 		public List<Linedef> Lines { get { return lines; } }
 		public List<Thing> Things { get { return things; } }
 		public List<Sector> Sectors { get { return sectors; } }
+		public List<Vertex> Vertices { get { return verts; } } //mxd
 		
 		#endregion
 		
@@ -65,6 +51,7 @@ namespace CodeImp.DoomBuilder.Map
 			lines = new List<Linedef>(2);
 			things = new List<Thing>(2);
 			sectors = new List<Sector>(2);
+			verts = new List<Vertex>(2); //mxd
 		}
 		
 		#endregion

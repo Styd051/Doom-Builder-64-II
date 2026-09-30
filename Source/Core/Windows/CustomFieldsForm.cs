@@ -18,17 +18,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Text;
 using System.Windows.Forms;
-using Microsoft.Win32;
-using System.Diagnostics;
-using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Data;
 using CodeImp.DoomBuilder.Config;
-using System.IO;
-using CodeImp.DoomBuilder.Controls;
 using CodeImp.DoomBuilder.Map;
 
 #endregion
@@ -53,10 +44,9 @@ namespace CodeImp.DoomBuilder.Windows
 		// This shows the dialog, returns false when cancelled
 		public static bool ShowDialog(IWin32Window owner, string title, string elementname, ICollection<MapElement> elements, List<UniversalFieldInfo> fixedfields)
 		{
-			bool result;
 			CustomFieldsForm f = new CustomFieldsForm();
 			f.Setup(title, elementname, elements, fixedfields);
-			result = (f.ShowDialog(owner) == DialogResult.OK);
+			bool result = (f.ShowDialog(owner) == DialogResult.OK);
 			f.Dispose();
 			return result;
 		}
@@ -67,12 +57,12 @@ namespace CodeImp.DoomBuilder.Windows
 			// Initialize
 			this.elements = elements;
 			this.Text = title;
-			
-			// Fill universal fields list
-			fieldslist.ListFixedFields(fixedfields);
 
 			// Initialize custom fields editor
 			fieldslist.Setup(elementname);
+
+			// Fill universal fields list
+			fieldslist.ListFixedFields(fixedfields);
 
 			// Setup from first element
 			MapElement fe = General.GetByIndex(elements, 0);

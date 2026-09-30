@@ -16,21 +16,7 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Editing;
-using CodeImp.DoomBuilder.VisualModes;
 
 #endregion
 
@@ -39,127 +25,38 @@ namespace CodeImp.DoomBuilder.BuilderModes
 	// This doesn't do jack shit.
 	internal class NullVisualEventReceiver : IVisualEventReceiver
 	{
-		public NullVisualEventReceiver()
-		{
-		}
+		public bool Selected { get { return false; } } //mxd
 		
-		public void OnSelectBegin()
-		{
-		}
-
-		public void OnSelectEnd()
-		{
-		}
-
-		public void OnEditBegin()
-		{
-		}
-
-		public void OnEditEnd()
-		{
-		}
-
-		public void OnMouseMove(MouseEventArgs e)
-		{
-		}
-
-		public void OnChangeTargetHeight(int amount)
-		{
-		}
-
-		public void OnChangeTargetBrightness(bool up)
-		{
-		}
-
-		public void OnChangeTextureOffset(int horizontal, int vertical)
-		{
-		}
-
-		public void OnResetTextureOffset()
-		{
-		}
-
-		public void OnSelectTexture()
-		{
-		}
-
-		public void OnCopyTexture()
-		{
-		}
-
-		public void OnPasteTexture()
-		{
-		}
-
-        // villsa
-        public void OnCopyLight()
-        {
-        }
-
-        // villsa
-        public void OnPasteLight()
-        {
-        }
-
-		public void OnCopyTextureOffsets()
-		{
-		}
-
-		public void OnPasteTextureOffsets()
-		{
-		}
-
-		public void OnCopyProperties()
-		{
-		}
-
-		public void OnPasteProperties()
-		{
-		}
-
-		public void OnTextureAlign(bool alignx, bool aligny)
-		{
-		}
-
-		public void OnTextureFloodfill()
-		{
-		}
-
-		public void OnToggleUpperUnpegged()
-		{
-		}
-
-		public void OnToggleLowerUnpegged()
-		{
-		}
-
-		public void OnProcess(double deltatime)
-		{
-		}
-
-		public void OnInsert()
-		{
-		}
-
-		public void OnDelete()
-		{
-		}
-
-		public void ApplyTexture(string texture)
-		{
-		}
-
-		public void ApplyUpperUnpegged(bool set)
-		{
-		}
-
-		public void ApplyLowerUnpegged(bool set)
-		{
-		}
-
-		public string GetTextureName()
-		{
-			return "";
-		}
+		public void OnSelectBegin() { }
+		public void OnSelectEnd() { }
+		public void OnEditBegin() {	}
+		public void OnEditEnd()	{ }
+		public void OnMouseMove(MouseEventArgs e) {	}
+		public void OnChangeTargetHeight(int amount) { }
+		public void OnChangeTargetBrightness(bool up) { }
+		public void OnChangeTextureOffset(int horizontal, int vertical, bool doSurfaceAngleCorrection) { }
+		public void OnChangeScale(int incrementX, int incrementY) { } //mxd
+		public void OnResetTextureOffset() { }
+		public void OnResetLocalTextureOffset() { } //mxd
+		public void OnSelectTexture() { }
+		public void OnCopyTexture() { }
+		public void OnPasteTexture() { }
+		public void OnCopyTextureOffsets() { }
+		public void OnPasteTextureOffsets() { }
+		public void OnCopyProperties() { }
+		public void OnPasteProperties(bool useoptions) { } //mxd. Added "useoptions"
+		public void OnTextureAlign(bool alignx, bool aligny) { }
+		public void OnTextureFit(FitTextureOptions options) { } //mxd
+		public void OnTextureFloodfill() { }
+		public void OnToggleUpperUnpegged()	{ }
+		public void OnToggleLowerUnpegged()	{ }
+		public void OnProcess(long deltatime) { }
+		public void OnInsert() { }
+		public void OnDelete() { }
+		public void ApplyTexture(string texture) { }
+		public void ApplyUpperUnpegged(bool set) { }
+		public void ApplyLowerUnpegged(bool set) { }
+		public string GetTextureName() { return "";	}
+		public void SelectNeighbours(bool select, bool withSameTexture, bool withSameHeight) { } //mxd
 	}
 }

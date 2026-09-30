@@ -17,18 +17,11 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
-using System.Text;
-using System.Windows.Forms;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.IO;
 using System.IO;
-using CodeImp.DoomBuilder.Config;
+using System.Windows.Forms;
+using CodeImp.DoomBuilder.Data;
 using CodeImp.DoomBuilder.Editing;
-using CodeImp.DoomBuilder.Controls;
 
 #endregion
 
@@ -47,7 +40,7 @@ namespace CodeImp.DoomBuilder.Windows
 			InitializeComponent();
 
 			// Show grid size
-			gridsize.Text = General.Map.Grid.GridSize.ToString();
+			gridsize.Text = General.Map.Grid.GridSizeF.ToString();
 			
 			// Background image?
 			if((General.Map.Grid.Background != null) &&
@@ -92,10 +85,8 @@ namespace CodeImp.DoomBuilder.Windows
 		// Browse texture
 		private void selecttexture_Click(object sender, EventArgs e)
 		{
-			string result;
-			
 			// Browse for texture
-			result = TextureBrowserForm.Browse(this, backgroundname);
+			string result = TextureBrowserForm.Browse(this, backgroundname, false);
 			if(result != null)
 			{
 				// Set this texture as background
@@ -110,10 +101,8 @@ namespace CodeImp.DoomBuilder.Windows
 		// Browse flat
 		private void selectflat_Click(object sender, EventArgs e)
 		{
-			string result;
-
 			// Browse for flat
-			result = FlatBrowserForm.Browse(this, backgroundname);
+			string result = TextureBrowserForm.Browse(this, backgroundname, true);
 			if(result != null)
 			{
 				// Set this flat as background
@@ -134,7 +123,7 @@ namespace CodeImp.DoomBuilder.Windows
 				// Set this file as background
 				backgroundname = browsefile.FileName;
 				backgroundsource = GridSetup.SOURCE_FILE;
-				ImageData img = new FileImage(backgroundname, backgroundname, false, 1.0f, 1.0f);
+				ImageData img = new FileImage(Path.GetFileNameWithoutExtension(backgroundname), backgroundname, false, 1.0f, 1.0f);
 				img.LoadImage();
 				General.DisplayZoomedImage(backgroundimage, new Bitmap(img.GetBitmap()));
 				img.Dispose();
@@ -151,8 +140,18 @@ namespace CodeImp.DoomBuilder.Windows
 		// Apply
 		private void apply_Click(object sender, EventArgs e)
 		{
+			//mxd. Apply
+			float newgridsize = gridsize.GetResultFloat(General.Map.Grid.GridSizeF);
+			if(newgridsize != General.Map.Grid.GridSizeF)
+			{
+				//Disable automatic grid resizing
+				General.MainWindow.DisableDynamicGridResize();
+
+				//Apply grid size
+				General.Map.Grid.SetGridSize(newgridsize);
+			}
+			
 			// Apply
-			General.Map.Grid.SetGridSize(gridsize.GetResult(General.Map.Grid.GridSize));
 			General.Map.Grid.SetBackgroundView(backoffsetx.GetResult(General.Map.Grid.BackgroundX),
 											   backoffsety.GetResult(General.Map.Grid.BackgroundY),
 											   backscalex.GetResult((int)(General.Map.Grid.BackgroundScaleX * 100.0f)) / 100.0f,

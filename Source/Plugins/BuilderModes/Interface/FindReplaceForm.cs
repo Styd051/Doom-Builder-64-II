@@ -18,17 +18,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
-using System.Text;
 using System.Windows.Forms;
-using Microsoft.Win32;
-using System.Diagnostics;
-using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.Config;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Controls;
 using CodeImp.DoomBuilder.Windows;
 using System.Reflection;
 using System.Globalization;
@@ -45,12 +36,14 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 		#region ================== Variables
 
+		private FindReplaceMode mode; //mxd
 		private FindReplaceType newfinder;
 		private FindReplaceType finder;
 		private List<FindReplaceType> findtypeslist;
-		bool controlpressed = false;
-		bool shiftpressed = false;
-		bool suppressevents = false;
+		private bool controlpressed;
+		private bool shiftpressed;
+		private bool suppressevents;
+		private Font hintfont; //mxd
 		
 		#endregion
 
@@ -68,15 +61,18 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			// Initialize
 			InitializeComponent();
 
+			//mxd. Create hint font
+			hintfont = new Font(this.Font, FontStyle.Underline);
+
 			// Find all find/replace types
 			Type[] findtypes = BuilderPlug.Me.FindClasses(typeof(FindReplaceType));
 			findtypeslist = new List<FindReplaceType>(findtypes.Length);
 			foreach(Type t in findtypes)
 			{
-				FindReplaceType finderinst;
 				object[] attr = t.GetCustomAttributes(typeof(FindReplaceAttribute), true);
 				if(attr.Length > 0)
 				{
+					FindReplaceType finderinst;
 					try
 					{
 						// Create instance
@@ -85,16 +81,16 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					catch(TargetInvocationException ex)
 					{
 						// Error!
-						General.ErrorLogger.Add(ErrorType.Error, "Failed to create class instance '" + t.Name + "'");
+						General.ErrorLogger.Add(ErrorType.Error, "Failed to create class instance \"" + t.Name + "\"");
 						General.WriteLogLine(ex.InnerException.GetType().Name + ": " + ex.InnerException.Message);
-						throw ex;
+						throw;
 					}
 					catch(Exception ex)
 					{
 						// Error!
-						General.ErrorLogger.Add(ErrorType.Error, "Failed to create class instance '" + t.Name + "'");
+						General.ErrorLogger.Add(ErrorType.Error, "Failed to create class instance \"" + t.Name + "\"");
 						General.WriteLogLine(ex.GetType().Name + ": " + ex.Message);
-						throw ex;
+						throw;
 					}
 					
 					// Add the finder to the list
@@ -110,16 +106,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// Replace (un)checked
 		private void doreplace_CheckedChanged(object sender, EventArgs e)
 		{
-			if(doreplace.Checked)
-			{
-				findbutton.Text = "Replace";
-				groupreplace.Enabled = true;
-			}
-			else
-			{
-				findbutton.Text = "Find";
-				groupreplace.Enabled = false;
-			}
+			findbutton.Text = (doreplace.Checked ? "Replace" : "Find");
+			replaceinput.Enabled = doreplace.Checked;
+			browsereplace.Enabled = doreplace.Checked && newfinder != null && newfinder.Attributes.BrowseButton;
 		}
 
 		// Search type selected
@@ -133,8 +122,25 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			browsefind.Image = newfinder.BrowseImage;
 			browsereplace.Enabled = newfinder.Attributes.BrowseButton;
 			browsereplace.Image = newfinder.BrowseImage;
-			if(!newfinder.Attributes.Replacable) doreplace.Checked = false;
-			doreplace.Enabled = newfinder.Attributes.Replacable;
+			if(!newfinder.CanReplace()) doreplace.Checked = false;
+			doreplace_CheckedChanged(this, EventArgs.Empty); //mxd. Update the rest of replace controls
+			doreplace.Enabled = newfinder.CanReplace();
+
+			//mxd. Update hint text
+			if(!string.IsNullOrEmpty(newfinder.UsageHint))
+			{
+				tooltip.SetToolTip(labelfind, newfinder.UsageHint);
+				labelfind.Font = hintfont;
+				labelfind.ForeColor = SystemColors.HotTrack;
+				labelfind.Cursor = Cursors.Hand;
+			}
+			else if(labelfind.ForeColor == SystemColors.HotTrack)
+			{
+				tooltip.SetToolTip(labelfind, string.Empty);
+				labelfind.Font = this.Font;
+				labelfind.ForeColor = SystemColors.ControlText;
+				labelfind.Cursor = Cursors.Default;
+			}
 		}
 		
 		// Browse find button clicked
@@ -146,7 +152,13 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// Browse replacement clicked
 		private void browsereplace_Click(object sender, EventArgs e)
 		{
-			replaceinput.Text = newfinder.Browse(replaceinput.Text);
+			replaceinput.Text = newfinder.BrowseReplace(replaceinput.Text);
+		}
+
+		//mxd
+		private void findinput_TextChanged(object sender, EventArgs e)
+		{
+			findbutton.Enabled = !string.IsNullOrEmpty(findinput.Text);
 		}
 
 		// Find / Replace clicked
@@ -171,18 +183,22 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			// Perform the search / replace and show the results
 			if(doreplace.Checked)
 			{
-				int ticket = General.Map.UndoRedo.CreateUndo("Replace " + searchtypes.SelectedItem);
+				General.Map.UndoRedo.CreateUndo("Replace " + searchtypes.SelectedItem);
 
-				resultslist.Items.AddRange(finder.Find(findinput.Text, withinselection.Checked, replaceinput.Text, false));
+				resultslist.Items.AddRange(finder.Find(findinput.Text, withinselection.Checked, true, replaceinput.Text, false));
 				resultscount.Text = resultslist.Items.Count + " items found and replaced.";
 
 				// Withdraw the undo step if nothing was replaced
-				if (resultslist.Items.Count <= 0)
+				if(resultslist.Items.Count < 1)
+				{
+					mode.Volatile = false; //mxd. Otherwice UndoManager.PerformUndo will cancel the mode...
 					General.Map.UndoRedo.WithdrawUndo();
+					mode.Volatile = true; //mxd
+				}
 			}
 			else
 			{
-				resultslist.Items.AddRange(finder.Find(findinput.Text, withinselection.Checked, null, false));
+				resultslist.Items.AddRange(finder.Find(findinput.Text, withinselection.Checked, false, string.Empty, false));
 				resultscount.Text = resultslist.Items.Count + " items found.";
 			}
 			
@@ -273,6 +289,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				General.Interface.Focus();
 				General.Editing.CancelMode();
 			}
+
+			//mxd
+			hintfont.Dispose();
 		}
 
 		// Close button clicked
@@ -354,14 +373,13 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		#region ================== Methods
 
 		// This shows the window
-		public void Show(Form owner)
+		public void Show(Form owner, FindReplaceMode mode)
 		{
-			// First time showing?
-			//if((this.Location.X == 0) && (this.Location.Y == 0))
-			{
-				// Position at left-top of owner
-				this.Location = new Point(owner.Location.X + 20, owner.Location.Y + 90);
-			}
+			//mxd
+			this.mode = mode;
+			
+			// Position at left-top of owner
+			this.Location = new Point(owner.Location.X + 20, owner.Location.Y + 90);
 			
 			// Re-fill the search types list
 			searchtypes.Items.Clear();
@@ -382,8 +400,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			}
 			
 			// Select first if none was selected
-			if(searchtypes.SelectedIndex < 0)
-				searchtypes.SelectedIndex = 0;
+			if(searchtypes.SelectedIndex < 0) searchtypes.SelectedIndex = 0;
 			
 			// Close results part
 			resultspanel.Visible = false;
@@ -416,5 +433,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		}
 		
 		#endregion
+
 	}
 }

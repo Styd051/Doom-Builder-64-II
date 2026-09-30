@@ -16,29 +16,18 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
+using System.Linq;
 using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Geometry;
-using System.Drawing;
-using CodeImp.DoomBuilder.Editing;
 using CodeImp.DoomBuilder.Config;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.BuilderModes
 {
-	[FindReplace("Linedef Tags", BrowseButton = false)]
-	internal class FindLinedefTags : FindReplaceType
+	[FindReplace("Linedef Tag", BrowseButton = false)]
+	internal class FindLinedefTags : BaseFindLinedef
 	{
 		#region ================== Constants
 
@@ -54,18 +43,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 		#region ================== Constructor / Destructor
 
-		// Constructor
-		public FindLinedefTags()
-		{
-			// Initialize
-
-		}
-
-		// Destructor
-		~FindLinedefTags()
-		{
-		}
-
 		#endregion
 
 		#region ================== Methods
@@ -75,25 +52,17 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		{
 			return General.Map.FormatInterface.HasLinedefTag;
 		}
-		
-		
-		// This is called when the browse button is pressed
-		public override string Browse(string initialvalue)
-		{
-			return "";
-		}
-
 
 		// This is called to perform a search (and replace)
 		// Returns a list of items to show in the results list
 		// replacewith is null when not replacing
-		public override FindReplaceObject[] Find(string value, bool withinselection, string replacewith, bool keepselection)
+		public override FindReplaceObject[] Find(string value, bool withinselection, bool replace, string replacewith, bool keepselection)
 		{
 			List<FindReplaceObject> objs = new List<FindReplaceObject>();
 
 			// Interpret the replacement
 			int replacetag = 0;
-			if(replacewith != null)
+			if(replace)
 			{
 				// If it cannot be interpreted, set replacewith to null (not replacing at all)
 				if(!int.TryParse(replacewith, out replacetag)) replacewith = null;
@@ -107,7 +76,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			}
 
 			// Interpret the number given
-			int tag = 0;
+			int tag;
 			if(int.TryParse(value, out tag))
 			{
 				// Where to search?
@@ -117,10 +86,17 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				foreach(Linedef l in list)
 				{
 					// Tag matches?
-					if(l.Tag == tag)
+					int index = l.Tags.IndexOf(tag);
+					if(index != -1)
 					{
 						// Replace
-						if(replacewith != null) l.Tag = replacetag;
+						if(replace)
+						{
+							//mxd. Make a copy of tags, otherwise BeforePropsChange will be triggered after tag changes
+							List<int> tags = new List<int>(l.Tags);
+							tags[index] = replacetag;
+							l.Tags = tags.Distinct().ToList(); // We don't want duplicates
+						}
 
 						// Add to list
 						LinedefActionInfo info = General.Map.Config.GetLinedefActionInfo(l.Action);
@@ -133,38 +109,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			}
 
 			return objs.ToArray();
-		}
-
-		// This is called when a specific object is selected from the list
-		public override void ObjectSelected(FindReplaceObject[] selection)
-		{
-			if(selection.Length == 1)
-			{
-				ZoomToSelection(selection);
-				General.Interface.ShowLinedefInfo(selection[0].Linedef);
-			}
-			else
-				General.Interface.HideInfo();
-
-			General.Map.Map.ClearAllSelected();
-			foreach(FindReplaceObject obj in selection) obj.Linedef.Selected = true;
-		}
-
-		// Render selection
-		public override void PlotSelection(IRenderer2D renderer, FindReplaceObject[] selection)
-		{
-			foreach(FindReplaceObject o in selection)
-			{
-				renderer.PlotLinedef(o.Linedef, General.Colors.Selection);
-			}
-		}
-
-		// Edit objects
-		public override void EditObjects(FindReplaceObject[] selection)
-		{
-			List<Linedef> lines = new List<Linedef>(selection.Length);
-			foreach(FindReplaceObject o in selection) lines.Add(o.Linedef);
-			General.Interface.ShowEditLinedefs(lines);
 		}
 
 		#endregion

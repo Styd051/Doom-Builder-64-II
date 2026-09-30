@@ -17,15 +17,9 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Text;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
-using Microsoft.Win32;
-using System.Diagnostics;
-using System.Reflection;
-using CodeImp.DoomBuilder.Controls;
+using CodeImp.DoomBuilder.Config;
 
 #endregion
 
@@ -40,9 +34,11 @@ namespace CodeImp.DoomBuilder.Windows
 			InitializeComponent();
 
 			// Show version
-			string postfix = "";
-			if(General.DebugBuild) postfix = "(debug)";
-			version.Text = Application.ProductName + " version " + Application.ProductVersion + " " + postfix;
+#if DEBUG
+			version.Text = Application.ProductName + " [DEVBUILD]";
+#else
+			version.Text = Application.ProductName + " v" + Application.ProductVersion + " (" + General.CommitHash + ")";
+#endif
 		}
 
 		// Launch Doom Builder website
@@ -57,11 +53,29 @@ namespace CodeImp.DoomBuilder.Windows
 			General.OpenWebsite("http://" + codeimplink.Text);
 		}
 
+		//mxd
+		private void zdoomorglink_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e) 
+		{
+			General.OpenWebsite("http://forum.zdoom.org/viewtopic.php?f=44&t=54957");
+		}
+
+		//mxd
+		private void gitlink_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+		{
+			General.OpenWebsite("https://github.com/jewalky/GZDoom-Builder-Bugfix");
+		}
+
 		// This copies the version number to clipboard
 		private void copyversion_Click(object sender, EventArgs e)
 		{
-			Clipboard.Clear();
-			Clipboard.SetText(Application.ProductVersion);
+			try //mxd
+			{
+				Clipboard.SetDataObject(Application.ProductVersion + " (" + General.CommitHash + ")", true, 5, 200);
+			}
+			catch(ExternalException)
+			{
+				General.Interface.DisplayStatus(StatusType.Warning, "Failed to perform a Clipboard operation...");
+			}
 		}
 	}
 }

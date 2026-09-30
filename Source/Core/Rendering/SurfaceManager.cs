@@ -17,24 +17,13 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
 using System.Drawing;
-using System.ComponentModel;
-using CodeImp.DoomBuilder.Map;
-using SlimDX.Direct3D9;
-using SlimDX;
-using CodeImp.DoomBuilder.Geometry;
-using System.Drawing.Imaging;
+using System.IO;
 using CodeImp.DoomBuilder.Data;
-using CodeImp.DoomBuilder.Editing;
-
-using Configuration = CodeImp.DoomBuilder.IO.Configuration;
+using CodeImp.DoomBuilder.Map;
+using SlimDX;
+using SlimDX.Direct3D9;
 
 #endregion
 
@@ -156,7 +145,6 @@ namespace CodeImp.DoomBuilder.Rendering
 													Usage.WriteOnly | Usage.Dynamic, VertexFormat.None, Pool.Default);
 
 					// Start refilling the buffer with sector geometry
-					int vertexoffset = 0;
 					DataStream bstream = b.Lock(0, FlatVertex.Stride * set.Value.buffersizes[i], LockFlags.Discard);
 					foreach(SurfaceEntry e in set.Value.entries)
 					{
@@ -634,29 +622,34 @@ namespace CodeImp.DoomBuilder.Rendering
 			}
 			else
 			{
-				if(General.Map.Data.GetFlatExists(longimagename))
+				if(longimagename == MapSet.EmptyLongName) 
 				{
-					img = General.Map.Data.GetFlatImageKnown(longimagename);
-					
-					// Is the texture loaded?
-					if(img.IsImageLoaded && !img.LoadFailed)
+					img = General.Map.Data.MissingTexture3D;
+				}
+				else 
+				{
+					img = General.Map.Data.GetFlatImage(longimagename);
+
+					if(img is UnknownImage)
 					{
-						if(img.Texture == null) img.CreateTexture();
+						img = General.Map.Data.UnknownTexture3D;
 					}
 					else
 					{
-						img = General.Map.Data.WhiteTexture;
+						if(img.IsImageLoaded && !img.LoadFailed) 
+						{
+							if(img.Texture == null) img.CreateTexture();
+						}
+						else 
+						{
+							img = General.Map.Data.WhiteTexture;
+						}
 					}
-				}
-				else
-				{
-					img = General.Map.Data.UnknownTexture3D;
 				}
 			}
 			
 			// Store by texture
-			if(!surfaces.ContainsKey(img))
-				surfaces.Add(img, new List<SurfaceEntry>());
+			if(!surfaces.ContainsKey(img)) surfaces.Add(img, new List<SurfaceEntry>());
 			surfaces[img].Add(entry);
 		}
 		
@@ -665,14 +658,14 @@ namespace CodeImp.DoomBuilder.Rendering
 		{
 			if(!resourcesunloaded)
 			{
+				int pass = Renderer.FullBrightness ? 2 : 1; //mxd
 				graphics.Shaders.Display2D.Begin();
 				foreach(KeyValuePair<ImageData, List<SurfaceEntry>> imgsurfaces in surfaces)
 				{
 					// Set texture
 					graphics.Shaders.Display2D.Texture1 = imgsurfaces.Key.Texture;
-					if(!graphics.Shaders.Enabled) graphics.Device.SetTexture(0, imgsurfaces.Key.Texture);
 
-					graphics.Shaders.Display2D.BeginPass(1);
+					graphics.Shaders.Display2D.BeginPass(pass);
 					
 					// Go for all surfaces
 					VertexBuffer lastbuffer = null;

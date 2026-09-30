@@ -1,4 +1,20 @@
-The main objective is to update the Doom Builder 64 source code up to commit R1493 of Doom Builder 2, and then migrate the Doom Builder 64 source code to Gzdoom Builder by m-x-d, Why commit R1493? Because it was from this commit that m-x-d created Gzdoom Builder for the first time, and the original Doom Builder 64 source code is based on commit R1302 of the original Doom Builder 2, So it has to be said that the source code for Doom Builder 64 who are very late.
+**System requirements:**
+- 2.4 GHz CPU or faster (multi-core recommended)
+- Windows XP, Vista, 7, 8 or 10
+- Graphics card with Pixel Shader model 2.0 support
 
-# main objective
-* Update the Doom Builder 64 source code up to commit R1493, then migrate the Doom Builder 64 source code to Gzdoom Builder.
+**Required software:**
+- [Microsoft .Net Framework 3.5](http://www.microsoft.com/download/en/details.aspx?id=25150)
+- [DirectX 9.0 Runtime](https://www.microsoft.com/en-us/download/details.aspx?id=35&44F86079-8679-400C-BFF2-9CA5F2BCBDFC=1)
+
+**Links:**
+- [Official thread at ZDoom.org](http://forum.zdoom.org/viewtopic.php?f=3&t=32392) 
+- [Unofficial thread at iddqd.ru](http://i.iddqd.ru/viewtopic.php?t=522) (in russian)
+- [Git builds at DRDTeam.org](http://devbuilds.drdteam.org/doombuilder2-gzdb/) 
+
+**This fork:**
+- This fork was created for maintenance of seemingly discontinued official branch:
+- [Alternate official thread link](https://forum.zdoom.org/viewtopic.php?f=44&t=54957).
+
+More detailed info can be found in the **editor documentation** (Refmanual.chm)
+

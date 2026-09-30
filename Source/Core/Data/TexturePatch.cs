@@ -16,72 +16,100 @@
 
 #region ================== Namespaces
 
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
-using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Rendering;
+using CodeImp.DoomBuilder.ZDoom;
 
 #endregion
 
 namespace CodeImp.DoomBuilder.Data
 {
-	internal enum TexturePathRenderStyle
+	public enum TexturePathRenderStyle
 	{
-		Copy,
-		Blend,
-		Add,
-		Subtract,
-		ReverseSubtract,
-		Modulate,
-		CopyAlpha
+		COPY,
+		BLEND,
+		ADD,
+		SUBTRACT,
+		REVERSE_SUBTRACT,
+		MODULATE,
+		COPY_ALPHA,
+		COPY_NEW_ALPHA, //mxd
+		OVERLAY, //mxd
+	}
+
+	public enum TexturePathBlendStyle //mxd
+	{
+		NONE,
+		BLEND,
+		TINT
 	}
 	
 	internal struct TexturePatch
 	{
-		public string lumpname;
-		public int x;
-		public int y;
-		public bool flipx;
-		public bool flipy;
-		public int rotate;
-		public PixelColor blend;
-		public float alpha;
-		public TexturePathRenderStyle style;
+		public readonly string LumpName;
+		public readonly int X;
+		public readonly int Y;
+		public readonly bool FlipX;
+		public readonly bool FlipY;
+		public readonly bool HasLongName; //mxd
+		public readonly int Rotate;
+		public PixelColor BlendColor;
+		public readonly float Alpha;
+		public readonly TexturePathRenderStyle RenderStyle;
+		public readonly TexturePathBlendStyle BlendStyle; //mxd
+		public readonly bool Skip; //mxd
 		
 		// Constructor for simple patches
 		public TexturePatch(string lumpname, int x, int y)
 		{
 			// Initialize
-			this.lumpname = lumpname;
-			this.x = x;
-			this.y = y;
-			this.flipx = false;
-			this.flipy = false;
-			this.rotate = 0;
-			this.blend = new PixelColor(0, 0, 0, 0);
-			this.alpha = 1.0f;
-			this.style = TexturePathRenderStyle.Copy;
+			this.LumpName = lumpname;
+			this.X = x;
+			this.Y = y;
+			this.FlipX = false;
+			this.FlipY = false;
+			this.Rotate = 0;
+			this.BlendColor = new PixelColor(0, 0, 0, 0);
+			this.Alpha = 1.0f;
+			this.RenderStyle = TexturePathRenderStyle.COPY;
+			this.BlendStyle = TexturePathBlendStyle.NONE;//mxd
+			this.HasLongName = false; //mxd
+			this.Skip = false; //mxd
 		}
 
-		// Constructor for hires patches
-		public TexturePatch(string lumpname, int x, int y, bool flipx, bool flipy, int rotate, PixelColor blend, float alpha, int style)
+		//mxd. Constructor for hires patches
+		public TexturePatch(PatchStructure patch) 
 		{
 			// Initialize
-			this.lumpname = lumpname;
-			this.x = x;
-			this.y = y;
-			this.flipx = flipx;
-			this.flipy = flipy;
-			this.rotate = rotate;
-			this.blend = blend;
-			this.alpha = alpha;
-			this.style = (TexturePathRenderStyle)style;
+			this.LumpName = patch.Name.ToUpperInvariant();
+			this.X = patch.OffsetX;
+			this.Y = patch.OffsetY;
+			this.FlipX = patch.FlipX;
+			this.FlipY = patch.FlipY;
+			this.Rotate = patch.Rotation;
+			this.BlendColor = patch.BlendColor;
+			this.Alpha = patch.Alpha;
+			this.RenderStyle = patch.RenderStyle;
+			this.BlendStyle = patch.BlendStyle;
+			this.HasLongName = (Path.GetFileNameWithoutExtension(this.LumpName) != this.LumpName);
+			this.Skip = patch.Skip;
+
+			//mxd. Check data so we don't perform unneeded operations later on
+			if(this.Alpha == 1.0f) 
+			{
+				switch(this.RenderStyle)
+				{
+					case TexturePathRenderStyle.BLEND:
+					case TexturePathRenderStyle.COPY_ALPHA:
+					case TexturePathRenderStyle.COPY_NEW_ALPHA:
+					case TexturePathRenderStyle.OVERLAY:
+						this.RenderStyle = TexturePathRenderStyle.COPY;
+						break;
+				}
+			}
+
+			//mxd. and get rid of render styles we don't support
+			if(this.RenderStyle == TexturePathRenderStyle.OVERLAY) this.RenderStyle = TexturePathRenderStyle.COPY;
 		}
 	}
 }

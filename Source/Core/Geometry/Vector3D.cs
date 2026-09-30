@@ -17,10 +17,7 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
+using SlimDX;
 
 #endregion
 
@@ -60,6 +57,14 @@ namespace CodeImp.DoomBuilder.Geometry
 			this.y = v.y;
 			this.z = 0f;
 		}
+
+		// Constructor (mxd)
+		public Vector3D(Vector2D v, float z) 
+		{
+			this.x = v.x;
+			this.y = v.y;
+			this.z = z;
+		}
 		
 		#endregion
 
@@ -77,10 +82,34 @@ namespace CodeImp.DoomBuilder.Geometry
 			return new Vector3D(a.x + b.x, a.y + b.y, a.z + b.z);
 		}
 
+		// This adds to all dimensions
+		public static Vector3D operator +(Vector3D a, float b)
+		{
+			return new Vector3D(a.x + b, a.y + b, a.z + b);
+		}
+
+		// This adds to all dimensions
+		public static Vector3D operator +(float b, Vector3D a)
+		{
+			return new Vector3D(a.x + b, a.y + b, a.z + b);
+		}
+
 		// This subtracts two vectors
 		public static Vector3D operator -(Vector3D a, Vector3D b)
 		{
 			return new Vector3D(a.x - b.x, a.y - b.y, a.z - b.z);
+		}
+
+		// This subtracts from all dimensions
+		public static Vector3D operator -(Vector3D a, float b)
+		{
+			return new Vector3D(a.x - b, a.y - b, a.z - b);
+		}
+
+		// This subtracts from all dimensions
+		public static Vector3D operator -(float a, Vector3D b)
+		{
+			return new Vector3D(a - b.x, a - b.y, a - b.z);
 		}
 
 		// This reverses a vector
@@ -117,6 +146,12 @@ namespace CodeImp.DoomBuilder.Geometry
 		public static Vector3D operator /(Vector3D a, float s)
 		{
 			return new Vector3D(a.x / s, a.y / s, a.z / s);
+		}
+
+		// This scales a vector
+		public static Vector3D operator /(Vector3D a, Vector3D b)
+		{
+			return new Vector3D(a.x / b.x, a.y / b.y, a.z / b.z);
 		}
 
 		// This compares a vector
@@ -199,6 +234,28 @@ namespace CodeImp.DoomBuilder.Geometry
 			// Return vector
 			return new Vector3D(ax, ay, az);
 		}
+
+		//mxd
+		public static Vector3D Transform(Vector3D v, Matrix m)
+		{
+			return new Vector3D
+			{
+				x = m.M11 * v.x + m.M21 * v.y + m.M31 * v.z + m.M41,
+				y = m.M12 * v.x + m.M22 * v.y + m.M32 * v.z + m.M42,
+				z = m.M13 * v.x + m.M23 * v.y + m.M33 * v.z + m.M43,
+			};
+		}
+
+		//mxd
+		public static Vector3D Transform(float x, float y, float z, Matrix m)
+		{
+			return new Vector3D
+			{
+				x = m.M11 * x + m.M21 * y + m.M31 * z + m.M41,
+				y = m.M12 * x + m.M22 * y + m.M32 * z + m.M42,
+				z = m.M13 * x + m.M23 * y + m.M33 * z + m.M43,
+			};
+		}
 		
 		#endregion
 		
@@ -208,7 +265,7 @@ namespace CodeImp.DoomBuilder.Geometry
 		public float GetAngleXY()
 		{
 			// Calculate and return the angle
-			return -(float)Math.Atan2(-y, x) + (float)Math.PI * 0.5f;
+			return -(float)Math.Atan2(-y, x) + Angle2D.PIHALF;//mxd // (float)Math.PI * 0.5f;
 		}
 
 		// This calculates the angle
@@ -217,7 +274,7 @@ namespace CodeImp.DoomBuilder.Geometry
 			Vector2D xy = new Vector2D(x, y);
 
 			// Calculate and return the angle
-			return (float)Math.Atan2(xy.GetLength(), z) + (float)Math.PI * 0.5f;
+			return (float)Math.Atan2(xy.GetLength(), z) + Angle2D.PIHALF;//mxd // (float)Math.PI * 0.5f;
 		}
 
 		// This calculates the length
@@ -288,6 +345,25 @@ namespace CodeImp.DoomBuilder.Geometry
 		public bool IsFinite()
 		{
 			return !float.IsNaN(x) && !float.IsNaN(y) && !float.IsNaN(z) && !float.IsInfinity(x) && !float.IsInfinity(y) && !float.IsInfinity(z);
+		}
+
+		//mxd. Addeed to make compiler a bit more happy...
+		public override int GetHashCode() 
+		{
+			return base.GetHashCode();
+		}
+
+		//mxd. Addeed to make compiler a bit more happy...
+		public override bool Equals(object obj) 
+		{
+			if(!(obj is Vector3D)) return false;
+
+			Vector3D other = (Vector3D)obj;
+
+			if(x != other.x) return false;
+			if(y != other.y) return false;
+			if(z != other.z) return false;
+			return true;
 		}
 
 		

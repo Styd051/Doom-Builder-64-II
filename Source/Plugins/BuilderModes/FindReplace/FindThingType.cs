@@ -17,20 +17,11 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Rendering;
-using CodeImp.DoomBuilder.Geometry;
 using System.Drawing;
-using CodeImp.DoomBuilder.Editing;
 using CodeImp.DoomBuilder.Config;
 
 #endregion
@@ -38,7 +29,7 @@ using CodeImp.DoomBuilder.Config;
 namespace CodeImp.DoomBuilder.BuilderModes
 {
 	[FindReplace("Thing Type", BrowseButton = true)]
-	internal class FindThingType : FindReplaceType
+	internal class FindThingType : BaseFindThing
 	{
 		#region ================== Constants
 
@@ -57,18 +48,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 		#region ================== Constructor / Destructor
 
-		// Constructor
-		public FindThingType()
-		{
-			// Initialize
-
-		}
-
-		// Destructor
-		~FindThingType()
-		{
-		}
-
 		#endregion
 
 		#region ================== Methods
@@ -86,13 +65,13 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// This is called to perform a search (and replace)
 		// Returns a list of items to show in the results list
 		// replacewith is null when not replacing
-		public override FindReplaceObject[] Find(string value, bool withinselection, string replacewith, bool keepselection)
+		public override FindReplaceObject[] Find(string value, bool withinselection, bool replace, string replacewith, bool keepselection)
 		{
 			List<FindReplaceObject> objs = new List<FindReplaceObject>();
 
 			// Interpret the replacement
 			int replacetype = 0;
-			if(replacewith != null)
+			if(replace)
 			{
 				// If it cannot be interpreted, set replacewith to null (not replacing at all)
 				if(!int.TryParse(replacewith, out replacetype)) replacewith = null;
@@ -106,7 +85,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			}
 
 			// Interpret the number given
-			int findtype = 0;
+			int findtype;
 			if(int.TryParse(value, out findtype))
 			{
 				// Where to search?
@@ -119,7 +98,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					if(t.Type == findtype)
 					{
 						// Replace
-						if(replacewith != null)
+						if(replace)
 						{
 							t.Type = replacetype;
 							t.UpdateConfiguration();
@@ -133,38 +112,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			}
 			
 			return objs.ToArray();
-		}
-
-		// This is called when a specific object is selected from the list
-		public override void ObjectSelected(FindReplaceObject[] selection)
-		{
-			if(selection.Length == 1)
-			{
-				ZoomToSelection(selection);
-				General.Interface.ShowThingInfo(selection[0].Thing);
-			}
-			else
-				General.Interface.HideInfo();
-
-			General.Map.Map.ClearAllSelected();
-			foreach(FindReplaceObject obj in selection) obj.Thing.Selected = true;
-		}
-
-		// Render selection
-		public override void RenderThingsSelection(IRenderer2D renderer, FindReplaceObject[] selection)
-		{
-			foreach(FindReplaceObject o in selection)
-			{
-				renderer.RenderThing(o.Thing, General.Colors.Selection, 1.0f);
-			}
-		}
-
-		// Edit objects
-		public override void EditObjects(FindReplaceObject[] selection)
-		{
-			List<Thing> things = new List<Thing>(selection.Length);
-			foreach(FindReplaceObject o in selection) things.Add(o.Thing);
-			General.Interface.ShowEditThings(things);
 		}
 
 		#endregion

@@ -17,22 +17,10 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Rendering;
 using CodeImp.DoomBuilder.Geometry;
-using CodeImp.DoomBuilder.Editing;
-using CodeImp.DoomBuilder.Actions;
-using CodeImp.DoomBuilder.Types;
-using CodeImp.DoomBuilder.Config;
 
 #endregion
 
@@ -42,9 +30,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
 	{
 		#region ================== Variables
 		
-		private Linedef line;
-		private int buttons;
-		private Sidedef copysidedef;
+		private readonly Linedef line;
+		private readonly int buttons;
+		private readonly Sidedef copysidedef;
 		
 		#endregion
 		
@@ -62,9 +50,10 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		public ResultLineNotDoubleSided(Linedef l)
 		{
 			// Initialize
-			this.line = l;
-			this.viewobjects.Add(l);
-			this.description = "This linedef is marked as double-sided, but is missing the back sidedef. Click Make Single-Sided to remove the double-sided flag from the line.";
+			line = l;
+			viewobjects.Add(l);
+			hidden = l.IgnoredErrorChecks.Contains(this.GetType()); //mxd
+			description = "This linedef is marked as double-sided, but is missing the back sidedef. Click 'Make Single-Sided' button to remove the double-sided flag from the line.";
 			
 			// One solution is to remove the double-sided flag
 			buttons = 1;
@@ -84,7 +73,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 						fixable = true;
 						break;
 					}
-					else if(!sd.Front && (sd.Line.Back != null))
+					
+					if(!sd.Front && (sd.Line.Back != null))
 					{
 						copysidedef = sd.Line.Back;
 						fixable = true;
@@ -104,11 +94,20 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		#endregion
 		
 		#region ================== Methods
+
+		// This sets if this result is displayed in ErrorCheckForm (mxd)
+		internal override void Hide(bool hide) 
+		{
+			hidden = hide;
+			Type t = this.GetType();
+			if(hide) line.IgnoredErrorChecks.Add(t);
+			else if(line.IgnoredErrorChecks.Contains(t)) line.IgnoredErrorChecks.Remove(t);
+		}
 		
 		// This must return the string that is displayed in the listbox
 		public override string ToString()
 		{
-			return "Linedef is marked double-sided but has no back side";
+			return "Linedef " + line.Index + " is marked double-sided but has no back side";
 		}
 		
 		// Rendering
@@ -120,18 +119,18 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		}
 		
 		// Fix by flipping linedefs
-		public override bool Button1Click()
+		public override bool Button1Click(bool batchMode)
 		{
-			General.Map.UndoRedo.CreateUndo("Linedef flags change");
+			if(!batchMode) General.Map.UndoRedo.CreateUndo("Linedef flags change");
 			line.ApplySidedFlags();
 			General.Map.Map.Update();
 			return true;
 		}
 		
 		// Fix by creating a sidedef
-		public override bool Button2Click()
+		public override bool Button2Click(bool batchMode)
 		{
-			General.Map.UndoRedo.CreateUndo("Create back sidedef");
+			if(!batchMode) General.Map.UndoRedo.CreateUndo("Create back sidedef");
 			Sidedef newside = General.Map.Map.CreateSidedef(line, false, copysidedef.Sector);
 			if(newside == null) return false;
 			copysidedef.CopyPropertiesTo(newside);

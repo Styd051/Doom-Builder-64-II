@@ -17,37 +17,25 @@
 #region ================== Namespaces
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Windows.Forms;
 using System.IO;
-using System.Reflection;
-using CodeImp.DoomBuilder.Windows;
-using CodeImp.DoomBuilder.IO;
-using CodeImp.DoomBuilder.Map;
-using CodeImp.DoomBuilder.Rendering;
-using System.Diagnostics;
-using CodeImp.DoomBuilder.Actions;
-using ICSharpCode.SharpZipLib.BZip2;
+using CodeImp.DoomBuilder.GZBuilder.Data; //mxd
 
 #endregion
 
 namespace CodeImp.DoomBuilder.Editing
 {
-	public class UndoSnapshot
+	public class UndoSnapshot : IDisposable
 	{
 		#region ================== Variables
 
 		private MemoryStream recstream;
 		private string filename;
 		private string description;
-		private int ticketid;			// For safe withdrawing
+		private readonly int ticketid;			// For safe withdrawing
 		private volatile bool storeondisk;
 		private volatile bool isondisk;
 		private bool isdisposed;
-		private Dictionary<string, MemoryStream> customdata;
+		//private Dictionary<string, MemoryStream> customdata;
 		
 		#endregion
 
@@ -83,7 +71,7 @@ namespace CodeImp.DoomBuilder.Editing
 		}
 
 		// Disposer
-		internal void Dispose()
+		public void Dispose()
 		{
 			lock(this)
 			{
@@ -123,8 +111,7 @@ namespace CodeImp.DoomBuilder.Editing
 				
 				// Compress data
 				recstream.Seek(0, SeekOrigin.Begin);
-				MemoryStream outstream = new MemoryStream((int)recstream.Length);
-				BZip2.Compress(recstream, outstream, 300000);
+				MemoryStream outstream = SharpCompressHelper.CompressStream(recstream); //mxd
 
 				// Make temporary file
 				filename = General.MakeTempFilename(General.Map.TempPath, "snapshot");
@@ -152,15 +139,14 @@ namespace CodeImp.DoomBuilder.Editing
 				MemoryStream instream = new MemoryStream(File.ReadAllBytes(filename));
 				
 				// Decompress data
-				MemoryStream outstream = new MemoryStream((int)instream.Length * 4);
-				instream.Seek(0, SeekOrigin.Begin);
-				BZip2.Decompress(instream, outstream);
+				MemoryStream outstream = SharpCompressHelper.DecompressStream(instream); //mxd
 				recstream = new MemoryStream(outstream.ToArray());
 				
 				// Clean up
 				instream.Dispose();
 				File.Delete(filename);
 				filename = null;
+				outstream.Dispose();
 			}
 		}
 		
