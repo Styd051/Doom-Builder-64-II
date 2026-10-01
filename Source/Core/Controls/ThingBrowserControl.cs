@@ -235,7 +235,7 @@ namespace CodeImp.DoomBuilder.Controls
 
 				if((thinginfo.Sprite.Length < 9) && (thinginfo.Sprite.Length > 0))
 				{
-					ImageData sprite = General.Map.Data.GetSpriteImage(thinginfo.Sprite);
+					ImageData sprite = General.Map.Data.GetSpriteImage(thinginfo.Sprite, thinginfo.PalIndex);
 					spritetex.Image = sprite.GetPreview();
 					if(!sprite.IsPreviewLoaded) updatetimer.Start();
 					return;

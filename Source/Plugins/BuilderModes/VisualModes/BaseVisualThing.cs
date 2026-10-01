@@ -80,7 +80,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			sprites = new ImageData[info.SpriteFrame.Length];
 			for(int i = 0; i < info.SpriteFrame.Length; i++)
 			{
-				sprites[i] = General.Map.Data.GetSpriteImage(info.SpriteFrame[i].Sprite);
+				sprites[i] = General.Map.Data.GetSpriteImage(info.SpriteFrame[i].Sprite, info.PalIndex);
 				if(sprites[i] != null) sprites[i].AddReference();
 			}
 
@@ -503,7 +503,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			sprites = new ImageData[info.SpriteFrame.Length];
 			for(int i = 0; i < info.SpriteFrame.Length; i++)
 			{
-				sprites[i] = General.Map.Data.GetSpriteImage(info.SpriteFrame[i].Sprite);
+				sprites[i] = General.Map.Data.GetSpriteImage(info.SpriteFrame[i].Sprite, info.PalIndex);
 				if(sprites[i] != null) sprites[i].AddReference();
 			}
 			

@@ -85,6 +85,7 @@ namespace CodeImp.DoomBuilder.Config
 		private readonly bool absolutez;
 		private bool xybillboard; //mxd
 		private SizeF spritescale;
+		private int palindex; // villsa. Doom 64 sprite palette
 		private readonly bool locksprite; //mxd
 		private bool obsolete; //mxd
 		private string obsoletemessage; //mxd
@@ -138,6 +139,7 @@ namespace CodeImp.DoomBuilder.Config
 		public bool AbsoluteZ { get { return absolutez; } }
 		public bool XYBillboard { get { return xybillboard; } } //mxd
 		public SizeF SpriteScale { get { return spritescale; } }
+		public int PalIndex { get { return palindex; } } // villsa
 		public string ClassName { get { return classname; } } //mxd. Need this to add model overrides for things defined in configs
 		public string LightName { get { return lightname; } } //mxd
 		public Dictionary<string, string> FlagsRename { get { return flagsrename.ContainsKey(General.Map.Config.FormatInterface) ? flagsrename[General.Map.Config.FormatInterface] : null ; } } //mxd
@@ -234,6 +236,7 @@ namespace CodeImp.DoomBuilder.Config
 			this.absolutez = cfg.ReadSetting("thingtypes." + cat.Name + "." + key + ".absolutez", cat.AbsoluteZ);
 			float sscale = cfg.ReadSetting("thingtypes." + cat.Name + "." + key + ".spritescale", cat.SpriteScale);
 			this.spritescale = new SizeF(sscale, sscale);
+			this.palindex = cfg.ReadSetting("thingtypes." + cat.Name + "." + key + ".palindex", cat.PalIndex); // villsa
 			this.locksprite = cfg.ReadSetting("thingtypes." + cat.Name + "." + key + ".locksprite", false); //mxd
 			this.classname = cfg.ReadSetting("thingtypes." + cat.Name + "." + key + ".class", String.Empty); //mxd
 			this.thinglink = cfg.ReadSetting("thingtypes." + cat.Name + "." + key + ".thinglink", 0);
@@ -312,6 +315,7 @@ namespace CodeImp.DoomBuilder.Config
 			this.fixedrotation = cat.FixedRotation; //mxd
 			this.absolutez = cat.AbsoluteZ;
 			this.spritescale = new SizeF(cat.SpriteScale, cat.SpriteScale);
+			this.palindex = cat.PalIndex; // villsa
 			this.locksprite = false; //mxd
 			this.flagsrename = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase); //mxd
 
@@ -359,6 +363,7 @@ namespace CodeImp.DoomBuilder.Config
 			this.fixedrotation = cat.FixedRotation; //mxd
 			this.absolutez = cat.AbsoluteZ;
 			this.spritescale = new SizeF(cat.SpriteScale, cat.SpriteScale);
+			this.palindex = cat.PalIndex; // villsa
 			this.flagsrename = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase); //mxd
 
 			// Safety
@@ -409,6 +414,7 @@ namespace CodeImp.DoomBuilder.Config
 			this.fixedrotation = cat.FixedRotation; //mxd
 			this.absolutez = cat.AbsoluteZ;
 			this.spritescale = new SizeF(cat.SpriteScale, cat.SpriteScale);
+			this.palindex = cat.PalIndex; // villsa
 			this.flagsrename = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase); //mxd
 
 			// Safety
@@ -462,6 +468,7 @@ namespace CodeImp.DoomBuilder.Config
 			this.absolutez = other.absolutez;
 			this.xybillboard = other.xybillboard; //mxd
 			this.spritescale = new SizeF(other.spritescale.Width, other.spritescale.Height);
+			this.palindex = other.palindex; // villsa
 			this.flagsrename = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase); //mxd
 
 			//mxd. Copy GZDoom rendering properties

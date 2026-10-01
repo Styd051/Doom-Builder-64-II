@@ -59,6 +59,7 @@ namespace CodeImp.DoomBuilder.Config
 		private readonly bool fixedrotation; //mxd
 		private readonly bool absolutez;
 		private readonly float spritescale;
+		private readonly int palindex; // villsa. Doom 64 sprite palette
 		
 		// Disposing
 		private bool isdisposed;
@@ -93,6 +94,7 @@ namespace CodeImp.DoomBuilder.Config
 		public bool IsValid { get { return !isinvalid; } } //mxd
 		public bool AbsoluteZ { get { return absolutez; } }
 		public float SpriteScale { get { return spritescale; } }
+		public int PalIndex { get { return palindex; } } // villsa
 		public List<ThingTypeInfo> Things { get { return things; } }
         public bool Optional { get { return optional; } }
 
@@ -127,6 +129,7 @@ namespace CodeImp.DoomBuilder.Config
 				this.fixedrotation = parent.fixedrotation;
 				this.absolutez = parent.absolutez;
 				this.spritescale = parent.spritescale;
+				this.palindex = parent.palindex; // villsa
                 this.optional = parent.optional;
 			}
 			// Set default properties
@@ -182,7 +185,7 @@ namespace CodeImp.DoomBuilder.Config
 			if(this.title == name)
 			{
 				string[] props = new[] { "sprite", "sort", "color", "alpha", "renderstyle", "arrow", "width", 
-					"height", "hangs", "blocking", "error", "fixedsize", "fixedrotation", "absolutez", "spritescale" };
+					"height", "hangs", "blocking", "error", "fixedsize", "fixedrotation", "absolutez", "spritescale", "palindex" };
 
 				isinvalid = true;
 				foreach(string prop in props)
@@ -214,6 +217,7 @@ namespace CodeImp.DoomBuilder.Config
 				this.fixedrotation = cfg.ReadSetting("thingtypes." + name + ".fixedrotation", parent.fixedrotation);
 				this.absolutez = cfg.ReadSetting("thingtypes." + name + ".absolutez", parent.absolutez);
 				this.spritescale = cfg.ReadSetting("thingtypes." + name + ".spritescale", parent.spritescale);
+				this.palindex = cfg.ReadSetting("thingtypes." + name + ".palindex", parent.palindex); // villsa
                 this.optional = cfg.ReadSetting("thingtypes." + name + ".optional", parent.optional);
             }
 			else
@@ -233,6 +237,7 @@ namespace CodeImp.DoomBuilder.Config
 				this.fixedrotation = cfg.ReadSetting("thingtypes." + name + ".fixedrotation", false); //mxd
 				this.absolutez = cfg.ReadSetting("thingtypes." + name + ".absolutez", false);
 				this.spritescale = cfg.ReadSetting("thingtypes." + name + ".spritescale", 1.0f);
+				this.palindex = cfg.ReadSetting("thingtypes." + name + ".palindex", 0); // villsa
                 this.optional = cfg.ReadSetting("thingtypes." + name + ".optional", false);
             }
 			

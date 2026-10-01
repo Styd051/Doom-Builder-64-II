@@ -1384,7 +1384,7 @@ namespace CodeImp.DoomBuilder.Rendering
 					foreach(KeyValuePair<int, List<Thing>> framegroup in thingsbyangle)
 					{
 						SpriteFrameInfo sfi = info.SpriteFrame[framegroup.Key];
-						ImageData sprite = General.Map.Data.GetSpriteImage(sfi.Sprite);
+						ImageData sprite = General.Map.Data.GetSpriteImage(sfi.Sprite, info.PalIndex);
 						if(sprite == null) continue;
 						if(!sprite.IsImageLoaded)
 						{

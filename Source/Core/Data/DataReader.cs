@@ -170,6 +170,9 @@ namespace CodeImp.DoomBuilder.Data
 
 		// When implemented, this should find and load a PLAYPAL palette
 		public virtual Playpal LoadPalette() { return null; }
+
+		// villsa. When implemented, this returns the Doom 64 thing palette from the lump with the given name
+		public virtual Playpal LoadThingPalette(string palname) { return null; }
 		
 		#endregion
 

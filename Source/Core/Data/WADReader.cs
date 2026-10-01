@@ -316,6 +316,21 @@ namespace CodeImp.DoomBuilder.Data
 			return null; // No palette
 		}
 
+		// villsa. This loads a Doom 64 thing palette
+		public override Playpal LoadThingPalette(string palname)
+		{
+			// Error when suspended
+			if(issuspended) throw new Exception("Data reader is suspended");
+
+			Lump lump = file.FindLump(palname);
+			if(lump != null)
+			{
+				using(Stream s = lump.GetSafeStream())
+					return new Playpal(s);
+			}
+			return null; // No such palette
+		}
+
 		#endregion
 
 		#region ================== Colormaps

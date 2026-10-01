@@ -67,6 +67,7 @@ namespace CodeImp.DoomBuilder.Data
 		
 		// Palette
 		private Playpal palette;
+		private Dictionary<string, Playpal> thingpalettes; // villsa. Doom 64 sprite palettes, by lump name
 		
 		// Textures, Flats and Sprites
 		private Dictionary<long, ImageData> textures;
@@ -351,6 +352,7 @@ namespace CodeImp.DoomBuilder.Data
 			textures = new Dictionary<long, ImageData>();
 			flats = new Dictionary<long, ImageData>();
 			sprites = new Dictionary<long, ImageData>();
+			thingpalettes = new Dictionary<string, Playpal>(StringComparer.OrdinalIgnoreCase); // villsa
 			texturenames = new List<string>();
 			flatnames = new List<string>();
 			texturenamesshorttofull = new Dictionary<long, long>(); //mxd
@@ -453,6 +455,7 @@ namespace CodeImp.DoomBuilder.Data
 			// Load stuff
 			LoadX11R6RGB(); //mxd
 			LoadPalette();
+			LoadThingPalettes(); // villsa
 			Dictionary<string, TexturesParser> cachedparsers = new Dictionary<string, TexturesParser>(); //mxd
 			int texcount = LoadTextures(texturesonly, texturenamesshorttofull, cachedparsers);
 			int flatcount = LoadFlats(flatsonly, flatnamesshorttofull, cachedparsers);
@@ -650,6 +653,7 @@ namespace CodeImp.DoomBuilder.Data
 			foreach(KeyValuePair<long, ImageData> i in flats) i.Value.Dispose();
 			foreach(KeyValuePair<long, ImageData> i in sprites) i.Value.Dispose();
 			palette = null;
+			thingpalettes = null; // villsa
 
 			//mxd. Dispose models
 			foreach(ModelData md in modeldefentries.Values) md.Dispose();
@@ -1006,9 +1010,57 @@ namespace CodeImp.DoomBuilder.Data
 			// Make empty palette when still no palette found
 			if(palette == null)
 			{
-				General.ErrorLogger.Add(ErrorType.Warning, "None of the loaded resources define a color palette. Did you forget to configure an IWAD for this game configuration?");
+				// Doom 64 has no such palette, its images have their own colors
+				if(!General.Map.DOOM64)
+					General.ErrorLogger.Add(ErrorType.Warning, "None of the loaded resources define a color palette. Did you forget to configure an IWAD for this game configuration?");
 				palette = new Playpal();
 			}
+		}
+
+		// villsa. This loads the Doom 64 thing palettes of the game configuration
+		private void LoadThingPalettes()
+		{
+			foreach(string name in General.Map.Config.ThingPalettes.Values)
+			{
+				// styd: make this failure visible. Without this warning a missing palette lump silently
+				// falls back to the default colors with zero indication why.
+				if(GetThingPalette(name) == null)
+					General.ErrorLogger.Add(ErrorType.Warning, "Could not find thing palette lump \"" + name + "\" in any loaded resource. Monster palette variants using this palette will not display correctly.");
+			}
+		}
+
+		// styd. This returns a Doom 64 thing palette by lump name, or null when no resource has it.
+		// This also finds the palettes that the game configuration does not list, such as the base
+		// palette of a sprite (PALTROO0 for the TROO sprites).
+		internal Playpal GetThingPalette(string name)
+		{
+			lock(thingpalettes)
+			{
+				Playpal pal;
+				if(thingpalettes.TryGetValue(name, out pal)) return pal;
+
+				for(int i = containers.Count - 1; i >= 0; i--)
+				{
+					pal = containers[i].LoadThingPalette(name);
+					if(pal != null) break;
+				}
+
+				thingpalettes[name] = pal;
+				return pal;
+			}
+		}
+
+		// This returns the Doom 64 thing palette for the palindex of a thing type
+		internal Playpal GetThingPalette(int palindex)
+		{
+			string name;
+			return (General.Map.Config.ThingPalettes.TryGetValue(palindex, out name) ? GetThingPalette(name) : null);
+		}
+
+		// This returns the name of the palette that the image of a Doom 64 sprite was made with
+		internal static string GetThingBasePaletteName(string spritename)
+		{
+			return "PAL" + spritename.Substring(0, 4) + "0";
 		}
 
 		#endregion
@@ -1670,6 +1722,17 @@ namespace CodeImp.DoomBuilder.Data
 
 						// Add to preview manager
 						if(image != null) previews.AddImage(image);
+
+						// styd. Thing types can share a sprite (Imp / Nightmare Imp) and show it with another palette
+						if((image is SpriteImage) && (ti.PalIndex > 0))
+						{
+							ImageData variant = GetSpriteImage(info.Sprite, ti.PalIndex);
+							if(variant != image)
+							{
+								GetThingPalette(GetThingBasePaletteName(info.Sprite)); // Have this loaded before the image is
+								previews.AddImage(variant);
+							}
+						}
 					}
 				}
 			}
@@ -1772,6 +1835,27 @@ namespace CodeImp.DoomBuilder.Data
 			}
 		}
 		
+		// styd: overload that supports Doom 64 monster palette variants (e.g. the Nightmare Imp uses
+		// sprite "TROOA2A8", the same as the regular Imp, but with palette 7). Each (name, palindex)
+		// pair gets its own image, because the palette is applied when the image is loaded.
+		public ImageData GetSpriteImage(string name, int palindex)
+		{
+			// No palette variant requested, or an internal sprite, which never has one?
+			if((palindex <= 0) || name.ToLowerInvariant().StartsWith(INTERNAL_PREFIX)) return GetSpriteImage(name);
+
+			long longname = Lump.MakeLongName(name.Trim().ToUpperInvariant() + "#" + palindex, true);
+			if(sprites.ContainsKey(longname)) return sprites[longname];
+
+			// Only a real sprite can have a variant
+			ImageData original = GetSpriteImage(name);
+			if(!(original is SpriteImage)) return original;
+
+			SpriteImage image = new SpriteImage(name);
+			image.PalIndex = palindex;
+			sprites.Add(longname, image);
+			return image;
+		}
+
 		// This returns an image by name
 		public ImageData GetSpriteImage(string name)
 		{

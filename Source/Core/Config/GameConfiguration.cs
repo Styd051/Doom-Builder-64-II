@@ -119,6 +119,7 @@ namespace CodeImp.DoomBuilder.Config
 		private readonly Dictionary<int, ThingTypeInfo> things;
 		private readonly List<FlagTranslation> thingflagstranslation;
 		private readonly Dictionary<string, ThingFlagsCompareGroup> thingflagscompare; //mxd 
+		private readonly Dictionary<int, string> thingpalettes; // villsa. Doom 64 sprite palettes (palindex -> lump name)
 		private readonly Dictionary<string, string> thingrenderstyles; //mxd
 		
 		// Linedefs
@@ -257,6 +258,7 @@ namespace CodeImp.DoomBuilder.Config
 		public IDictionary<string, string> ThingFlags { get { return thingflags; } }
 		public List<FlagTranslation> ThingFlagsTranslation { get { return thingflagstranslation; } }
 		public Dictionary<string, ThingFlagsCompareGroup> ThingFlagsCompare { get { return thingflagscompare; } } //mxd
+		public IDictionary<int, string> ThingPalettes { get { return thingpalettes; } } // villsa
 		public Dictionary<string, string> ThingRenderStyles { get { return thingrenderstyles; } } //mxd
 		
 		// Linedefs
@@ -350,6 +352,7 @@ namespace CodeImp.DoomBuilder.Config
 			this.linedefflagstranslation = new List<FlagTranslation>();
 			this.thingfilters = new List<ThingsFilter>();
 			this.thingflagscompare = new Dictionary<string, ThingFlagsCompareGroup>(); //mxd
+			this.thingpalettes = new Dictionary<int, string>(); // villsa
 			this.brightnesslevels = new StepsList();
 			this.makedoorflags = new Dictionary<string, bool>(StringComparer.Ordinal);
 			this.linedefrenderstyles = new Dictionary<string, string>(StringComparer.Ordinal); //mxd
@@ -464,6 +467,7 @@ namespace CodeImp.DoomBuilder.Config
 
 			// Things
 			LoadThingFlags();
+			LoadThingPalettes(); // villsa
 			LoadDefaultThingFlags();
 			LoadThingCategories();
 			LoadStringDictionary(thingrenderstyles, "thingrenderstyles"); //mxd
@@ -846,6 +850,20 @@ namespace CodeImp.DoomBuilder.Config
 		}
 
 		// Thing flags
+		// villsa. Doom 64 thing palettes. A thing type refers to these with its palindex setting.
+		private void LoadThingPalettes()
+		{
+			IDictionary dic = cfg.ReadSetting("thingpalettes", new Hashtable());
+			foreach(DictionaryEntry de in dic)
+			{
+				int index;
+				if(int.TryParse(de.Key.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out index))
+					thingpalettes[index] = de.Value.ToString();
+				else
+					General.ErrorLogger.Add(ErrorType.Warning, "Structure \"thingpalettes\" contains invalid numbers in the \"" + this.Name + "\" game configuration");
+			}
+		}
+
 		private void LoadThingFlags()
 		{
 			// Get thing flags

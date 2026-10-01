@@ -17,6 +17,7 @@
 #region ================== Namespaces
 
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
@@ -49,6 +50,7 @@ namespace CodeImp.DoomBuilder.Data
 		protected Vector2D scale;
 		protected bool worldpanning;
 		private bool usecolorcorrection;
+		private int palindex; // villsa. Doom 64 sprite palette
 		protected string filepathname; //mxd. Absolute path to the image;
 		protected string shortname; //mxd. Name in uppercase and clamped to DataManager.CLASIC_IMAGE_NAME_LENGTH
 		protected string virtualname; //mxd. Path of this name is used in TextureBrowserForm
@@ -106,6 +108,7 @@ namespace CodeImp.DoomBuilder.Data
 		public bool HasPatchWithSameName { get { return hasPatchWithSameName; } } //mxd
 		internal bool HasLongName { get { return hasLongName; } } //mxd
 		public bool UseColorCorrection { get { return usecolorcorrection; } set { usecolorcorrection = value; } }
+		public int PalIndex { get { return palindex; } internal set { palindex = value; } } // villsa
 		public Texture Texture { get { lock (this) lock (bitmap ?? bitmapLocker) { return texture; } } }
 		public bool IsPreviewLoaded { get { return (previewstate == ImageLoadState.Ready); } }
 		public bool IsImageLoaded { get { return (imagestate == ImageLoadState.Ready); } }
@@ -259,6 +262,52 @@ namespace CodeImp.DoomBuilder.Data
 			General.SendMessage(General.MainWindow.Handle, (int)MainForm.ThreadMessages.ImageDataLoaded, strptr, IntPtr.Zero);
 		}
 		
+		// styd: Doom 64 sprite palette variant support (e.g. Nightmare Imp). The sprites are PNG images
+		// that are decoded straight to 32 bits ARGB, so there is no indexed palette left to swap.
+		// Instead the colors are remapped: each pixel is looked up in the palette the sprite was made
+		// with (e.g. PALTROO0 for any TROO sprite) to get back its palette index, and gets the color
+		// that the other palette (e.g. PALTROO1) has at that index.
+		private void ApplyThingPalette()
+		{
+			if((General.Map == null) || !General.Map.DOOM64 || (General.Map.Data == null)) return;
+			if((bitmap.PixelFormat != PixelFormat.Format32bppArgb) || (name.Length < 4)) return;
+
+			Playpal altpal = General.Map.Data.GetThingPalette(palindex);
+			Playpal basepal = General.Map.Data.GetThingPalette(DataManager.GetThingBasePaletteName(name));
+			if((altpal == null) || (basepal == null)) return;
+
+			// Build reverse lookup: RGB -> palette index (first match wins on duplicates)
+			Dictionary<int, int> reverse = new Dictionary<int, int>(256);
+			for(int i = 0; i < 256; i++)
+			{
+				int key = (basepal[i].r << 16) | (basepal[i].g << 8) | basepal[i].b;
+				if(!reverse.ContainsKey(key)) reverse.Add(key, i);
+			}
+
+			try
+			{
+				BitmapData bmpdata = bitmap.LockBits(new Rectangle(0, 0, bitmap.Size.Width, bitmap.Size.Height), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+				PixelColor* pixels = (PixelColor*)(bmpdata.Scan0.ToPointer());
+				int numpixels = bmpdata.Width * bmpdata.Height;
+				for(int i = 0; i < numpixels; i++)
+				{
+					int index;
+					if(reverse.TryGetValue((pixels[i].r << 16) | (pixels[i].g << 8) | pixels[i].b, out index))
+					{
+						// The alpha is left untouched, preserving transparency
+						pixels[i].r = altpal[index].r;
+						pixels[i].g = altpal[index].g;
+						pixels[i].b = altpal[index].b;
+					}
+				}
+				bitmap.UnlockBits(bmpdata);
+			}
+			catch(Exception e)
+			{
+				General.ErrorLogger.Add(ErrorType.Warning, "Cannot remap palette for image \"" + name + "\". " + e.GetType().Name + ": " + e.Message);
+			}
+		}
+
 		// This requests loading the image
 		protected virtual void LocalLoadImage()
 		{
@@ -297,6 +346,9 @@ namespace CodeImp.DoomBuilder.Data
 						}
 					}
 					
+					// styd. Doom 64 sprite that is shown with another palette?
+					if(palindex > 0) ApplyThingPalette();
+
 					// This applies brightness correction on the image
 					if(usecolorcorrection)
 					{
