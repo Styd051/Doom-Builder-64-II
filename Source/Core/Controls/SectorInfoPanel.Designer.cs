@@ -28,7 +28,6 @@ namespace CodeImp.DoomBuilder.Controls
 		/// </summary>
 		private void InitializeComponent()
 		{
-			System.Windows.Forms.Label label13;
 			System.Windows.Forms.Label label5;
 			this.labelfloor = new System.Windows.Forms.Label();
 			this.labelceiling = new System.Windows.Forms.Label();
@@ -72,7 +71,28 @@ namespace CodeImp.DoomBuilder.Controls
 			this.flowLayoutPanel1 = new System.Windows.Forms.FlowLayoutPanel();
 			this.flagsPanel = new System.Windows.Forms.GroupBox();
 			this.flags = new CodeImp.DoomBuilder.Controls.TransparentListView();
-			label13 = new System.Windows.Forms.Label();
+			this.colorspanel = new System.Windows.Forms.GroupBox();
+			this.colorceilinglabel = new System.Windows.Forms.Label();
+			this.colorceiling = new System.Windows.Forms.Panel();
+			this.colorceilingindex = new System.Windows.Forms.Label();
+			this.colorceilingtag = new System.Windows.Forms.Label();
+			this.colorupperlabel = new System.Windows.Forms.Label();
+			this.colorupper = new System.Windows.Forms.Panel();
+			this.colorupperindex = new System.Windows.Forms.Label();
+			this.coloruppertag = new System.Windows.Forms.Label();
+			this.colorthinglabel = new System.Windows.Forms.Label();
+			this.colorthing = new System.Windows.Forms.Panel();
+			this.colorthingindex = new System.Windows.Forms.Label();
+			this.colorthingtag = new System.Windows.Forms.Label();
+			this.colorlowerlabel = new System.Windows.Forms.Label();
+			this.colorlower = new System.Windows.Forms.Panel();
+			this.colorlowerindex = new System.Windows.Forms.Label();
+			this.colorlowertag = new System.Windows.Forms.Label();
+			this.colorfloorlabel = new System.Windows.Forms.Label();
+			this.colorfloor = new System.Windows.Forms.Panel();
+			this.colorfloorindex = new System.Windows.Forms.Label();
+			this.colorfloortag = new System.Windows.Forms.Label();
+this.brightnesslabel = new System.Windows.Forms.Label();
 			label5 = new System.Windows.Forms.Label();
 			this.sectorinfo.SuspendLayout();
 			this.ceilingpanel.SuspendLayout();
@@ -81,16 +101,17 @@ namespace CodeImp.DoomBuilder.Controls
 			this.floortex.SuspendLayout();
 			this.flowLayoutPanel1.SuspendLayout();
 			this.flagsPanel.SuspendLayout();
+			this.colorspanel.SuspendLayout();
 			this.SuspendLayout();
 			// 
-			// label13
+			// brightnesslabel
 			// 
-			label13.Location = new System.Drawing.Point(183, 64);
-			label13.Name = "label13";
-			label13.Size = new System.Drawing.Size(70, 14);
-			label13.TabIndex = 14;
-			label13.Text = "Brightness:";
-			label13.TextAlign = System.Drawing.ContentAlignment.TopRight;
+			this.brightnesslabel.Location = new System.Drawing.Point(183, 64);
+			this.brightnesslabel.Name = "brightnesslabel";
+this.brightnesslabel.Size = new System.Drawing.Size(70, 14);
+			this.brightnesslabel.TabIndex = 14;
+			this.brightnesslabel.Text = "Brightness:";
+			this.brightnesslabel.TextAlign = System.Drawing.ContentAlignment.TopRight;
 			// 
 			// label5
 			// 
@@ -216,7 +237,7 @@ namespace CodeImp.DoomBuilder.Controls
 			this.sectorinfo.Controls.Add(this.labelFade);
 			this.sectorinfo.Controls.Add(this.labelLight);
 			this.sectorinfo.Controls.Add(this.brightness);
-			this.sectorinfo.Controls.Add(label13);
+			this.sectorinfo.Controls.Add(this.brightnesslabel);
 			this.sectorinfo.Controls.Add(this.height);
 			this.sectorinfo.Controls.Add(label5);
 			this.sectorinfo.Controls.Add(this.tag);
@@ -501,6 +522,7 @@ namespace CodeImp.DoomBuilder.Controls
 			this.flowLayoutPanel1.Controls.Add(this.sectorinfo);
 			this.flowLayoutPanel1.Controls.Add(this.floorpanel);
 			this.flowLayoutPanel1.Controls.Add(this.ceilingpanel);
+			this.flowLayoutPanel1.Controls.Add(this.colorspanel);
 			this.flowLayoutPanel1.Controls.Add(this.flagsPanel);
 			this.flowLayoutPanel1.Dock = System.Windows.Forms.DockStyle.Fill;
 			this.flowLayoutPanel1.Location = new System.Drawing.Point(0, 0);
@@ -509,6 +531,207 @@ namespace CodeImp.DoomBuilder.Controls
 			this.flowLayoutPanel1.Size = new System.Drawing.Size(1400, 100);
 			this.flowLayoutPanel1.TabIndex = 5;
 			this.flowLayoutPanel1.WrapContents = false;
+			// 
+			// colorspanel
+			// 
+			this.colorspanel.Controls.Add(this.colorceilinglabel);
+			this.colorspanel.Controls.Add(this.colorceiling);
+			this.colorspanel.Controls.Add(this.colorceilingindex);
+			this.colorspanel.Controls.Add(this.colorceilingtag);
+			this.colorspanel.Controls.Add(this.colorupperlabel);
+			this.colorspanel.Controls.Add(this.colorupper);
+			this.colorspanel.Controls.Add(this.colorupperindex);
+			this.colorspanel.Controls.Add(this.coloruppertag);
+			this.colorspanel.Controls.Add(this.colorthinglabel);
+			this.colorspanel.Controls.Add(this.colorthing);
+			this.colorspanel.Controls.Add(this.colorthingindex);
+			this.colorspanel.Controls.Add(this.colorthingtag);
+			this.colorspanel.Controls.Add(this.colorlowerlabel);
+			this.colorspanel.Controls.Add(this.colorlower);
+			this.colorspanel.Controls.Add(this.colorlowerindex);
+			this.colorspanel.Controls.Add(this.colorlowertag);
+			this.colorspanel.Controls.Add(this.colorfloorlabel);
+			this.colorspanel.Controls.Add(this.colorfloor);
+			this.colorspanel.Controls.Add(this.colorfloorindex);
+			this.colorspanel.Controls.Add(this.colorfloortag);
+			this.colorspanel.Location = new System.Drawing.Point(709, 0);
+			this.colorspanel.Margin = new System.Windows.Forms.Padding(0, 0, 3, 0);
+			this.colorspanel.Name = "colorspanel";
+			this.colorspanel.Size = new System.Drawing.Size(238, 100);
+			this.colorspanel.TabIndex = 8;
+			this.colorspanel.TabStop = false;
+			this.colorspanel.Text = " Colored lighting ";
+			this.colorspanel.Visible = false;
+			// 
+			// colorceilinglabel
+			// 
+			this.colorceilinglabel.Location = new System.Drawing.Point(6, 15);
+			this.colorceilinglabel.Name = "colorceilinglabel";
+			this.colorceilinglabel.Size = new System.Drawing.Size(62, 14);
+			this.colorceilinglabel.TabIndex = 0;
+			this.colorceilinglabel.Text = "Ceiling:";
+			this.colorceilinglabel.TextAlign = System.Drawing.ContentAlignment.TopRight;
+			// 
+			// colorceiling
+			// 
+			this.colorceiling.BackColor = System.Drawing.SystemColors.Control;
+			this.colorceiling.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+			this.colorceiling.Location = new System.Drawing.Point(72, 15);
+			this.colorceiling.Name = "colorceiling";
+			this.colorceiling.Size = new System.Drawing.Size(26, 13);
+			this.colorceiling.TabIndex = 1;
+			// 
+			// colorceilingindex
+			// 
+			this.colorceilingindex.Location = new System.Drawing.Point(104, 15);
+			this.colorceilingindex.Name = "colorceilingindex";
+			this.colorceilingindex.Size = new System.Drawing.Size(66, 14);
+			this.colorceilingindex.TabIndex = 2;
+			this.colorceilingindex.Text = "Index: 256";
+			// 
+			// colorceilingtag
+			// 
+			this.colorceilingtag.Location = new System.Drawing.Point(170, 15);
+			this.colorceilingtag.Name = "colorceilingtag";
+			this.colorceilingtag.Size = new System.Drawing.Size(62, 14);
+			this.colorceilingtag.TabIndex = 3;
+			this.colorceilingtag.Text = "Tag: 0";
+			// 
+			// colorupperlabel
+			// 
+			this.colorupperlabel.Location = new System.Drawing.Point(6, 31);
+			this.colorupperlabel.Name = "colorupperlabel";
+			this.colorupperlabel.Size = new System.Drawing.Size(62, 14);
+			this.colorupperlabel.TabIndex = 4;
+			this.colorupperlabel.Text = "Upper wall:";
+			this.colorupperlabel.TextAlign = System.Drawing.ContentAlignment.TopRight;
+			// 
+			// colorupper
+			// 
+			this.colorupper.BackColor = System.Drawing.SystemColors.Control;
+			this.colorupper.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+			this.colorupper.Location = new System.Drawing.Point(72, 31);
+			this.colorupper.Name = "colorupper";
+			this.colorupper.Size = new System.Drawing.Size(26, 13);
+			this.colorupper.TabIndex = 5;
+			// 
+			// colorupperindex
+			// 
+			this.colorupperindex.Location = new System.Drawing.Point(104, 31);
+			this.colorupperindex.Name = "colorupperindex";
+			this.colorupperindex.Size = new System.Drawing.Size(66, 14);
+			this.colorupperindex.TabIndex = 6;
+			this.colorupperindex.Text = "Index: 256";
+			// 
+			// coloruppertag
+			// 
+			this.coloruppertag.Location = new System.Drawing.Point(170, 31);
+			this.coloruppertag.Name = "coloruppertag";
+			this.coloruppertag.Size = new System.Drawing.Size(62, 14);
+			this.coloruppertag.TabIndex = 7;
+			this.coloruppertag.Text = "Tag: 0";
+			// 
+			// colorthinglabel
+			// 
+			this.colorthinglabel.Location = new System.Drawing.Point(6, 47);
+			this.colorthinglabel.Name = "colorthinglabel";
+			this.colorthinglabel.Size = new System.Drawing.Size(62, 14);
+			this.colorthinglabel.TabIndex = 8;
+			this.colorthinglabel.Text = "Thing:";
+			this.colorthinglabel.TextAlign = System.Drawing.ContentAlignment.TopRight;
+			// 
+			// colorthing
+			// 
+			this.colorthing.BackColor = System.Drawing.SystemColors.Control;
+			this.colorthing.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+			this.colorthing.Location = new System.Drawing.Point(72, 47);
+			this.colorthing.Name = "colorthing";
+			this.colorthing.Size = new System.Drawing.Size(26, 13);
+			this.colorthing.TabIndex = 9;
+			// 
+			// colorthingindex
+			// 
+			this.colorthingindex.Location = new System.Drawing.Point(104, 47);
+			this.colorthingindex.Name = "colorthingindex";
+			this.colorthingindex.Size = new System.Drawing.Size(66, 14);
+			this.colorthingindex.TabIndex = 10;
+			this.colorthingindex.Text = "Index: 256";
+			// 
+			// colorthingtag
+			// 
+			this.colorthingtag.Location = new System.Drawing.Point(170, 47);
+			this.colorthingtag.Name = "colorthingtag";
+			this.colorthingtag.Size = new System.Drawing.Size(62, 14);
+			this.colorthingtag.TabIndex = 11;
+			this.colorthingtag.Text = "Tag: 0";
+			// 
+			// colorlowerlabel
+			// 
+			this.colorlowerlabel.Location = new System.Drawing.Point(6, 63);
+			this.colorlowerlabel.Name = "colorlowerlabel";
+			this.colorlowerlabel.Size = new System.Drawing.Size(62, 14);
+			this.colorlowerlabel.TabIndex = 12;
+			this.colorlowerlabel.Text = "Lower wall:";
+			this.colorlowerlabel.TextAlign = System.Drawing.ContentAlignment.TopRight;
+			// 
+			// colorlower
+			// 
+			this.colorlower.BackColor = System.Drawing.SystemColors.Control;
+			this.colorlower.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+			this.colorlower.Location = new System.Drawing.Point(72, 63);
+			this.colorlower.Name = "colorlower";
+			this.colorlower.Size = new System.Drawing.Size(26, 13);
+			this.colorlower.TabIndex = 13;
+			// 
+			// colorlowerindex
+			// 
+			this.colorlowerindex.Location = new System.Drawing.Point(104, 63);
+			this.colorlowerindex.Name = "colorlowerindex";
+			this.colorlowerindex.Size = new System.Drawing.Size(66, 14);
+			this.colorlowerindex.TabIndex = 14;
+			this.colorlowerindex.Text = "Index: 256";
+			// 
+			// colorlowertag
+			// 
+			this.colorlowertag.Location = new System.Drawing.Point(170, 63);
+			this.colorlowertag.Name = "colorlowertag";
+			this.colorlowertag.Size = new System.Drawing.Size(62, 14);
+			this.colorlowertag.TabIndex = 15;
+			this.colorlowertag.Text = "Tag: 0";
+			// 
+			// colorfloorlabel
+			// 
+			this.colorfloorlabel.Location = new System.Drawing.Point(6, 79);
+			this.colorfloorlabel.Name = "colorfloorlabel";
+			this.colorfloorlabel.Size = new System.Drawing.Size(62, 14);
+			this.colorfloorlabel.TabIndex = 16;
+			this.colorfloorlabel.Text = "Floor:";
+			this.colorfloorlabel.TextAlign = System.Drawing.ContentAlignment.TopRight;
+			// 
+			// colorfloor
+			// 
+			this.colorfloor.BackColor = System.Drawing.SystemColors.Control;
+			this.colorfloor.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+			this.colorfloor.Location = new System.Drawing.Point(72, 79);
+			this.colorfloor.Name = "colorfloor";
+			this.colorfloor.Size = new System.Drawing.Size(26, 13);
+			this.colorfloor.TabIndex = 17;
+			// 
+			// colorfloorindex
+			// 
+			this.colorfloorindex.Location = new System.Drawing.Point(104, 79);
+			this.colorfloorindex.Name = "colorfloorindex";
+			this.colorfloorindex.Size = new System.Drawing.Size(66, 14);
+			this.colorfloorindex.TabIndex = 18;
+			this.colorfloorindex.Text = "Index: 256";
+			// 
+			// colorfloortag
+			// 
+			this.colorfloortag.Location = new System.Drawing.Point(170, 79);
+			this.colorfloortag.Name = "colorfloortag";
+			this.colorfloortag.Size = new System.Drawing.Size(62, 14);
+			this.colorfloortag.TabIndex = 19;
+			this.colorfloortag.Text = "Tag: 0";
 			// 
 			// flagsPanel
 			// 
@@ -557,6 +780,7 @@ namespace CodeImp.DoomBuilder.Controls
 			this.floortex.PerformLayout();
 			this.flowLayoutPanel1.ResumeLayout(false);
 			this.flagsPanel.ResumeLayout(false);
+			this.colorspanel.ResumeLayout(false);
 			this.ResumeLayout(false);
 
 		}
@@ -605,5 +829,27 @@ namespace CodeImp.DoomBuilder.Controls
 		private System.Windows.Forms.Label effectlabel;
 		private System.Windows.Forms.Label labelfloor;
 		private System.Windows.Forms.Label labelceiling;
+		private System.Windows.Forms.Label brightnesslabel;
+		private System.Windows.Forms.GroupBox colorspanel;
+		private System.Windows.Forms.Label colorceilinglabel;
+		private System.Windows.Forms.Panel colorceiling;
+		private System.Windows.Forms.Label colorceilingindex;
+		private System.Windows.Forms.Label colorceilingtag;
+		private System.Windows.Forms.Label colorupperlabel;
+		private System.Windows.Forms.Panel colorupper;
+		private System.Windows.Forms.Label colorupperindex;
+		private System.Windows.Forms.Label coloruppertag;
+		private System.Windows.Forms.Label colorthinglabel;
+		private System.Windows.Forms.Panel colorthing;
+		private System.Windows.Forms.Label colorthingindex;
+		private System.Windows.Forms.Label colorthingtag;
+		private System.Windows.Forms.Label colorlowerlabel;
+		private System.Windows.Forms.Panel colorlower;
+		private System.Windows.Forms.Label colorlowerindex;
+		private System.Windows.Forms.Label colorlowertag;
+		private System.Windows.Forms.Label colorfloorlabel;
+		private System.Windows.Forms.Panel colorfloor;
+		private System.Windows.Forms.Label colorfloorindex;
+		private System.Windows.Forms.Label colorfloortag;
 	}
 }

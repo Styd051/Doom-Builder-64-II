@@ -155,6 +155,9 @@ namespace CodeImp.DoomBuilder.Windows
 			this.visualbilinear = new System.Windows.Forms.CheckBox();
 			this.classicbilinear = new System.Windows.Forms.CheckBox();
 			this.imagebrightnesslabel = new System.Windows.Forms.Label();
+			this.lightintensitytitle = new System.Windows.Forms.Label();
+			this.lightintensity = new CodeImp.DoomBuilder.Controls.TransparentTrackBar();
+			this.lightintensitylabel = new System.Windows.Forms.Label();
 			this.colorsgroup1 = new System.Windows.Forms.GroupBox();
 			this.colorguidelines = new CodeImp.DoomBuilder.Controls.ColorControl();
 			this.color3dFloors = new CodeImp.DoomBuilder.Controls.ColorControl();
@@ -243,6 +246,7 @@ namespace CodeImp.DoomBuilder.Windows
 			((System.ComponentModel.ISupportInitialize)(this.anisotropicfiltering)).BeginInit();
 			((System.ComponentModel.ISupportInitialize)(this.tbDynLightCount)).BeginInit();
 			((System.ComponentModel.ISupportInitialize)(this.imagebrightness)).BeginInit();
+			((System.ComponentModel.ISupportInitialize)(this.lightintensity)).BeginInit();
 			((System.ComponentModel.ISupportInitialize)(this.hiddenthingsalpha)).BeginInit();
 			((System.ComponentModel.ISupportInitialize)(this.inactivethingsalpha)).BeginInit();
 			((System.ComponentModel.ISupportInitialize)(this.doublesidedalpha)).BeginInit();
@@ -624,7 +628,7 @@ namespace CodeImp.DoomBuilder.Windows
 			// cbMarkExtraFloors
 			// 
 			this.cbMarkExtraFloors.AutoSize = true;
-			this.cbMarkExtraFloors.Location = new System.Drawing.Point(18, 466);
+			this.cbMarkExtraFloors.Location = new System.Drawing.Point(18, 475);
 			this.cbMarkExtraFloors.Name = "cbMarkExtraFloors";
 			this.cbMarkExtraFloors.Size = new System.Drawing.Size(175, 17);
 			this.cbMarkExtraFloors.TabIndex = 1;
@@ -658,7 +662,7 @@ namespace CodeImp.DoomBuilder.Windows
 			// cbOldHighlightMode
 			// 
 			this.cbOldHighlightMode.AutoSize = true;
-			this.cbOldHighlightMode.Location = new System.Drawing.Point(229, 443);
+			this.cbOldHighlightMode.Location = new System.Drawing.Point(229, 454);
 			this.cbOldHighlightMode.Name = "cbOldHighlightMode";
 			this.cbOldHighlightMode.Size = new System.Drawing.Size(207, 17);
 			this.cbOldHighlightMode.TabIndex = 15;
@@ -670,7 +674,7 @@ namespace CodeImp.DoomBuilder.Windows
 			// cbStretchView
 			// 
 			this.cbStretchView.AutoSize = true;
-			this.cbStretchView.Location = new System.Drawing.Point(229, 397);
+			this.cbStretchView.Location = new System.Drawing.Point(229, 412);
 			this.cbStretchView.Name = "cbStretchView";
 			this.cbStretchView.Size = new System.Drawing.Size(172, 17);
 			this.cbStretchView.TabIndex = 13;
@@ -1453,6 +1457,9 @@ namespace CodeImp.DoomBuilder.Windows
 			this.appearancegroup1.Controls.Add(label1);
 			this.appearancegroup1.Controls.Add(this.classicbilinear);
 			this.appearancegroup1.Controls.Add(this.imagebrightnesslabel);
+			this.appearancegroup1.Controls.Add(this.lightintensitytitle);
+			this.appearancegroup1.Controls.Add(this.lightintensity);
+			this.appearancegroup1.Controls.Add(this.lightintensitylabel);
 			this.appearancegroup1.Location = new System.Drawing.Point(217, 8);
 			this.appearancegroup1.Name = "appearancegroup1";
 			this.appearancegroup1.Size = new System.Drawing.Size(475, 510);
@@ -1554,7 +1561,7 @@ namespace CodeImp.DoomBuilder.Windows
 			// qualitydisplay
 			// 
 			this.qualitydisplay.AutoSize = true;
-			this.qualitydisplay.Location = new System.Drawing.Point(18, 397);
+			this.qualitydisplay.Location = new System.Drawing.Point(18, 412);
 			this.qualitydisplay.Name = "qualitydisplay";
 			this.qualitydisplay.Size = new System.Drawing.Size(128, 17);
 			this.qualitydisplay.TabIndex = 10;
@@ -1608,7 +1615,7 @@ namespace CodeImp.DoomBuilder.Windows
 			// animatevisualselection
 			// 
 			this.animatevisualselection.AutoSize = true;
-			this.animatevisualselection.Location = new System.Drawing.Point(229, 420);
+			this.animatevisualselection.Location = new System.Drawing.Point(229, 433);
 			this.animatevisualselection.Name = "animatevisualselection";
 			this.animatevisualselection.Size = new System.Drawing.Size(190, 17);
 			this.animatevisualselection.TabIndex = 14;
@@ -1651,7 +1658,7 @@ namespace CodeImp.DoomBuilder.Windows
 			// visualbilinear
 			// 
 			this.visualbilinear.AutoSize = true;
-			this.visualbilinear.Location = new System.Drawing.Point(18, 443);
+			this.visualbilinear.Location = new System.Drawing.Point(18, 454);
 			this.visualbilinear.Name = "visualbilinear";
 			this.visualbilinear.Size = new System.Drawing.Size(171, 17);
 			this.visualbilinear.TabIndex = 12;
@@ -1661,7 +1668,7 @@ namespace CodeImp.DoomBuilder.Windows
 			// classicbilinear
 			// 
 			this.classicbilinear.AutoSize = true;
-			this.classicbilinear.Location = new System.Drawing.Point(18, 420);
+			this.classicbilinear.Location = new System.Drawing.Point(18, 433);
 			this.classicbilinear.Name = "classicbilinear";
 			this.classicbilinear.Size = new System.Drawing.Size(176, 17);
 			this.classicbilinear.TabIndex = 11;
@@ -1676,6 +1683,37 @@ namespace CodeImp.DoomBuilder.Windows
 			this.imagebrightnesslabel.Size = new System.Drawing.Size(30, 13);
 			this.imagebrightnesslabel.TabIndex = 22;
 			this.imagebrightnesslabel.Text = "+ 0 y";
+			// 
+			// lightintensitytitle
+			// 
+			this.lightintensitytitle.AutoSize = true;
+			this.lightintensitytitle.Location = new System.Drawing.Point(68, 383);
+			this.lightintensitytitle.Name = "lightintensitytitle";
+			this.lightintensitytitle.Size = new System.Drawing.Size(120, 13);
+			this.lightintensitytitle.TabIndex = 49;
+			this.lightintensitytitle.Text = "Doom 64 light intensity:";
+			this.lightintensitytitle.TextAlign = System.Drawing.ContentAlignment.TopRight;
+			// 
+			// lightintensity
+			// 
+			this.lightintensity.AutoSize = false;
+			this.lightintensity.BackColor = System.Drawing.Color.Transparent;
+			this.lightintensity.LargeChange = 3;
+			this.lightintensity.Location = new System.Drawing.Point(199, 372);
+			this.lightintensity.Name = "lightintensity";
+			this.lightintensity.Size = new System.Drawing.Size(154, 36);
+			this.lightintensity.TabIndex = 50;
+			this.lightintensity.TickStyle = System.Windows.Forms.TickStyle.TopLeft;
+			this.lightintensity.ValueChanged += new System.EventHandler(this.lightintensity_ValueChanged);
+			// 
+			// lightintensitylabel
+			// 
+			this.lightintensitylabel.AutoSize = true;
+			this.lightintensitylabel.Location = new System.Drawing.Point(359, 383);
+			this.lightintensitylabel.Name = "lightintensitylabel";
+			this.lightintensitylabel.Size = new System.Drawing.Size(30, 13);
+			this.lightintensitylabel.TabIndex = 51;
+			this.lightintensitylabel.Text = "+ 0%";
 			// 
 			// colorsgroup1
 			// 
@@ -2419,6 +2457,7 @@ namespace CodeImp.DoomBuilder.Windows
 			((System.ComponentModel.ISupportInitialize)(this.anisotropicfiltering)).EndInit();
 			((System.ComponentModel.ISupportInitialize)(this.tbDynLightCount)).EndInit();
 			((System.ComponentModel.ISupportInitialize)(this.imagebrightness)).EndInit();
+			((System.ComponentModel.ISupportInitialize)(this.lightintensity)).EndInit();
 			((System.ComponentModel.ISupportInitialize)(this.hiddenthingsalpha)).EndInit();
 			((System.ComponentModel.ISupportInitialize)(this.inactivethingsalpha)).EndInit();
 			((System.ComponentModel.ISupportInitialize)(this.doublesidedalpha)).EndInit();
@@ -2466,6 +2505,9 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.Label label2;
 		private System.Windows.Forms.Label doublesidedalphalabel;
 		private System.Windows.Forms.Label imagebrightnesslabel;
+		private System.Windows.Forms.Label lightintensitytitle;
+		private CodeImp.DoomBuilder.Controls.TransparentTrackBar lightintensity;
+		private System.Windows.Forms.Label lightintensitylabel;
 		private System.Windows.Forms.GroupBox groupBox2;
 		private System.Windows.Forms.Label fieldofviewlabel;
 		private System.Windows.Forms.Label label4;

@@ -105,6 +105,19 @@ namespace CodeImp.DoomBuilder.Rendering
 			return new PixelColor(a, (byte)(255 - r), (byte)(255 - g), (byte)(255 - b));
 		}
 		
+		// iori84. Construct from a hex value such as "FF8000"
+		public static PixelColor FromHex(string h)
+		{
+			// Add FF for Alpha value
+			return FromInt(int.Parse("FF" + h, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture));
+		}
+
+		// iori84. To a hex value such as "FF8000"
+		public string ToHex()
+		{
+			return r.ToString("X2") + g.ToString("X2") + b.ToString("X2");
+		}
+		
 		// To int
 		public int ToInt()
 		{

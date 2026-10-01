@@ -68,6 +68,7 @@ namespace CodeImp.DoomBuilder.Windows
 			
 			// Interface
 			imagebrightness.Value = General.Settings.ImageBrightness;
+			lightintensity.Value = General.Clamp(General.Settings.LightIntensity, lightintensity.Minimum, lightintensity.Maximum); // villsa
 			doublesidedalpha.Value = General.Clamp((int)((1.0f - General.Settings.DoubleSidedAlpha) * 10.0f), doublesidedalpha.Minimum, doublesidedalpha.Maximum);
 			activethingsalpha.Value = General.Clamp((int)((1.0f - General.Settings.ActiveThingsAlpha) * 10.0f), activethingsalpha.Minimum, activethingsalpha.Maximum); //mxd
 			inactivethingsalpha.Value = General.Clamp((int)((1.0f - General.Settings.InactiveThingsAlpha) * 10.0f), inactivethingsalpha.Minimum, inactivethingsalpha.Maximum); //mxd
@@ -298,6 +299,7 @@ namespace CodeImp.DoomBuilder.Windows
 
 			// Apply interface
 			General.Settings.ImageBrightness = imagebrightness.Value;
+			General.Settings.LightIntensity = lightintensity.Value; // villsa
 			General.Settings.DoubleSidedAlpha = 1.0f - (doublesidedalpha.Value * 0.1f);
 			General.Settings.ActiveThingsAlpha = 1.0f - (activethingsalpha.Value * 0.1f); //mxd
 			General.Settings.InactiveThingsAlpha = 1.0f - (inactivethingsalpha.Value * 0.1f); //mxd
@@ -981,6 +983,12 @@ namespace CodeImp.DoomBuilder.Windows
 		private void imagebrightness_ValueChanged(object sender, EventArgs e)
 		{
 			imagebrightnesslabel.Text = "+ " + imagebrightness.Value + " y";
+		}
+
+		// villsa. Doom 64 colored lighting
+		private void lightintensity_ValueChanged(object sender, EventArgs e)
+		{
+			lightintensitylabel.Text = "+ " + (lightintensity.Value * 10) + "%";
 		}
 
 		private void doublesidedalpha_ValueChanged(object sender, EventArgs e)

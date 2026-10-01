@@ -21,6 +21,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 using CodeImp.DoomBuilder.Config;
+using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Types;
 
@@ -42,6 +43,8 @@ namespace CodeImp.DoomBuilder.Windows
 		private List<LinedefProperties> linedefprops; //mxd
 		private bool preventchanges;
 		private bool undocreated; //mxd
+		private CheckBox[] activationtypes; // villsa. Doom 64 activation types, the tag of each is its bit
+		private CheckState[] initialswitchstates; // Doom 64 switch setup as it was when the window opened
 
 		private struct LinedefProperties //mxd
 		{
@@ -92,6 +95,28 @@ namespace CodeImp.DoomBuilder.Windows
 			foreach(KeyValuePair<string, string> lf in General.Map.Config.LinedefFlags)
 				flags.Add(lf.Value, lf.Key);
 
+			// villsa. Doom 64 has many more flags, make room to show them all
+			if(General.Map.DOOM64)
+			{
+				int extraheight = flags.GetHeight() - flags.Height;
+				if(extraheight > 0)
+				{
+					flagsgroup.Height += extraheight;
+					actiongroup.Top += extraheight;
+				}
+			}
+
+			// villsa. Doom 64 activation types (the upper bits of the linedef special)
+			activationtypered.Tag = 512;
+			activationtypeblue.Tag = 1024;
+			activationtypeyellow.Tag = 2048;
+			activationtypecross.Tag = 4096;
+			activationtypeshoot.Tag = 8192;
+			activationtypeuse.Tag = 16384;
+			activationtyperepeat.Tag = 32768;
+			activationtypes = new[] { activationtypeuse, activationtypecross, activationtypeshoot, activationtyperepeat,
+									  activationtypeblue, activationtypeyellow, activationtypered };
+
 			// Fill actions list
 			action.GeneralizedCategories = General.Map.Config.GenActionCategories;
 			action.AddInfo(General.Map.Config.SortedLinedefActions.ToArray());
@@ -133,6 +158,18 @@ namespace CodeImp.DoomBuilder.Windows
 			{
 				idgroup.Visible = false;
 				panel.Height = actiongroup.Bottom + actiongroup.Margin.Bottom * 2;
+			}
+
+			// villsa. Doom 64 has an activation type and a switch setup
+			if(General.Map.DOOM64)
+			{
+				// (the Visible property of a group cannot be used here: it is false as long as the window is not shown)
+				GroupBox above = (General.Map.FormatInterface.HasLinedefTag ? idgroup : actiongroup);
+				activationtypegroup.Top = above.Bottom + above.Margin.Bottom + activationtypegroup.Margin.Top;
+				switchsetupgroup.Top = activationtypegroup.Top;
+				activationtypegroup.Visible = true;
+				switchsetupgroup.Visible = true;
+				panel.Height = activationtypegroup.Bottom + activationtypegroup.Margin.Bottom * 2;
 			}
 
 			// Arrange Apply/Cancel buttons
@@ -185,6 +222,21 @@ namespace CodeImp.DoomBuilder.Windows
 
 			//mxd. Args
 			argscontrol.SetValue(fl, true);
+
+			// villsa. Doom 64 activation type and switch setup
+			if(General.Map.DOOM64)
+			{
+				foreach(CheckBox c in activationtypes) c.Checked = ((fl.Activate & (int)c.Tag) != 0);
+
+				int texture, display;
+				GetSwitchChoice(fl, out texture, out display);
+				switchtextureupper.Checked = (texture == 1);
+				switchtexturelower.Checked = (texture == 2);
+				switchtexturemiddle.Checked = (texture == 3);
+				switchdisplayupper.Checked = (display == 1);
+				switchdisplaylower.Checked = (display == 2);
+				switchdisplaymiddle.Checked = (display == 3);
+			}
 			
 			// Front side and back side checkboxes
 			frontside.Checked = (fl.Front != null);
@@ -249,6 +301,22 @@ namespace CodeImp.DoomBuilder.Windows
 
 				//mxd. Arguments
 				argscontrol.SetValue(l, false);
+
+				// villsa. Doom 64 activation type and switch setup. styd: each checkbox is compared
+				// on its own, so only the ones that differ across the selection become indeterminate.
+				if(General.Map.DOOM64)
+				{
+					foreach(CheckBox c in activationtypes) SetMixedState(c, (l.Activate & (int)c.Tag) != 0);
+
+					int texture, display;
+					GetSwitchChoice(l, out texture, out display);
+					SetMixedState(switchtextureupper, texture == 1);
+					SetMixedState(switchtexturelower, texture == 2);
+					SetMixedState(switchtexturemiddle, texture == 3);
+					SetMixedState(switchdisplayupper, display == 1);
+					SetMixedState(switchdisplaylower, display == 2);
+					SetMixedState(switchdisplaymiddle, display == 3);
+				}
 				
 				// Front side checkbox
 				if((l.Front != null) != frontside.Checked)
@@ -332,10 +400,90 @@ namespace CodeImp.DoomBuilder.Windows
 			frontmid.Refresh();
 			frontlow.Refresh();
 
+			// Remember the Doom 64 switch setup as it is shown now
+			if(General.Map.DOOM64) initialswitchstates = GetSwitchStates();
+
 			preventchanges = false;
 
 			argscontrol.UpdateScriptControls(); //mxd
 			actionhelp.UpdateAction(action.GetValue()); //mxd
+		}
+
+		// styd. This makes a checkbox indeterminate when a linedef does not have the state it shows
+		private static void SetMixedState(CheckBox c, bool linedefvalue)
+		{
+			if(c.CheckState == CheckState.Indeterminate) return; // Already known to be mixed
+			if(linedefvalue != c.Checked)
+			{
+				c.ThreeState = true;
+				c.CheckState = CheckState.Indeterminate;
+			}
+		}
+
+		// styd: decodes the Doom 64 switch setup of a linedef (checked against DOOM64-RE: SWITCHMASK() /
+		// P_ChangeSwitchTexture in p_switch.c and the R_RenderSwitch calls of R_WallPrep in r_phase3.c).
+		// texture: the sidedef part that holds and animates the switch graphic.
+		//   0 = none, 1 = upper (SWITCHX02 alone), 2 = lower (SWITCHX04 alone), 3 = middle (both)
+		// display: where the switch is drawn on the wall, independently of the texture bits.
+		//   0 = none, 1 = upper (SWITCHX08 alone), 2 = lower (CHECKFLOORHEIGHT alone), 3 = middle (both)
+		private static void GetSwitchChoice(Linedef l, out int texture, out int display)
+		{
+			texture = 0;
+			display = 0;
+
+			bool textureupper = ((l.SwitchMask & Doom64MapSetIO.SWITCH_TEXTURE_UPPER) != 0);
+			bool texturelower = ((l.SwitchMask & Doom64MapSetIO.SWITCH_TEXTURE_LOWER) != 0);
+			if(textureupper && texturelower) texture = 3;
+			else if(textureupper) texture = 1;
+			else if(texturelower) texture = 2;
+
+			bool displayupper = ((l.SwitchMask & Doom64MapSetIO.SWITCH_DISPLAY_UPPER) != 0);
+			bool checkfloorheight = ((l.SwitchMask & Doom64MapSetIO.SWITCH_CHECK_FLOOR_HEIGHT) != 0);
+			if(displayupper && checkfloorheight) display = 3;
+			else if(displayupper) display = 1;
+			else if(checkfloorheight) display = 2;
+		}
+
+		// This returns the state of the Doom 64 switch setup checkboxes
+		private CheckState[] GetSwitchStates()
+		{
+			return new[] { switchtextureupper.CheckState, switchtexturemiddle.CheckState, switchtexturelower.CheckState,
+						   switchdisplayupper.CheckState, switchdisplaymiddle.CheckState, switchdisplaylower.CheckState };
+		}
+
+		// styd: this applies the Doom 64 switch setup to a linedef
+		private void SetSwitchMask(Linedef l)
+		{
+			// When nothing was changed here, the linedef keeps its switch setup, also when
+			// it is one that cannot be shown here (such as a texture without display position)
+			CheckState[] states = GetSwitchStates();
+			bool changed = false;
+			for(int i = 0; i < states.Length; i++) changed |= (states[i] != initialswitchstates[i]);
+			if(!changed) return;
+
+			// When any of the checkboxes is still indeterminate (the selection is mixed
+			// and the user did not touch this group), the linedef keeps its switch setup
+			foreach(CheckState state in states)
+			{
+				if(state == CheckState.Indeterminate) return;
+			}
+
+			int mask = 0;
+			if(switchtextureupper.Checked) mask = Doom64MapSetIO.SWITCH_TEXTURE_UPPER;
+			else if(switchtexturelower.Checked) mask = Doom64MapSetIO.SWITCH_TEXTURE_LOWER;
+			else if(switchtexturemiddle.Checked) mask = (Doom64MapSetIO.SWITCH_TEXTURE_UPPER | Doom64MapSetIO.SWITCH_TEXTURE_LOWER);
+
+			// A switch needs both a texture and a display position
+			if((mask != 0) && (switchdisplayupper.Checked || switchdisplaymiddle.Checked || switchdisplaylower.Checked))
+			{
+				if(switchdisplayupper.Checked || switchdisplaymiddle.Checked) mask |= Doom64MapSetIO.SWITCH_DISPLAY_UPPER;
+				if(switchdisplaylower.Checked || switchdisplaymiddle.Checked) mask |= Doom64MapSetIO.SWITCH_CHECK_FLOOR_HEIGHT;
+				l.SwitchMask = mask;
+			}
+			else
+			{
+				l.SwitchMask = 0;
+			}
 		}
 
 		//mxd
@@ -382,6 +530,20 @@ namespace CodeImp.DoomBuilder.Windows
 				// Apply chosen activation flag
 				if(activation.SelectedIndex > -1)
 					l.Activate = (activation.SelectedItem as LinedefActivateInfo).Index;
+				
+				// villsa. Doom 64 activation type and switch setup
+				if(General.Map.DOOM64)
+				{
+					int activate = l.Activate;
+					foreach(CheckBox c in activationtypes)
+					{
+						if(c.CheckState == CheckState.Checked) activate |= (int)c.Tag;
+						else if(c.CheckState == CheckState.Unchecked) activate &= ~(int)c.Tag;
+					}
+					l.Activate = activate;
+
+					SetSwitchMask(l);
+				}
 				
 				// Action/tags
 				l.Tag = General.Clamp(tagSelector.GetSmartTag(l.Tag, offset), General.Map.FormatInterface.MinTag, General.Map.FormatInterface.MaxTag); //mxd
@@ -506,6 +668,26 @@ namespace CodeImp.DoomBuilder.Windows
 		private void browseaction_Click(object sender, EventArgs e)
 		{
 			action.Value = ActionBrowserForm.BrowseAction(this, action.Value);
+		}
+
+		// styd. Only one switch texture can be chosen. This only acts when the checkbox is really
+		// checked: Checked is also true for an indeterminate checkbox, and reacting to that would
+		// wipe the mixed state of the other checkboxes of a multi-selection.
+		private void switchtexture_CheckStateChanged(object sender, EventArgs e)
+		{
+			CheckBox changed = (CheckBox)sender;
+			if(changed.CheckState != CheckState.Checked) return;
+			foreach(CheckBox c in new[] { switchtextureupper, switchtexturemiddle, switchtexturelower })
+				if(c != changed) c.Checked = false;
+		}
+
+		// styd. Only one switch display position can be chosen
+		private void switchdisplay_CheckStateChanged(object sender, EventArgs e)
+		{
+			CheckBox changed = (CheckBox)sender;
+			if(changed.CheckState != CheckState.Checked) return;
+			foreach(CheckBox c in new[] { switchdisplayupper, switchdisplaymiddle, switchdisplaylower })
+				if(c != changed) c.Checked = false;
 		}
 
 		// Help!

@@ -31,9 +31,7 @@ namespace CodeImp.DoomBuilder.Windows
             this.components = new System.ComponentModel.Container();
             System.Windows.Forms.Label label1;
             System.Windows.Forms.Label label3;
-            System.Windows.Forms.GroupBox groupeffect;
             System.Windows.Forms.Label label8;
-            System.Windows.Forms.Label label9;
             System.Windows.Forms.GroupBox groupfloorceiling;
             System.Windows.Forms.Label label7;
             System.Windows.Forms.Label label5;
@@ -55,11 +53,24 @@ namespace CodeImp.DoomBuilder.Windows
             this.apply = new System.Windows.Forms.Button();
             this.panel1 = new System.Windows.Forms.Panel();
             this.tooltip = new System.Windows.Forms.ToolTip(this.components);
+            this.groupflags = new System.Windows.Forms.GroupBox();
+            this.flags = new CodeImp.DoomBuilder.Controls.CheckboxArrayControl();
+            this.grouplights = new System.Windows.Forms.GroupBox();
+            this.lightindexlabel = new System.Windows.Forms.Label();
+            this.lightcolorlabel = new System.Windows.Forms.Label();
+            this.lighthexlabel = new System.Windows.Forms.Label();
+            this.lighttaglabel = new System.Windows.Forms.Label();
+            this.lightintensitylabel = new System.Windows.Forms.Label();
+            this.ceilingcolor = new CodeImp.DoomBuilder.Controls.ColorControlSector();
+            this.topcolor = new CodeImp.DoomBuilder.Controls.ColorControlSector();
+            this.thingcolor = new CodeImp.DoomBuilder.Controls.ColorControlSector();
+            this.lowercolor = new CodeImp.DoomBuilder.Controls.ColorControlSector();
+            this.floorcolor = new CodeImp.DoomBuilder.Controls.ColorControlSector();
             label1 = new System.Windows.Forms.Label();
             label3 = new System.Windows.Forms.Label();
-            groupeffect = new System.Windows.Forms.GroupBox();
+            this.groupeffect = new System.Windows.Forms.GroupBox();
             label8 = new System.Windows.Forms.Label();
-            label9 = new System.Windows.Forms.Label();
+            this.label9 = new System.Windows.Forms.Label();
             groupfloorceiling = new System.Windows.Forms.GroupBox();
             label7 = new System.Windows.Forms.Label();
             label5 = new System.Windows.Forms.Label();
@@ -69,6 +80,8 @@ namespace CodeImp.DoomBuilder.Windows
             groupeffect.SuspendLayout();
             groupfloorceiling.SuspendLayout();
             this.panel1.SuspendLayout();
+            this.groupflags.SuspendLayout();
+            this.grouplights.SuspendLayout();
             this.SuspendLayout();
             // 
             // label1
@@ -369,10 +382,146 @@ namespace CodeImp.DoomBuilder.Windows
             this.panel1.BackColor = System.Drawing.SystemColors.Control;
             this.panel1.Controls.Add(groupfloorceiling);
             this.panel1.Controls.Add(groupeffect);
+            this.panel1.Controls.Add(this.groupflags);
+            this.panel1.Controls.Add(this.grouplights);
             this.panel1.Location = new System.Drawing.Point(12, 10);
             this.panel1.Name = "panel1";
             this.panel1.Size = new System.Drawing.Size(443, 290);
             this.panel1.TabIndex = 3;
+            // 
+            // groupflags
+            // 
+            this.groupflags.Controls.Add(this.flags);
+            this.groupflags.Location = new System.Drawing.Point(3, 293);
+            this.groupflags.Name = "groupflags";
+            this.groupflags.Size = new System.Drawing.Size(436, 136);
+            this.groupflags.TabIndex = 2;
+            this.groupflags.TabStop = false;
+            this.groupflags.Text = "Flags";
+            this.groupflags.Visible = false;
+            // 
+            // flags
+            // 
+            this.flags.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.flags.AutoScroll = true;
+            this.flags.Columns = 3;
+            this.flags.Location = new System.Drawing.Point(15, 19);
+            this.flags.Name = "flags";
+            this.flags.Size = new System.Drawing.Size(415, 112);
+            this.flags.TabIndex = 0;
+            this.flags.VerticalSpacing = 1;
+            // 
+            // grouplights
+            // 
+            this.grouplights.Controls.Add(this.lightindexlabel);
+            this.grouplights.Controls.Add(this.lightcolorlabel);
+            this.grouplights.Controls.Add(this.lighthexlabel);
+            this.grouplights.Controls.Add(this.lighttaglabel);
+            this.grouplights.Controls.Add(this.lightintensitylabel);
+            this.grouplights.Controls.Add(this.ceilingcolor);
+            this.grouplights.Controls.Add(this.topcolor);
+            this.grouplights.Controls.Add(this.thingcolor);
+            this.grouplights.Controls.Add(this.lowercolor);
+            this.grouplights.Controls.Add(this.floorcolor);
+            this.grouplights.Location = new System.Drawing.Point(3, 435);
+            this.grouplights.Name = "grouplights";
+            this.grouplights.Size = new System.Drawing.Size(436, 174);
+            this.grouplights.TabIndex = 3;
+            this.grouplights.TabStop = false;
+            this.grouplights.Text = "Colored lighting";
+            this.grouplights.Visible = false;
+            // 
+            // lightindexlabel
+            // 
+            this.lightindexlabel.AutoSize = true;
+            this.lightindexlabel.Location = new System.Drawing.Point(102, 20);
+            this.lightindexlabel.Name = "lightindexlabel";
+            this.lightindexlabel.Size = new System.Drawing.Size(33, 13);
+            this.lightindexlabel.TabIndex = 0;
+            this.lightindexlabel.Text = "Index";
+            // 
+            // lightcolorlabel
+            // 
+            this.lightcolorlabel.AutoSize = true;
+            this.lightcolorlabel.Location = new System.Drawing.Point(154, 20);
+            this.lightcolorlabel.Name = "lightcolorlabel";
+            this.lightcolorlabel.Size = new System.Drawing.Size(33, 13);
+            this.lightcolorlabel.TabIndex = 1;
+            this.lightcolorlabel.Text = "Color";
+            // 
+            // lighthexlabel
+            // 
+            this.lighthexlabel.AutoSize = true;
+            this.lighthexlabel.Location = new System.Drawing.Point(196, 20);
+            this.lighthexlabel.Name = "lighthexlabel";
+            this.lighthexlabel.Size = new System.Drawing.Size(33, 13);
+            this.lighthexlabel.TabIndex = 2;
+            this.lighthexlabel.Text = "Hex";
+            // 
+            // lighttaglabel
+            // 
+            this.lighttaglabel.AutoSize = true;
+            this.lighttaglabel.Location = new System.Drawing.Point(264, 20);
+            this.lighttaglabel.Name = "lighttaglabel";
+            this.lighttaglabel.Size = new System.Drawing.Size(33, 13);
+            this.lighttaglabel.TabIndex = 3;
+            this.lighttaglabel.Text = "Tag";
+            // 
+            // lightintensitylabel
+            // 
+            this.lightintensitylabel.AutoSize = true;
+            this.lightintensitylabel.Location = new System.Drawing.Point(362, 20);
+            this.lightintensitylabel.Name = "lightintensitylabel";
+            this.lightintensitylabel.Size = new System.Drawing.Size(33, 13);
+            this.lightintensitylabel.TabIndex = 4;
+            this.lightintensitylabel.Text = "Intensity";
+            // 
+            // ceilingcolor
+            // 
+            this.ceilingcolor.BackColor = System.Drawing.Color.Transparent;
+            this.ceilingcolor.Label = "Ceiling:";
+            this.ceilingcolor.Location = new System.Drawing.Point(12, 38);
+            this.ceilingcolor.Name = "ceilingcolor";
+            this.ceilingcolor.Size = new System.Drawing.Size(404, 24);
+            this.ceilingcolor.TabIndex = 5;
+            // 
+            // topcolor
+            // 
+            this.topcolor.BackColor = System.Drawing.Color.Transparent;
+            this.topcolor.Label = "Upper wall:";
+            this.topcolor.Location = new System.Drawing.Point(12, 64);
+            this.topcolor.Name = "topcolor";
+            this.topcolor.Size = new System.Drawing.Size(404, 24);
+            this.topcolor.TabIndex = 6;
+            // 
+            // thingcolor
+            // 
+            this.thingcolor.BackColor = System.Drawing.Color.Transparent;
+            this.thingcolor.Label = "Thing:";
+            this.thingcolor.Location = new System.Drawing.Point(12, 90);
+            this.thingcolor.Name = "thingcolor";
+            this.thingcolor.Size = new System.Drawing.Size(404, 24);
+            this.thingcolor.TabIndex = 7;
+            // 
+            // lowercolor
+            // 
+            this.lowercolor.BackColor = System.Drawing.Color.Transparent;
+            this.lowercolor.Label = "Lower wall:";
+            this.lowercolor.Location = new System.Drawing.Point(12, 116);
+            this.lowercolor.Name = "lowercolor";
+            this.lowercolor.Size = new System.Drawing.Size(404, 24);
+            this.lowercolor.TabIndex = 8;
+            // 
+            // floorcolor
+            // 
+            this.floorcolor.BackColor = System.Drawing.Color.Transparent;
+            this.floorcolor.Label = "Floor:";
+            this.floorcolor.Location = new System.Drawing.Point(12, 142);
+            this.floorcolor.Name = "floorcolor";
+            this.floorcolor.Size = new System.Drawing.Size(404, 24);
+            this.floorcolor.TabIndex = 9;
             // 
             // tooltip
             // 
@@ -406,6 +555,9 @@ namespace CodeImp.DoomBuilder.Windows
             groupfloorceiling.ResumeLayout(false);
             groupfloorceiling.PerformLayout();
             this.panel1.ResumeLayout(false);
+            this.groupflags.ResumeLayout(false);
+            this.grouplights.ResumeLayout(false);
+            this.grouplights.PerformLayout();
             this.ResumeLayout(false);
 
 		}
@@ -427,5 +579,20 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.Panel panel1;
 		private CodeImp.DoomBuilder.Controls.ButtonsNumericTextbox heightoffset;
 		private System.Windows.Forms.ToolTip tooltip;
+		private System.Windows.Forms.GroupBox groupeffect;
+		private System.Windows.Forms.Label label9;
+		private System.Windows.Forms.GroupBox groupflags;
+		private CodeImp.DoomBuilder.Controls.CheckboxArrayControl flags;
+		private System.Windows.Forms.GroupBox grouplights;
+		private System.Windows.Forms.Label lightindexlabel;
+		private System.Windows.Forms.Label lightcolorlabel;
+		private System.Windows.Forms.Label lighthexlabel;
+		private System.Windows.Forms.Label lighttaglabel;
+		private System.Windows.Forms.Label lightintensitylabel;
+		private CodeImp.DoomBuilder.Controls.ColorControlSector ceilingcolor;
+		private CodeImp.DoomBuilder.Controls.ColorControlSector topcolor;
+		private CodeImp.DoomBuilder.Controls.ColorControlSector thingcolor;
+		private CodeImp.DoomBuilder.Controls.ColorControlSector lowercolor;
+		private CodeImp.DoomBuilder.Controls.ColorControlSector floorcolor;
 	}
 }

@@ -80,6 +80,26 @@ namespace CodeImp.DoomBuilder.Windows
 
 			// Set steps for brightness field
 			brightness.StepValues = General.Map.Config.BrightnessLevels;
+
+			// villsa. Doom 64 sectors have flags and five colored lights, and no brightness
+			if(General.Map.DOOM64)
+			{
+				label9.Visible = false;
+				brightness.Visible = false;
+
+				foreach(KeyValuePair<string, string> sf in General.Map.Config.SectorFlags)
+					flags.Add(sf.Value, sf.Key);
+
+				groupflags.Height += flags.GetHeight() - flags.Height;
+				groupflags.Top = groupeffect.Bottom + groupeffect.Margin.Bottom + groupflags.Margin.Top;
+				grouplights.Top = groupflags.Bottom + groupflags.Margin.Bottom + grouplights.Margin.Top;
+				groupflags.Visible = true;
+				grouplights.Visible = true;
+
+				int extraheight = grouplights.Bottom - groupeffect.Bottom;
+				panel1.Height += extraheight;
+				this.Height += extraheight;
+			}
 		}
 
 		#endregion
@@ -120,6 +140,18 @@ namespace CodeImp.DoomBuilder.Windows
 			tagSelector.Setup(UniversalType.SectorTag); //mxd
 			tagSelector.SetTag(sc.Tag);//mxd
 			
+			// villsa. Doom 64 flags and colored lights
+			if(General.Map.DOOM64)
+			{
+				foreach(CheckBox c in flags.Checkboxes) c.Checked = sc.IsFlagSet(c.Tag.ToString());
+
+				ceilingcolor.Setup(sc.CeilColor);
+				topcolor.Setup(sc.TopColor);
+				thingcolor.Setup(sc.ThingColor);
+				lowercolor.Setup(sc.LowerColor);
+				floorcolor.Setup(sc.FloorColor);
+			}
+
 			////////////////////////////////////////////////////////////////////////
 			// Now go for all sectors and change the options when a setting is different
 			////////////////////////////////////////////////////////////////////////
@@ -147,6 +179,20 @@ namespace CodeImp.DoomBuilder.Windows
 
 				// Action
 				if(s.Tag != sc.Tag)	tagSelector.ClearTag(); //mxd
+
+				// villsa. Doom 64 flags
+				if(General.Map.DOOM64)
+				{
+					foreach(CheckBox c in flags.Checkboxes)
+					{
+						if(c.CheckState == CheckState.Indeterminate) continue;
+						if(s.IsFlagSet(c.Tag.ToString()) != c.Checked)
+						{
+							c.ThreeState = true;
+							c.CheckState = CheckState.Indeterminate;
+						}
+					}
+				}
 
 				//mxd. Store initial properties
 				sectorprops.Add(new SectorProperties(s));
@@ -329,6 +375,27 @@ namespace CodeImp.DoomBuilder.Windows
 			{
 				// Effects
 				if(!effect.Empty) s.Effect = effect.Value;
+
+				// villsa. Doom 64 flags and colored lights
+				if(General.Map.DOOM64)
+				{
+					foreach(CheckBox c in flags.Checkboxes)
+					{
+						if(c.CheckState == CheckState.Checked) s.SetFlag(c.Tag.ToString(), true);
+						else if(c.CheckState == CheckState.Unchecked) s.SetFlag(c.Tag.ToString(), false);
+					}
+
+					Lights light = s.CeilColor;
+					if(ceilingcolor.Apply(ref light)) s.CeilColor = light;
+					light = s.TopColor;
+					if(topcolor.Apply(ref light)) s.TopColor = light;
+					light = s.ThingColor;
+					if(thingcolor.Apply(ref light)) s.ThingColor = light;
+					light = s.LowerColor;
+					if(lowercolor.Apply(ref light)) s.LowerColor = light;
+					light = s.FloorColor;
+					if(floorcolor.Apply(ref light)) s.FloorColor = light;
+				}
 
 				// Action
 				s.Tag = General.Clamp(tagSelector.GetSmartTag(s.Tag, tagoffset++), General.Map.FormatInterface.MinTag, General.Map.FormatInterface.MaxTag); //mxd

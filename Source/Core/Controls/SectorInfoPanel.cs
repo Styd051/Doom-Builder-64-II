@@ -68,6 +68,19 @@ namespace CodeImp.DoomBuilder.Controls
 			floor.Text = s.FloorHeight.ToString();
 			height.Text = sheight.ToString();
 			brightness.Text = s.Brightness.ToString();
+
+			// villsa. Doom 64 sectors have five colored lights instead of a brightness
+			brightness.Visible = !General.Map.DOOM64;
+			brightnesslabel.Visible = !General.Map.DOOM64;
+			colorspanel.Visible = General.Map.DOOM64;
+			if(General.Map.DOOM64)
+			{
+				ShowLight(s.CeilColor, colorceiling, colorceilingindex, colorceilingtag);
+				ShowLight(s.TopColor, colorupper, colorupperindex, coloruppertag);
+				ShowLight(s.ThingColor, colorthing, colorthingindex, colorthingtag);
+				ShowLight(s.LowerColor, colorlower, colorlowerindex, colorlowertag);
+				ShowLight(s.FloorColor, colorfloor, colorfloorindex, colorfloortag);
+			}
 			floorname.Text = (s.FloorTexture.Length > DataManager.CLASIC_IMAGE_NAME_LENGTH ? s.FloorTexture : s.FloorTexture.ToUpperInvariant());
 			ceilingname.Text = (s.CeilTexture.Length > DataManager.CLASIC_IMAGE_NAME_LENGTH ? s.CeilTexture : s.CeilTexture.ToUpperInvariant());
 
@@ -319,22 +332,7 @@ namespace CodeImp.DoomBuilder.Controls
 				}
 
 				//mxd. Flags panel visibility and size
-				flagsPanel.Visible = (flags.Items.Count > 0);
-				if(flags.Items.Count > 0) 
-				{
-					Rectangle rect = flags.GetItemRect(0);
-					int itemspercolumn = 1;
-
-					// Check how many items per column we have...
-					for(int i = 1; i < flags.Items.Count; i++)
-					{
-						if(flags.GetItemRect(i).X != rect.X) break;
-						itemspercolumn++;
-					}
-
-					flags.Width = rect.Width * (int)Math.Ceiling(flags.Items.Count / (float)itemspercolumn);
-					flagsPanel.Width = flags.Width + flags.Left * 2;
-				}
+				UpdateFlagsPanel();
 
 				//mxd. Toggle visibility
 				foreach(Label label in floorinfolabels) label.Visible = showExtededFloorInfo;
@@ -348,7 +346,18 @@ namespace CodeImp.DoomBuilder.Controls
 				panelLightColor.Visible = false;
 				labelFade.Visible = false;
 				labelLight.Visible = false;
-				flagsPanel.Visible = false;
+
+				// villsa. Doom 64 sectors have flags
+				flags.Items.Clear();
+				if(General.Map.DOOM64)
+				{
+					foreach(KeyValuePair<string, string> group in General.Map.Config.SectorFlags)
+					{
+						if(s.IsFlagSet(group.Key))
+							flags.Items.Add(new ListViewItem(group.Value) { Checked = true });
+					}
+				}
+				UpdateFlagsPanel();
 			}
 
 			//mxd. Resize panels
@@ -370,6 +379,38 @@ namespace CodeImp.DoomBuilder.Controls
 			// Show the whole thing
 			this.Show();
             //this.Update(); // ano - don't think this is needed, and is slow
+        }
+
+		//mxd. Flags panel visibility and size
+		private void UpdateFlagsPanel()
+		{
+			flagsPanel.Visible = (flags.Items.Count > 0);
+			if(flags.Items.Count > 0)
+			{
+				Rectangle rect = flags.GetItemRect(0);
+				int itemspercolumn = 1;
+
+				// Check how many items per column we have...
+				for(int i = 1; i < flags.Items.Count; i++)
+				{
+					if(flags.GetItemRect(i).X != rect.X) break;
+					itemspercolumn++;
+				}
+
+				flags.Width = rect.Width * (int)Math.Ceiling(flags.Items.Count / (float)itemspercolumn);
+				flagsPanel.Width = flags.Width + flags.Left * 2;
+			}
+		}
+
+		// styd: this shows a Doom 64 colored light with its LIGHTS index and its tag,
+		// the same information as in the Edit Sector window
+		private static void ShowLight(Lights light, Panel color, Label index, Label tag)
+		{
+			string displayindex = Lights.GetDisplayIndex(light);
+			color.BackColor = light.color.WithAlpha(255).ToColor();
+			index.Text = "Index: " + (displayindex.Length > 0 ? displayindex : "--");
+			tag.Text = "Tag: " + light.tag;
+			tag.Enabled = (light.tag != 0);
         }
 
         //mxd
