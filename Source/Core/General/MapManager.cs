@@ -339,7 +339,7 @@ namespace CodeImp.DoomBuilder
 			General.Editing.ChangeMode(configinfo.StartMode);
 			ClassicMode cmode = (General.Editing.Mode as ClassicMode);
 			if(cmode != null) cmode.SetZoom(0.5f);
-			renderer2d.SetViewMode((ViewMode)General.Settings.DefaultViewMode);
+			renderer2d.SetViewMode(GetDefaultViewMode());
 			General.Settings.SetDefaultThingFlags(config.DefaultThingFlags);
 
 			// Success
@@ -441,6 +441,10 @@ namespace CodeImp.DoomBuilder
 			options.ApplyGridSettings();
 			map.UpdateConfiguration();
 			map.SnapAllToAccuracy();
+
+			// villsa. Doom 64 sectors are filled with the color that the view mode shows,
+			// so the view mode must be known before their surfaces are made
+			if(config.DOOM64) renderer2d.SetViewMode(GetDefaultViewMode());
 			map.Update();
 			thingsfilter.Update();
 
@@ -456,7 +460,7 @@ namespace CodeImp.DoomBuilder
 			// Set defaults
 			this.visualcamera = new VisualCamera();
 			General.Editing.ChangeMode(configinfo.StartMode);
-			renderer2d.SetViewMode((ViewMode)General.Settings.DefaultViewMode);
+			renderer2d.SetViewMode(GetDefaultViewMode());
 			General.Settings.SetDefaultThingFlags(config.DefaultThingFlags);
 
 			// Center map in screen
@@ -648,6 +652,17 @@ namespace CodeImp.DoomBuilder
 			}
 
 			return true;
+		}
+
+		// This returns the view mode to start a map with
+		private ViewMode GetDefaultViewMode()
+		{
+			ViewMode mode = (ViewMode)General.Settings.DefaultViewMode;
+
+			// villsa. Doom 64 sectors have no brightness levels, but colors
+			if(config.DOOM64 && (mode == ViewMode.Brightness)) mode = ViewMode.FloorColor;
+
+			return mode;
 		}
 
 		#endregion
