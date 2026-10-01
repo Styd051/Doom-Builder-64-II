@@ -83,7 +83,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			
 			Vector2D tscale = new Vector2D(Sidedef.Fields.GetValue("scalex_mid", 1.0f),
 										   Sidedef.Fields.GetValue("scaley_mid", 1.0f));
-			Vector2D toffset = new Vector2D(Sidedef.Fields.GetValue("offsetx_mid", 0.0f),
+            Vector2D tscaleAbs = new Vector2D(Math.Abs(tscale.x), Math.Abs(tscale.y));
+            Vector2D toffset = new Vector2D(Sidedef.Fields.GetValue("offsetx_mid", 0.0f),
 											Sidedef.Fields.GetValue("offsety_mid", 0.0f));
 			
 			// Left and right vertices for this sidedef
@@ -130,10 +131,15 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 			// Get texture offsets
 			Vector2D tof = new Vector2D(Sidedef.OffsetX, Sidedef.OffsetY);
+
 			tof = tof + toffset;
-			tof = tof / tscale;
-			if(General.Map.Config.ScaledTextureOffsets && !base.Texture.WorldPanning)
+
+			// biwa. Also take the ForceWorldPanning MAPINFO entry into account
+			if (General.Map.Config.ScaledTextureOffsets && (!base.Texture.WorldPanning && !General.Map.Data.MapInfo.ForceWorldPanning))
+			{
+				tof = tof / tscaleAbs;
 				tof = tof * base.Texture.Scale;
+			}
 
 			// Determine texture coordinates plane as they would be in normal circumstances.
 			// We can then use this plane to find any texture coordinate we need.
@@ -195,8 +201,15 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			CropPoly(ref poly, osd.Ceiling.plane, true);
 			CropPoly(ref poly, osd.Floor.plane, true);
 
-			// Determine if we should repeat the middle texture
-			repeatmidtex = Sidedef.IsFlagSet("wrapmidtex") || Sidedef.Line.IsFlagSet("wrapmidtex"); //mxd
+			// Determine if we should repeat the middle texture. In UDMF this is done with a flag, in Hexen with
+			// a argument to the 121:Line_SetIdentification. See https://www.zdoom.org/w/index.php?title=Line_SetIdentification
+			if (General.Map.UDMF)
+				repeatmidtex = Sidedef.IsFlagSet("wrapmidtex") || Sidedef.Line.IsFlagSet("wrapmidtex"); //mxd
+			else if (General.Map.HEXEN)
+				repeatmidtex = Sidedef.Line.Action == 121 && (Sidedef.Line.Args[1] & 16) == 16;
+			else
+				repeatmidtex = false;
+
 			if(!repeatmidtex) 
 			{
 				// First determine the visible portion of the texture
@@ -286,37 +299,40 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			// Some textures (e.g. HiResImage) may lie about their size, so use bitmap size instead
 			Bitmap image = Texture.GetBitmap();
 
-			// Determine texture scale...
-			Vector2D imgscale = new Vector2D((float)Texture.Width / image.Width, (float)Texture.Height / image.Height);
-			Vector2D texscale = (Texture is HiResImage) ? imgscale * Texture.Scale : Texture.Scale;
+            lock (image)
+            {
+                // Determine texture scale...
+                Vector2D imgscale = new Vector2D((float)Texture.Width / image.Width, (float)Texture.Height / image.Height);
+                Vector2D texscale = (Texture is HiResImage) ? imgscale * Texture.Scale : Texture.Scale;
 
-			// Get correct offset to texture space...
-			int ox = (int)Math.Floor((u * Sidedef.Line.Length * UniFields.GetFloat(Sidedef.Fields, "scalex_mid", 1.0f) / texscale.x 
-				+ ((Sidedef.OffsetX + UniFields.GetFloat(Sidedef.Fields, "offsetx_mid")) / imgscale.x)) 
-				% image.Width);
-			
-			int oy;
-			if(repeatmidtex)
-			{
-				bool pegbottom = Sidedef.Line.IsFlagSet(General.Map.Config.LowerUnpeggedFlag);
-				float zoffset = (pegbottom ? Sidedef.Sector.FloorHeight : Sidedef.Sector.CeilHeight);
-				oy = (int)Math.Floor(((pickintersect.z - zoffset) * UniFields.GetFloat(Sidedef.Fields, "scaley_mid", 1.0f) / texscale.y
-					- ((Sidedef.OffsetY - UniFields.GetFloat(Sidedef.Fields, "offsety_mid")) / imgscale.y)) 
-					% image.Height);
-			}
-			else
-			{
-				float zoffset = bottomclipplane.GetZ(pickintersect);
-				oy = (int)Math.Ceiling(((pickintersect.z - zoffset) * UniFields.GetFloat(Sidedef.Fields, "scaley_mid", 1.0f) / texscale.y) % image.Height);
-			}
+                // Get correct offset to texture space...
+                int ox = (int)Math.Floor((u * Sidedef.Line.Length * UniFields.GetFloat(Sidedef.Fields, "scalex_mid", 1.0f) / texscale.x
+                    + ((Sidedef.OffsetX + UniFields.GetFloat(Sidedef.Fields, "offsetx_mid")) / imgscale.x))
+                    % image.Width);
 
-			// Make sure offsets are inside of texture dimensions...
-			if(ox < 0) ox += image.Width;
-			if(oy < 0) oy += image.Height;
+                int oy;
+                if (repeatmidtex)
+                {
+                    bool pegbottom = Sidedef.Line.IsFlagSet(General.Map.Config.LowerUnpeggedFlag);
+                    float zoffset = (pegbottom ? Sidedef.Sector.FloorHeight : Sidedef.Sector.CeilHeight);
+                    oy = (int)Math.Floor(((pickintersect.z - zoffset) * UniFields.GetFloat(Sidedef.Fields, "scaley_mid", 1.0f) / texscale.y
+                        - ((Sidedef.OffsetY - UniFields.GetFloat(Sidedef.Fields, "offsety_mid")) / imgscale.y))
+                        % image.Height);
+                }
+                else
+                {
+                    float zoffset = bottomclipplane.GetZ(pickintersect);
+                    oy = (int)Math.Ceiling(((pickintersect.z - zoffset) * UniFields.GetFloat(Sidedef.Fields, "scaley_mid", 1.0f) / texscale.y) % image.Height);
+                }
 
-			// Check pixel alpha
-			Point pixelpos = new Point(General.Clamp(ox, 0, image.Width - 1), General.Clamp(image.Height - oy, 0, image.Height - 1));
-			return (image.GetPixel(pixelpos.X, pixelpos.Y).A > 0 && base.PickAccurate(from, to, dir, ref u_ray));
+                // Make sure offsets are inside of texture dimensions...
+                if (ox < 0) ox += image.Width;
+                if (oy < 0) oy += image.Height;
+
+                // Check pixel alpha
+                Point pixelpos = new Point(General.Clamp(ox, 0, image.Width - 1), General.Clamp(image.Height - oy, 0, image.Height - 1));
+                return (image.GetPixel(pixelpos.X, pixelpos.Y).A > 0 && base.PickAccurate(from, to, dir, ref u_ray));
+            }
 		}
 		
 		// Return texture name
@@ -348,16 +364,20 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		protected override void MoveTextureOffset(int offsetx, int offsety)
 		{
 			Sidedef.Fields.BeforeFieldsChange();
+			bool worldpanning = this.Texture.WorldPanning || General.Map.Data.MapInfo.ForceWorldPanning;
 			float oldx = Sidedef.Fields.GetValue("offsetx_mid", 0.0f);
 			float oldy = Sidedef.Fields.GetValue("offsety_mid", 0.0f);
 			float scalex = Sidedef.Fields.GetValue("scalex_mid", 1.0f);
 			float scaley = Sidedef.Fields.GetValue("scaley_mid", 1.0f);
 			bool textureloaded = (Texture != null && Texture.IsImageLoaded); //mxd
-			Sidedef.Fields["offsetx_mid"] = new UniValue(UniversalType.Float, GetRoundedTextureOffset(oldx, offsetx, scalex, textureloaded ? Texture.Width : -1)); //mxd
+			float width = textureloaded ? (worldpanning ? this.Texture.ScaledWidth / scalex : this.Texture.Width) : -1; // biwa
+			float height = textureloaded ? (worldpanning ? this.Texture.ScaledHeight / scaley : this.Texture.Height) : -1; // biwa
+
+			Sidedef.Fields["offsetx_mid"] = new UniValue(UniversalType.Float, GetNewTexutreOffset(oldx, offsetx, width)); //mxd // biwa
 
 			//mxd. Don't clamp offsetY of clipped mid textures
 			bool dontClamp = (!textureloaded || (!Sidedef.IsFlagSet("wrapmidtex") && !Sidedef.Line.IsFlagSet("wrapmidtex")));
-			Sidedef.Fields["offsety_mid"] = new UniValue(UniversalType.Float, GetRoundedTextureOffset(oldy, offsety, scaley, dontClamp ? -1 : Texture.Height));
+			Sidedef.Fields["offsety_mid"] = new UniValue(UniversalType.Float, GetNewTexutreOffset(oldy, offsety, dontClamp ? -1 : Texture.Height)); // biwa
 		}
 
 		protected override Point GetTextureOffset()

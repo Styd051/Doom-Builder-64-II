@@ -14,7 +14,9 @@ namespace CodeImp.DoomBuilder.GZBuilder.Data
 	{
 		#region ================== Constants
 
-		public static readonly string[] SUPPORTED_TEXTURE_EXTENSIONS = { ".jpg", ".tga", ".png", ".dds", ".pcx" };
+		// Keep sage order of extensions as in GZDoom's r_data\models\models.cpp FindGFXFile function. That doesn't
+		// list .dds, but just keep it in here
+		public static readonly string[] SUPPORTED_TEXTURE_EXTENSIONS = { ".png", ".jpg", ".tga", ".pcx", ".dds" };
 
 		#endregion
 
@@ -23,6 +25,7 @@ namespace CodeImp.DoomBuilder.GZBuilder.Data
 		private ModelLoadState loadstate;
 		private Vector3 scale;
 		private Matrix transform;
+        private Matrix transformrotation;
 		private Matrix transformstretched;
 
 		#endregion
@@ -34,11 +37,13 @@ namespace CodeImp.DoomBuilder.GZBuilder.Data
 		internal List<Dictionary<int, string>> SurfaceSkinNames;
 		internal List<string> FrameNames;
 		internal List<int> FrameIndices;
+		internal string Path; // biwa
 
 		internal GZModel Model;
 
 		internal Vector3 Scale { get { return scale; } }
-		internal Matrix Transform { get { return (General.Settings.GZStretchView ? transformstretched : transform); } }
+		internal Matrix Transform { get { /* return (General.Settings.GZStretchView ? transformstretched : transform); */ return transformstretched; } }
+        internal Matrix TransformRotation { get { return transformrotation; } }
 		internal bool OverridePalette; // Used for voxel models only 
 		internal float AngleOffset; // Used for voxel models only
 		internal bool InheritActorPitch;
@@ -67,6 +72,7 @@ namespace CodeImp.DoomBuilder.GZBuilder.Data
 			SurfaceSkinNames = new List<Dictionary<int, string>>();
 			FrameNames = new List<string>();
 			FrameIndices = new List<int>();
+			Path = string.Empty;
 			transform = Matrix.Identity;
 			transformstretched = Matrix.Identity;
 			hashcode = hashcounter++;
@@ -93,8 +99,9 @@ namespace CodeImp.DoomBuilder.GZBuilder.Data
 		internal void SetTransform(Matrix rotation, Matrix offset, Vector3 scale)
 		{
 			this.scale = scale;
+            transformrotation = rotation * Matrix.Scaling(scale);
 			transform = rotation * Matrix.Scaling(scale) * offset;
-			transformstretched = Matrix.Scaling(1.0f, 1.0f, Renderer3D.GZDOOM_INVERTED_VERTICAL_VIEW_STRETCH) * transform;
+			transformstretched = Matrix.Scaling(1.0f, 1.0f, General.Map.Data.InvertedVerticalViewStretch) * transform;
 		}
 
 		//mxd. This greatly speeds up Dictionary lookups

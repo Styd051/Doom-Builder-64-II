@@ -42,7 +42,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			  ButtonGroup = "000_editing",
 			  UseByDefault = true,
 			  SafeStartMode = true)]
-
+    
 	public class ThingsMode : BaseClassicMode
 	{
 		#region ================== Constants
@@ -653,8 +653,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			{
 				// Check if moved enough pixels for multiselect
 				Vector2D delta = mousedownpos - mousepos;
-				if((Math.Abs(delta.x) > MULTISELECT_START_MOVE_PIXELS) ||
-				   (Math.Abs(delta.y) > MULTISELECT_START_MOVE_PIXELS)) 
+				if((Math.Abs(delta.x) > BuilderPlug.Me.MouseSelectionThreshold) ||
+				   (Math.Abs(delta.y) > BuilderPlug.Me.MouseSelectionThreshold)) 
 				{
 					// Start multiselecting
 					StartMultiSelection();
@@ -670,7 +670,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					if(t != highlighted) 
 					{
 						//toggle selected state
-						if(General.Interface.ShiftState ^ BuilderPlug.Me.AdditiveSelect)
+						if(General.Interface.ShiftState ^ BuilderPlug.Me.AdditivePaintSelect)
 							t.Selected = true;
 						else if(General.Interface.CtrlState)
 							t.Selected = false;

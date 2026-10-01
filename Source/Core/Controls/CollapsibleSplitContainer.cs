@@ -405,9 +405,17 @@ namespace CodeImp.DoomBuilder.Controls
 		}
 
 		// ISupportInitialize methods. Not needed for .Net 4 and higher
-		public void BeginInit() { }
-		public void EndInit() { }
+		//public void BeginInit() { }
+		//public void EndInit() { }
 
+
+		// biwa. Fills the stored sized with some value other than 0. Otherwise
+		// the error list will not be shown correctly when toggling the panel
+		public void SetSizes()
+		{
+			storedpanel1minsize = Panel1MinSize;
+			storedpanel2minsize = Panel2MinSize;
+		}
 		#endregion
 	}
 }

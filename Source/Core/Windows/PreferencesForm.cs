@@ -33,6 +33,12 @@ namespace CodeImp.DoomBuilder.Windows
 {
 	internal partial class PreferencesForm : DelayedForm
 	{
+		#region ================== Constants
+
+		private const float VIEW_DISTANCE_STEP_SIZE = 500.0f;
+
+		#endregion
+
 		#region ================== Variables
 
 		private PreferencesController controller;
@@ -71,7 +77,7 @@ namespace CodeImp.DoomBuilder.Windows
 			mousespeed.Value = General.Clamp(General.Settings.MouseSpeed / 100, mousespeed.Minimum, mousespeed.Maximum);
 			movespeed.Value = General.Clamp(General.Settings.MoveSpeed / 100, movespeed.Minimum, movespeed.Maximum);
 			vertexScale3D.Value = General.Clamp((int)(General.Settings.GZVertexScale3D * 10), vertexScale3D.Minimum, vertexScale3D.Maximum); //mxd
-			viewdistance.Value = General.Clamp((int)(General.Settings.ViewDistance / 200.0f), viewdistance.Minimum, viewdistance.Maximum);
+			viewdistance.Value = General.Clamp((int)(General.Settings.ViewDistance / VIEW_DISTANCE_STEP_SIZE), viewdistance.Minimum, viewdistance.Maximum);
 			invertyaxis.Checked = General.Settings.InvertYAxis;
 			autoscrollspeed.Value = General.Clamp(General.Settings.AutoScrollSpeed, autoscrollspeed.Minimum, autoscrollspeed.Maximum);
 			zoomfactor.Value = General.Clamp(General.Settings.ZoomFactor, zoomfactor.Minimum, zoomfactor.Maximum);
@@ -301,7 +307,7 @@ namespace CodeImp.DoomBuilder.Windows
 			General.Settings.MouseSpeed = mousespeed.Value * 100;
 			General.Settings.MoveSpeed = movespeed.Value * 100;
 			General.Settings.GZVertexScale3D = vertexScale3D.Value * 0.1f; //mxd
-			General.Settings.ViewDistance = viewdistance.Value * 200.0f;
+			General.Settings.ViewDistance = viewdistance.Value * VIEW_DISTANCE_STEP_SIZE;
 			General.Settings.InvertYAxis = invertyaxis.Checked;
 			General.Settings.AutoScrollSpeed = autoscrollspeed.Value;
 			General.Settings.ZoomFactor = zoomfactor.Value;
@@ -500,7 +506,7 @@ namespace CodeImp.DoomBuilder.Windows
 
 		private void viewdistance_ValueChanged(object sender, EventArgs e)
 		{
-			int value = viewdistance.Value * 200;
+			int value = viewdistance.Value * (int)VIEW_DISTANCE_STEP_SIZE;
 			viewdistancelabel.Text = value + " mp";
 		}
 
@@ -596,7 +602,9 @@ namespace CodeImp.DoomBuilder.Windows
 			{
 				actioncontrol.Items.Add(new KeyControl(SpecialKeys.MScrollUp, "ScrollUp"));
 				actioncontrol.Items.Add(new KeyControl(SpecialKeys.MScrollDown, "ScrollDown"));
-			}
+                actioncontrol.Items.Add(new KeyControl(SpecialKeys.MScrollLeft, "ScrollLeft"));
+                actioncontrol.Items.Add(new KeyControl(SpecialKeys.MScrollRight, "ScrollRight"));
+            }
 
 			//mxd. Alt
 			if(a.AllowMouse && !a.DisregardAlt) 
@@ -611,7 +619,9 @@ namespace CodeImp.DoomBuilder.Windows
 			{
 				actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollUp | (int)Keys.Alt, "Alt+ScrollUp"));
 				actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollDown | (int)Keys.Alt, "Alt+ScrollDown"));
-			}
+                actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollLeft | (int)Keys.Alt, "Alt+ScrollLeft"));
+                actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollRight | (int)Keys.Alt, "Alt+ScrollRight"));
+            }
 
 			//Ctrl
 			if(a.AllowMouse && !a.DisregardControl) 
@@ -627,7 +637,9 @@ namespace CodeImp.DoomBuilder.Windows
 			{
 				actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollUp | (int)Keys.Control, "Ctrl+ScrollUp"));
 				actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollDown | (int)Keys.Control, "Ctrl+ScrollDown"));
-			}
+                actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollLeft | (int)Keys.Control, "Ctrl+ScrollLeft"));
+                actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollRight | (int)Keys.Control, "Ctrl+ScrollRight"));
+            }
 
 			//Shift
 			if(a.AllowMouse && !a.DisregardShift)
@@ -642,7 +654,9 @@ namespace CodeImp.DoomBuilder.Windows
 			{
 				actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollUp | (int)Keys.Shift, "Shift+ScrollUp"));
 				actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollDown | (int)Keys.Shift, "Shift+ScrollDown"));
-			}
+                actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollLeft | (int)Keys.Shift, "Shift+ScrollLeft"));
+                actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollRight | (int)Keys.Shift, "Shift+ScrollRight"));
+            }
 
 			//mxd. Alt-Shift
 			if(a.AllowMouse && !a.DisregardShift && !a.DisregardAlt) 
@@ -657,7 +671,9 @@ namespace CodeImp.DoomBuilder.Windows
 			{
 				actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollUp | (int)Keys.Shift | (int)Keys.Alt, "Alt+Shift+ScrollUp"));
 				actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollDown | (int)Keys.Shift | (int)Keys.Alt, "Alt+Shift+ScrollDown"));
-			}
+                actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollLeft | (int)Keys.Shift | (int)Keys.Alt, "Alt+Shift+ScrollLeft"));
+                actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollRight | (int)Keys.Shift | (int)Keys.Alt, "Alt+Shift+ScrollRight"));
+            }
 
 			//mxd. Ctrl-Alt
 			if(a.AllowMouse && !a.DisregardAlt && !a.DisregardControl) 
@@ -672,7 +688,9 @@ namespace CodeImp.DoomBuilder.Windows
 			{
 				actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollUp | (int)Keys.Control | (int)Keys.Alt, "Ctrl+Alt+ScrollUp"));
 				actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollDown | (int)Keys.Control | (int)Keys.Alt, "Ctrl+Alt+ScrollDown"));
-			}
+                actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollLeft | (int)Keys.Control | (int)Keys.Alt, "Ctrl+Alt+ScrollLeft"));
+                actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollRight | (int)Keys.Control | (int)Keys.Alt, "Ctrl+Alt+ScrollRight"));
+            }
 			
 			//Ctrl-Shift
 			if(a.AllowMouse && !a.DisregardShift && !a.DisregardControl)
@@ -687,7 +705,9 @@ namespace CodeImp.DoomBuilder.Windows
 			{
 				actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollUp | (int)Keys.Shift | (int)Keys.Control, "Ctrl+Shift+ScrollUp"));
 				actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollDown | (int)Keys.Shift | (int)Keys.Control, "Ctrl+Shift+ScrollDown"));
-			}
+                actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollLeft | (int)Keys.Shift | (int)Keys.Control, "Ctrl+Shift+ScrollLeft"));
+                actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollRight | (int)Keys.Shift | (int)Keys.Control, "Ctrl+Shift+ScrollRight"));
+            }
 
 			//mxd. Ctrl-Alt-Shift
 			if(a.AllowMouse && !a.DisregardShift && !a.DisregardControl && !a.DisregardAlt) 
@@ -702,7 +722,9 @@ namespace CodeImp.DoomBuilder.Windows
 			{
 				actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollUp | (int)Keys.Shift | (int)Keys.Control | (int)Keys.Alt, "Ctrl+Alt+Shift+ScrollUp"));
 				actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollDown | (int)Keys.Shift | (int)Keys.Control | (int)Keys.Alt, "Ctrl+Alt+Shift+ScrollDown"));
-			}
+                actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollLeft | (int)Keys.Shift | (int)Keys.Control | (int)Keys.Alt, "Ctrl+Alt+Shift+ScrollLeft"));
+                actioncontrol.Items.Add(new KeyControl((int)SpecialKeys.MScrollRight | (int)Keys.Shift | (int)Keys.Control | (int)Keys.Alt, "Ctrl+Alt+Shift+ScrollRight"));
+            }
 		}
 		
 		// Item selected

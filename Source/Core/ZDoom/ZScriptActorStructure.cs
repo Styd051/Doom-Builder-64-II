@@ -9,14 +9,25 @@ namespace CodeImp.DoomBuilder.ZDoom
 {
     public sealed class ZScriptActorStructure : ActorStructure
     {
-        // privates
-        private ZScriptParser parser;
+		#region ================== Variables
+
+		private ZScriptParser parser;
         private Stream stream;
         private ZScriptTokenizer tokenizer;
-        // ========
+		private List<string> mixins;
 
-        internal static bool ParseGZDBComment(Dictionary<string, List<string>> props, string text)
+		#endregion
+
+		#region ================== Properties
+
+		public List<string> Mixins { get { return mixins; } }
+
+		#endregion
+
+		internal static bool ParseGZDBComment(Dictionary<string, List<string>> props, string text)
         {
+            if (string.IsNullOrWhiteSpace(text))
+                return false;
             text = text.Trim();
             // check if it's a GZDB comment
             if (text[0] != '$')
@@ -232,9 +243,11 @@ namespace CodeImp.DoomBuilder.ZDoom
             token = tokenizer.ReadToken();
             if (token != null && token.Type == ZScriptTokenType.OpLessThan) // <
             {
+                tokenizer.SkipWhitespace();
                 string internal_type = ParseTypeName();
                 if (internal_type == null)
                     return null;
+                tokenizer.SkipWhitespace();
                 token = tokenizer.ExpectToken(ZScriptTokenType.OpGreaterThan);
                 if (token == null || !token.IsValid)
                 {
@@ -262,7 +275,8 @@ namespace CodeImp.DoomBuilder.ZDoom
 
                 // parse identifier or int (identifier is a constant, we don't parse this yet)
                 tokenizer.SkipWhitespace();
-                token = tokenizer.ExpectToken(ZScriptTokenType.Integer, ZScriptTokenType.Identifier);
+                long cpos = stream.Position;
+                token = tokenizer.ExpectToken(ZScriptTokenType.Integer, ZScriptTokenType.Identifier, ZScriptTokenType.CloseSquare);
                 if (token == null || !token.IsValid)
                 {
                     parser.ReportError("Expected integer or const, got " + ((Object)token ?? "<null>").ToString());
@@ -272,6 +286,35 @@ namespace CodeImp.DoomBuilder.ZDoom
                 int arraylen = -1;
                 if (token.Type == ZScriptTokenType.Integer)
                     arraylen = token.ValueInt;
+                else if (token.Type == ZScriptTokenType.CloseSquare)
+                {
+                    /* todo determine this somehow... not for now */
+                    stream.Position = cpos; // code later expects close square
+                }
+                else
+                {
+                    // we can have more identifiers (dotted)
+                    while (true)
+                    {
+                        cpos = stream.Position;
+                        token = tokenizer.ExpectToken(ZScriptTokenType.Dot);
+                        if (token == null || !token.IsValid)
+                        {
+                            stream.Position = cpos;
+                            break;
+                        }
+                        else
+                        {
+                            token = tokenizer.ExpectToken(ZScriptTokenType.Identifier);
+                            if (token == null || !token.IsValid)
+                            {
+                                parser.ReportError("Expected identifier, got " + ((Object)token ?? "<null>").ToString());
+                                return null;
+                            }
+                        }
+                    }
+                }
+
                 dimensions.Add(arraylen);
 
                 // closing square
@@ -284,6 +327,84 @@ namespace CodeImp.DoomBuilder.ZDoom
                 }
             }
         }
+
+        private bool ParseFlagdef()
+        {
+            // flagdef identifier: variable, bitnum;
+            tokenizer.SkipWhitespace();
+            ZScriptToken token = tokenizer.ExpectToken(ZScriptTokenType.Identifier);
+            if (token == null || !token.IsValid)
+            {
+                parser.ReportError("Expected flag name, got " + ((Object)token ?? "<null>").ToString());
+                return false;
+            }
+
+            tokenizer.SkipWhitespace();
+            token = tokenizer.ExpectToken(ZScriptTokenType.Colon);
+            if (token == null || !token.IsValid)
+            {
+                parser.ReportError("Expected :, got " + ((Object)token ?? "<null>").ToString());
+                return false;
+            }
+
+            tokenizer.SkipWhitespace();
+            token = tokenizer.ExpectToken(ZScriptTokenType.Identifier);
+            if (token == null || !token.IsValid)
+            {
+                parser.ReportError("Expected flag base variable, got " + ((Object)token ?? "<null>").ToString());
+                return false;
+            }
+
+            tokenizer.SkipWhitespace();
+            token = tokenizer.ExpectToken(ZScriptTokenType.Comma);
+            if (token == null || !token.IsValid)
+            {
+                parser.ReportError("Expected comma, got " + ((Object)token ?? "<null>").ToString());
+                return false;
+            }
+
+            tokenizer.SkipWhitespace();
+            token = tokenizer.ExpectToken(ZScriptTokenType.Integer);
+            if (token == null || !token.IsValid)
+            {
+                parser.ReportError("Expected flag bit index, got " + ((Object)token ?? "<null>").ToString());
+                return false;
+            }
+
+            tokenizer.SkipWhitespace();
+            token = tokenizer.ExpectToken(ZScriptTokenType.Semicolon);
+            if (token == null || !token.IsValid)
+            {
+                parser.ReportError("Expected semicolon, got " + ((Object)token ?? "<null>").ToString());
+                return false;
+            }
+
+            return true;
+        }
+
+		private bool ParseMixin()
+		{
+			// mixin identifier;
+			tokenizer.SkipWhitespace();
+			ZScriptToken token = tokenizer.ExpectToken(ZScriptTokenType.Identifier);
+			if (token == null || !token.IsValid)
+			{
+				parser.ReportError("Expected mixin class name, got " + ((Object)token ?? "<null>").ToString());
+				return false;
+			}
+
+			mixins.Add(token.Value.ToLowerInvariant());
+
+			tokenizer.SkipWhitespace();
+			token = tokenizer.ExpectToken(ZScriptTokenType.Semicolon);
+			if (token == null || !token.IsValid)
+			{
+				parser.ReportError("Expected semicolon, got " + ((Object)token ?? "<null>").ToString());
+				return false;
+			}
+
+			return true;
+		}
 
         private bool ParseProperty()
         {
@@ -331,6 +452,38 @@ namespace CodeImp.DoomBuilder.ZDoom
             return true;
         }
 
+        private string ParseVersion(bool required)
+        {
+            // read in the version.
+            tokenizer.SkipWhitespace();
+            ZScriptToken token = tokenizer.ExpectToken(ZScriptTokenType.OpenParen);
+            if (token == null || !token.IsValid)
+            {
+                if (required)
+                    parser.ReportError("Expected (, got " + ((Object)token ?? "<null>").ToString());
+                return null;
+            }
+
+            tokenizer.SkipWhitespace();
+            token = tokenizer.ExpectToken(ZScriptTokenType.String);
+            if (token == null || !token.IsValid)
+            {
+                parser.ReportError("Expected version, got " + ((Object)token ?? "<null>").ToString());
+                return null;
+            }
+
+            string version = token.Value.Trim();
+            tokenizer.SkipWhitespace();
+            token = tokenizer.ExpectToken(ZScriptTokenType.CloseParen);
+            if (token == null || !token.IsValid)
+            {
+                parser.ReportError("Expected ), got " + ((Object)token ?? "<null>").ToString());
+                return null;
+            }
+
+            return version;
+        }
+
         internal ZScriptActorStructure(ZDTextParser zdparser, DecorateCategoryInfo catinfo, string _classname, string _replacesname, string _parentname)
         {
             this.catinfo = catinfo; //mxd
@@ -342,7 +495,9 @@ namespace CodeImp.DoomBuilder.ZDoom
 
             classname = _classname;
             replaceclass = _replacesname;
-            //baseclass = parser.GetArchivedActorByName(_parentname); // this is not guaranteed to work here
+			//baseclass = parser.GetArchivedActorByName(_parentname); // this is not guaranteed to work here
+
+			mixins = new List<string>();
 
             ZScriptToken cls_open = tokenizer.ExpectToken(ZScriptTokenType.OpenCurly);
             if (cls_open == null || !cls_open.IsValid)
@@ -350,6 +505,9 @@ namespace CodeImp.DoomBuilder.ZDoom
                 parser.ReportError("Expected {, got " + ((Object)cls_open ?? "<null>").ToString());
                 return;
             }
+
+            // this dict holds temporary user settings per field (function, etc)
+            Dictionary<string, List<string>> var_props = new Dictionary<string, List<string>>();
 
             // in the class definition, we can have the following:
             // - Defaults block
@@ -361,7 +519,18 @@ namespace CodeImp.DoomBuilder.ZDoom
             // we are skipping everything, except Defaults and States.
             while (true)
             {
-                tokenizer.SkipWhitespace();
+                var_props.Clear();
+                while (true)
+                {
+                    ZScriptToken tt = tokenizer.ExpectToken(ZScriptTokenType.Whitespace, ZScriptTokenType.BlockComment, ZScriptTokenType.LineComment, ZScriptTokenType.Newline);
+                    if (tt == null || !tt.IsValid)
+                        break;
+
+                    if (tt.Type == ZScriptTokenType.LineComment)
+                        ParseGZDBComment(var_props, tt.Value);
+                }
+
+                //tokenizer.SkipWhitespace();
                 long ocpos = stream.Position;
                 ZScriptToken token = tokenizer.ExpectToken(ZScriptTokenType.Identifier, ZScriptTokenType.CloseCurly);
                 if (token == null || !token.IsValid)
@@ -397,7 +566,7 @@ namespace CodeImp.DoomBuilder.ZDoom
 
                     // apparently we can have a struct inside a class, but not another class.
                     case "struct":
-                        if (!parser.ParseClassOrStruct(true, false, null))
+                        if (!parser.ParseClassOrStruct(true, false, false, null))
                             return;
                         continue;
 
@@ -407,6 +576,18 @@ namespace CodeImp.DoomBuilder.ZDoom
                             return;
                         continue;
 
+                    // new flags syntax
+                    case "flagdef":
+                        if (!ParseFlagdef())
+                            return;
+                        continue;
+
+					// mixins
+					case "mixin":
+						if (!ParseMixin())
+							return;
+						continue;
+
                     default:
                         stream.Position = ocpos;
                         break;
@@ -414,7 +595,8 @@ namespace CodeImp.DoomBuilder.ZDoom
 
                 // try to read in a variable/method.
                 bool bmethod = false;
-                string[] availablemodifiers = new string[] { "static", "native", "action", "readonly", "protected", "private", "virtual", "override", "meta", "transient", "deprecated", "final" };
+                string[] availablemodifiers = new string[] { "static", "native", "action", "readonly", "protected", "private", "virtual", "override", "meta", "transient", "deprecated", "final", "play", "ui", "clearscope", "virtualscope", "version", "const" };
+                string[] versionedmodifiers = new string[] { "version", "deprecated" };
                 string[] methodmodifiers = new string[] { "action", "virtual", "override", "final" };
                 HashSet<string> modifiers = new HashSet<string>();
                 List<string> types = new List<string>();
@@ -446,6 +628,13 @@ namespace CodeImp.DoomBuilder.ZDoom
 
                         if (methodmodifiers.Contains(b_lower))
                             bmethod = true;
+
+                        if (versionedmodifiers.Contains(b_lower))
+                        {
+                            string version = ParseVersion(b_lower == "version"); // deprecated doesn't require version string for historical reasons. (compatibility with old gzdoom.pk3)
+                            if (version == null && b_lower == "version")
+                                return;
+                        }
 
                         modifiers.Add(b_lower);
                     }
@@ -541,14 +730,32 @@ namespace CodeImp.DoomBuilder.ZDoom
                         // also get the body block, if any.
                         tokenizer.SkipWhitespace();
                         cpos = stream.Position;
-                        token = tokenizer.ExpectToken(ZScriptTokenType.Semicolon, ZScriptTokenType.OpenCurly);
+                        token = tokenizer.ExpectToken(ZScriptTokenType.Semicolon, ZScriptTokenType.OpenCurly, ZScriptTokenType.Identifier);
                         if (token == null || !token.IsValid)
                         {
-                            parser.ReportError("Expected ; or {, got " + ((Object)token ?? "<null>").ToString());
+                            parser.ReportError("Expected 'const', ; or {, got " + ((Object)token ?? "<null>").ToString());
                             return;
                         }
 
                         //
+                        if (token.Type == ZScriptTokenType.Identifier)
+                        {
+                            if (token.Value.ToLowerInvariant() != "const")
+                            {
+                                parser.ReportError("Expected 'const', got " + ((Object)token ?? "<null>").ToString());
+                                return;
+                            }
+
+                            tokenizer.SkipWhitespace();
+                            cpos = stream.Position;
+                            token = tokenizer.ExpectToken(ZScriptTokenType.Semicolon, ZScriptTokenType.OpenCurly);
+                            if (token == null || !token.IsValid)
+                            {
+                                parser.ReportError("Expected ; or {, got " + ((Object)token ?? "<null>").ToString());
+                                return;
+                            }
+                        }
+
                         if (token.Type == ZScriptTokenType.OpenCurly)
                         {
                             stream.Position = cpos;
@@ -576,11 +783,30 @@ namespace CodeImp.DoomBuilder.ZDoom
 
 
                             tokenizer.SkipWhitespace();
-                            token = tokenizer.ExpectToken(ZScriptTokenType.Semicolon, ZScriptTokenType.Comma);
+                            ZScriptTokenType[] expectTokens;
+                            if (modifiers.Contains("static"))
+                                expectTokens = new ZScriptTokenType[] { ZScriptTokenType.Semicolon, ZScriptTokenType.Comma, ZScriptTokenType.OpAssign };
+                            else expectTokens = new ZScriptTokenType[] { ZScriptTokenType.Semicolon, ZScriptTokenType.Comma };
+                            token = tokenizer.ExpectToken(expectTokens);
                             if (token == null || !token.IsValid)
                             {
-                                parser.ReportError("Expected ; or comma, got " + ((Object)token ?? "<null>").ToString());
+                                parser.ReportError("Expected ;, =, or comma, got " + ((Object)token ?? "<null>").ToString());
                                 return;
+                            }
+
+                            // "static int A[] = {1, 2, 3};"
+                            if (token.Type == ZScriptTokenType.OpAssign)
+                            {
+                                // read in array data
+                                tokenizer.SkipWhitespace();
+                                parser.SkipBlock(false);
+                                tokenizer.SkipWhitespace();
+                                token = tokenizer.ExpectToken(ZScriptTokenType.Semicolon, ZScriptTokenType.Comma);
+                                if (token == null || !token.IsValid)
+                                {
+                                    parser.ReportError("Expected ; or comma, got " + ((Object)token ?? "<null>").ToString());
+                                    return;
+                                }
                             }
                         }
                     }
@@ -640,25 +866,97 @@ namespace CodeImp.DoomBuilder.ZDoom
                     //  - bool
                     string type = types[0];
                     UniversalType utype;
+                    object udefault = null;
                     switch (type)
                     {
                         case "int":
+						case "int8":
+						case "int16":
+						case "uint":
+						case "uint8":
+						case "uint16":
                             utype = UniversalType.Integer;
                             break;
-                        /*case "float":
+                        case "float":
                         case "double":
                             utype = UniversalType.Float;
                             break;
                         case "bool":
-                            utype = UniversalType.Integer;
+                            utype = UniversalType.Boolean;
                             break;
                         case "string":
                             utype = UniversalType.String;
                             break;
-                            // todo test if class names and colors will work*/
-                            // [ZZ] currently only integer variable works.
+                            // todo test if class names and colors will work
                         default:
                             continue; // go read next field
+                    }
+
+                    UniversalType utype_reinterpret = utype;
+                    if (var_props.ContainsKey("$userreinterpret"))
+                    {
+                        string sp = var_props["$userreinterpret"][0].Trim().ToLowerInvariant();
+                        switch (sp)
+                        {
+                            case "color":
+                                if (utype != UniversalType.Integer)
+                                {
+                                    parser.LogWarning("Cannot use $UserReinterpret Color with non-integers");
+                                    break;
+                                }
+                                utype_reinterpret = UniversalType.Color;
+                                break;
+                        }
+                    }
+
+                    if (var_props.ContainsKey("$userdefaultvalue"))
+                    {
+                        string sp = var_props["$userdefaultvalue"][0];
+                        switch (utype)
+                        {
+                            case UniversalType.String:
+                                if (sp[0] == '"' && sp[sp.Length - 1] == '"')
+                                    sp = sp.Substring(1, sp.Length - 2);
+                                udefault = sp;
+                                break;
+                            case UniversalType.Float:
+                                float d;
+                                if (!float.TryParse(sp, out d))
+                                {
+                                    parser.LogWarning("Incorrect float default from string \"" + sp + "\"");
+                                    break;
+                                }
+                                udefault = d;
+                                break;
+                            case UniversalType.Integer:
+                                int i;
+								if (!int.TryParse(sp, out i))
+								{
+									if (utype_reinterpret == UniversalType.Color)
+									{
+										sp = sp.ToLowerInvariant();
+										Rendering.PixelColor pc;
+										if (!ZDTextParser.GetColorFromString(sp, out pc))
+										{
+											parser.LogWarning("Incorrect color default from string \"" + sp + "\"");
+											break;
+										}
+										udefault = pc.ToInt() & 0xFFFFFF;
+										break;
+									}
+								}
+								udefault = i;
+								break;
+							case UniversalType.Boolean:
+								sp = sp.ToLowerInvariant();
+								if (sp == "true")
+									udefault = true;
+								else if (sp == "false")
+									udefault = false;
+								else
+									parser.LogWarning("Incorrect boolean default from string \"" + sp + "\"");
+								break;
+						}
                     }
 
                     for (int i = 0; i < names.Count; i++)
@@ -669,10 +967,15 @@ namespace CodeImp.DoomBuilder.ZDoom
                         if (!name.StartsWith("user_"))
                             continue; // we don't process non-user_ fields (because ZScript won't pick them up anyway)
                         // parent class is not guaranteed to be loaded already, so handle collisions later
-                        uservars.Add(name, utype);
+                        uservars.Add(name, utype_reinterpret);
+                        if (udefault != null)
+                            uservar_defaults.Add(name, udefault);
                     }
                 }
             }
+
+            // parsing done, process thing arguments
+            ParseCustomArguments();
         }
     }
 }

@@ -36,6 +36,7 @@ using CodeImp.DoomBuilder.Plugins;
 using CodeImp.DoomBuilder.Rendering;
 using CodeImp.DoomBuilder.Types;
 using CodeImp.DoomBuilder.Windows;
+using System.Runtime.CompilerServices;
 
 #endregion
 
@@ -66,13 +67,17 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			public readonly string TrackTexture;
 			public readonly string CeilingTexture;
 			public readonly bool ResetOffsets;
+			public readonly bool ApplyActionSpecials;
+			public readonly bool ApplyTag;
 
-			public MakeDoorSettings(string doortexture, string tracktexture, string ceilingtexture, bool resetoffsets)
+			public MakeDoorSettings(string doortexture, string tracktexture, string ceilingtexture, bool resetoffsets, bool applyactionspecials, bool applytag)
 			{
 				DoorTexture = doortexture;
 				TrackTexture = tracktexture;
 				CeilingTexture = ceilingtexture;
 				ResetOffsets = resetoffsets;
+				ApplyActionSpecials = applyactionspecials;
+				ApplyTag = applytag;
 			}
 		}
 
@@ -102,6 +107,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		private bool editnewthing;
 		private bool editnewsector;
 		private bool additiveselect;
+		private bool additivepaintselect;
 		private bool autoclearselection;
 		private bool visualmodeclearselection;
 		private string copiedtexture;
@@ -118,6 +124,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		private float highlightrange;
 		private float highlightthingsrange;
 		private float splitlinedefsrange;
+		private float mouseselectionthreshold;
 		private bool autodragonpaste;
 		private bool autoAlignTextureOffsetsOnCreate;//mxd
 		private bool dontMoveGeometryOutsideMapBoundary;//mxd
@@ -153,6 +160,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		public bool EditNewThing { get { return editnewthing; } }
 		public bool EditNewSector { get { return editnewsector; } }
 		public bool AdditiveSelect { get { return additiveselect; } }
+		public bool AdditivePaintSelect { get { return additivepaintselect; } }
 		public bool AutoClearSelection { get { return autoclearselection; } }
 		public bool VisualModeClearSelection { get { return visualmodeclearselection; } }
 		public string CopiedTexture { get { return copiedtexture; } set { copiedtexture = value; } }
@@ -169,6 +177,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		public float HighlightRange { get { return highlightrange; } }
 		public float HighlightThingsRange { get { return highlightthingsrange; } }
 		public float SplitLinedefsRange { get { return splitlinedefsrange; } }
+		public float MouseSelectionThreshold { get { return mouseselectionthreshold; } }
 		public bool AutoDragOnPaste { get { return autodragonpaste; } set { autodragonpaste = value; } }
 		public bool AutoDrawOnEdit { get { return autoDrawOnEdit; } set { autoDrawOnEdit = value; } } //mxd
 		public bool AutoAlignTextureOffsetsOnCreate { get { return autoAlignTextureOffsetsOnCreate; } set { autoAlignTextureOffsetsOnCreate = value; } } //mxd
@@ -269,12 +278,14 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			editnewthing = General.Settings.ReadPluginSetting("editnewthing", true);
 			editnewsector = General.Settings.ReadPluginSetting("editnewsector", false);
 			additiveselect = General.Settings.ReadPluginSetting("additiveselect", false);
+			additivepaintselect = General.Settings.ReadPluginSetting("additivepaintselect", additiveselect); // use the same value as additiveselect by default
 			autoclearselection = General.Settings.ReadPluginSetting("autoclearselection", false);
 			visualmodeclearselection = General.Settings.ReadPluginSetting("visualmodeclearselection", false);
 			stitchrange = General.Settings.ReadPluginSetting("stitchrange", 20);
 			highlightrange = General.Settings.ReadPluginSetting("highlightrange", 20);
 			highlightthingsrange = General.Settings.ReadPluginSetting("highlightthingsrange", 10);
 			splitlinedefsrange = General.Settings.ReadPluginSetting("splitlinedefsrange", 10);
+			mouseselectionthreshold = General.Settings.ReadPluginSetting("mouseselectionthreshold", 2);
 			autodragonpaste = General.Settings.ReadPluginSetting("autodragonpaste", false);
 			autoDrawOnEdit = General.Settings.ReadPluginSetting("autodrawonedit", true); //mxd
 			autoAlignTextureOffsetsOnCreate = General.Settings.ReadPluginSetting("autoaligntextureoffsetsoncreate", false); //mxd
@@ -370,6 +381,14 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					}
 				}
 			}
+            else // [ZZ] proper fallback please.
+            {
+                for (int i = 0; i < vertices.Length; i++)
+                {
+                    vertices[i].u = vertices[i].u / 64;
+                    vertices[i].v = -vertices[i].v / 64;
+                }
+            }
 		}
 
 		// When ceiling surface geometry is created for classic modes
@@ -422,7 +441,15 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					}
 				}
 			}
-		}
+            else // [ZZ] proper fallback please.
+            {
+                for (int i = 0; i < vertices.Length; i++)
+                {
+                    vertices[i].u = vertices[i].u / 64;
+                    vertices[i].v = -vertices[i].v / 64;
+                }
+            }
+        }
 
 		// When the editing mode changes
 		public override bool OnModeChange(EditMode oldmode, EditMode newmode)
@@ -466,7 +493,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			//mxd
 			General.Interface.AddDocker(drawingOverridesDocker);
 			drawingOverridesPanel.Setup();
-			MakeDoor = new MakeDoorSettings(General.Map.Config.MakeDoorDoor, General.Map.Config.MakeDoorTrack, General.Map.Config.MakeDoorCeiling, MakeDoor.ResetOffsets);
+			MakeDoor = new MakeDoorSettings(General.Map.Config.MakeDoorDoor, General.Map.Config.MakeDoorTrack, General.Map.Config.MakeDoorCeiling, MakeDoor.ResetOffsets, MakeDoor.ApplyActionSpecials, MakeDoor.ApplyTag);
 			ResetCopyProperties();
 		}
 		
@@ -481,7 +508,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			General.Interface.AddDocker(drawingOverridesDocker);
 			drawingOverridesPanel.Setup();
 			General.Map.Renderer2D.UpdateExtraFloorFlag();
-			MakeDoor = new MakeDoorSettings(General.Map.Config.MakeDoorDoor, General.Map.Config.MakeDoorTrack, General.Map.Config.MakeDoorCeiling, MakeDoor.ResetOffsets);
+			MakeDoor = new MakeDoorSettings(General.Map.Config.MakeDoorDoor, General.Map.Config.MakeDoorTrack, General.Map.Config.MakeDoorCeiling, MakeDoor.ResetOffsets, MakeDoor.ApplyActionSpecials, MakeDoor.ApplyTag);
 			ResetCopyProperties();
 		}
 
@@ -491,9 +518,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			drawingOverridesPanel.Terminate();
 			General.Interface.RemoveDocker(drawingOverridesDocker);
 		}
-		
-		// Map closed
-		public override void OnMapCloseEnd()
+
+        // Map closed
+        public override void OnMapCloseEnd()
 		{
 			base.OnMapCloseEnd();
 			undoredopanel.UpdateList();
@@ -742,10 +769,10 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					if(ti != null && asso.DirectLinkType >= 0 && Math.Abs(asso.DirectLinkType) != t.Type)
 					{
 						if(  ((ti.Args[0].Type == (int)asso.Type) && (asso.Tags.Contains(t.Args[0]))) ||
-						     ((ti.Args[1].Type == (int)asso.Type) && (asso.Tags.Contains(t.Args[1]))) ||
-						     ((ti.Args[2].Type == (int)asso.Type) && (asso.Tags.Contains(t.Args[2]))) ||
-						     ((ti.Args[3].Type == (int)asso.Type) && (asso.Tags.Contains(t.Args[3]))) ||
-						     ((ti.Args[4].Type == (int)asso.Type) && (asso.Tags.Contains(t.Args[4]))))
+							 ((ti.Args[1].Type == (int)asso.Type) && (asso.Tags.Contains(t.Args[1]))) ||
+							 ((ti.Args[2].Type == (int)asso.Type) && (asso.Tags.Contains(t.Args[2]))) ||
+							 ((ti.Args[3].Type == (int)asso.Type) && (asso.Tags.Contains(t.Args[3]))) ||
+							 ((ti.Args[4].Type == (int)asso.Type) && (asso.Tags.Contains(t.Args[4]))))
 						{
 							renderer.RenderThing(t, General.Colors.Indication, General.Settings.ActiveThingsAlpha);
 							if(General.Settings.GZShowEventLines) eventlines.Add(new Line3D(t.Position, asso.Center));

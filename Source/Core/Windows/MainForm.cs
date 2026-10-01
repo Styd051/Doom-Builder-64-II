@@ -439,10 +439,12 @@ namespace CodeImp.DoomBuilder.Windows
 		//mxd
 		private void UpdateTitle()
 		{
-            string programname = this.Text = Application.ProductName + " R" + General.ThisAssembly.GetName().Version.Revision;
+			string programname = this.Text = Application.ProductName + " R" + General.ThisAssembly.GetName().Version.Revision;
+			if (Environment.Is64BitProcess)
+				programname += " (64-bit)";
 
-            // Map opened?
-            if (General.Map != null)
+			// Map opened?
+			if (General.Map != null)
 			{
 				// Get nice name
 				string maptitle = (!string.IsNullOrEmpty(General.Map.Data.MapInfo.Title) ? ": " + General.Map.Data.MapInfo.Title : "");
@@ -452,9 +454,9 @@ namespace CodeImp.DoomBuilder.Windows
 			}
 			else
 			{
-                // Show normal caption
-                this.Text = programname;
-            }
+				// Show normal caption
+				this.Text = programname;
+			}
 		}
 		
 		// Generic event that invokes the tagged action
@@ -1361,6 +1363,29 @@ namespace CodeImp.DoomBuilder.Windows
 			// Let the base know
 			base.OnMouseWheel(e);
 		}
+
+		// [ZZ]
+		private void OnMouseHWheel(int delta)
+		{
+			int mod = 0;
+			if (alt) mod |= (int)Keys.Alt;
+			if (shift) mod |= (int)Keys.Shift;
+			if (ctrl) mod |= (int)Keys.Control;
+
+			// Scrollwheel left?
+			if (delta < 0)
+			{
+				General.Actions.KeyPressed((int)SpecialKeys.MScrollLeft | mod);
+				General.Actions.KeyReleased((int)SpecialKeys.MScrollLeft | mod);
+			}
+			else if (delta > 0)
+			{
+				General.Actions.KeyPressed((int)SpecialKeys.MScrollRight | mod);
+				General.Actions.KeyReleased((int)SpecialKeys.MScrollRight | mod);
+			}
+
+			// base? what base?
+		}
 		
 		// When a key is pressed
 		private void MainForm_KeyDown(object sender, KeyEventArgs e)
@@ -2115,12 +2140,12 @@ namespace CodeImp.DoomBuilder.Windows
 		// This checks one of the edit mode items (and unchecks all others)
 		internal void CheckEditModeButton(string modeclassname)
 		{
-            // Go for all items
-            //foreach(ToolStripItem item in editmodeitems)
-            int itemCount = editmodeitems.Count;
-            for(int i = 0; i < itemCount; i++)
+			// Go for all items
+			//foreach(ToolStripItem item in editmodeitems)
+			int itemCount = editmodeitems.Count;
+			for(int i = 0; i < itemCount; i++)
 			{
-                ToolStripItem item = editmodeitems[i];
+				ToolStripItem item = editmodeitems[i];
 				// Check what type it is
 				if(item is ToolStripMenuItem)
 				{
@@ -2138,14 +2163,14 @@ namespace CodeImp.DoomBuilder.Windows
 		// This removes the config-specific editing mode buttons
 		internal void RemoveEditModeButtons()
 		{
-            // Go for all items
-            //foreach(ToolStripItem item in editmodeitems)
-            int itemCount = editmodeitems.Count;
-            for (int i = 0; i < itemCount; i++)
-            {
-                ToolStripItem item = editmodeitems[i];
-                // Remove it and restart
-                menumode.DropDownItems.Remove(item);
+			// Go for all items
+			//foreach(ToolStripItem item in editmodeitems)
+			int itemCount = editmodeitems.Count;
+			for (int i = 0; i < itemCount; i++)
+			{
+				ToolStripItem item = editmodeitems[i];
+				// Remove it and restart
+				menumode.DropDownItems.Remove(item);
 				item.Dispose();
 			}
 			
@@ -2883,6 +2908,47 @@ namespace CodeImp.DoomBuilder.Windows
 			General.Interface.DisplayStatus(StatusType.Action, "Grid rendering is " + (General.Settings.RenderGrid ? "ENABLED" : "DISABLED"));
 
 			// Redraw display to show changes
+			General.Map.CRenderer2D.GridVisibilityChanged();
+			General.Interface.RedrawDisplay();
+		}
+		
+		[BeginAction("aligngridtolinedef")]
+		protected void AlignGridToLinedef()
+		{
+			if (General.Map.Map.SelectedLinedefsCount != 1)
+			{
+				General.Interface.DisplayStatus(StatusType.Warning, "Exactly one linedef must be selected");
+				General.Interface.MessageBeep(MessageBeepType.Warning);
+				return;
+			}
+			Linedef line = General.Map.Map.SelectedLinedefs.First.Value;
+			Vertex vertex = line.Start;
+			General.Map.Grid.SetGridRotation(line.Angle);
+			General.Map.Grid.SetGridOrigin(vertex.Position.x, vertex.Position.y);
+			General.Map.CRenderer2D.GridVisibilityChanged();
+			General.Interface.RedrawDisplay();
+		}
+
+		[BeginAction("setgridorigintovertex")]
+		protected void SetGridOriginToVertex()
+		{
+			if (General.Map.Map.SelectedVerticessCount != 1)
+			{
+				General.Interface.DisplayStatus(StatusType.Warning, "Exactly one vertex must be selected");
+				General.Interface.MessageBeep(MessageBeepType.Warning);
+				return;
+			}
+			Vertex vertex = General.Map.Map.SelectedVertices.First.Value;
+			General.Map.Grid.SetGridOrigin(vertex.Position.x, vertex.Position.y);
+			General.Map.CRenderer2D.GridVisibilityChanged();
+			General.Interface.RedrawDisplay();
+		}
+
+		[BeginAction("resetgrid")]
+		protected void ResetGrid()
+		{
+			General.Map.Grid.SetGridRotation(0.0f);
+			General.Map.Grid.SetGridOrigin(0, 0);
 			General.Map.CRenderer2D.GridVisibilityChanged();
 			General.Interface.RedrawDisplay();
 		}
@@ -3632,9 +3698,9 @@ namespace CodeImp.DoomBuilder.Windows
 		// This hides all info panels
 		public void HideInfo()
 		{
-            // Hide them all
-            // [ZZ]
-            panelinfo.SuspendLayout();
+			// Hide them all
+			// [ZZ]
+			panelinfo.SuspendLayout();
 			bool showModeName = ((General.Map != null) && IsInfoPanelExpanded); //mxd
 			lastinfoobject = null;
 			if(linedefinfo.Visible) linedefinfo.Hide();
@@ -3653,8 +3719,8 @@ namespace CodeImp.DoomBuilder.Windows
 
 			//mxd. Let the plugins know
 			General.Plugins.OnHighlightLost();
-            // [ZZ]
-            panelinfo.ResumeLayout();
+			// [ZZ]
+			panelinfo.ResumeLayout();
 		}
 		
 		// This refreshes info
@@ -3665,11 +3731,11 @@ namespace CodeImp.DoomBuilder.Windows
 			else if(lastinfoobject is Sector) ShowSectorInfo((Sector)lastinfoobject);
 			else if(lastinfoobject is Thing) ShowThingInfo((Thing)lastinfoobject);
 
-            //mxd. Let the plugins know
-            // [ZZ]
-            panelinfo.SuspendLayout();
+			//mxd. Let the plugins know
+			// [ZZ]
+			panelinfo.SuspendLayout();
 			General.Plugins.OnHighlightRefreshed(lastinfoobject);
-            panelinfo.ResumeLayout();
+			panelinfo.ResumeLayout();
 		}
 
 		//mxd
@@ -3718,9 +3784,9 @@ namespace CodeImp.DoomBuilder.Windows
 				return;
 			}
 
-            // [ZZ]
-            panelinfo.SuspendLayout();
-            lastinfoobject = l;
+			// [ZZ]
+			panelinfo.SuspendLayout();
+			lastinfoobject = l;
 			modename.Visible = false;
 #if DEBUG
 			console.Visible = console.AlwaysOnTop; //mxd
@@ -3747,11 +3813,11 @@ namespace CodeImp.DoomBuilder.Windows
 			}
 			labelcollapsedinfo.Refresh();
 
-            //mxd. let the plugins know
-            General.Plugins.OnHighlightLinedef(l);
-            // [ZZ]
-            panelinfo.ResumeLayout();
-        }
+			//mxd. let the plugins know
+			General.Plugins.OnHighlightLinedef(l);
+			// [ZZ]
+			panelinfo.ResumeLayout();
+		}
 
 		// Show vertex info
 		public void ShowVertexInfo(Vertex v) 
@@ -3761,10 +3827,10 @@ namespace CodeImp.DoomBuilder.Windows
 				HideInfo();
 				return;
 			}
-            
-            // [ZZ]
-            panelinfo.SuspendLayout();
-            lastinfoobject = v;
+			
+			// [ZZ]
+			panelinfo.SuspendLayout();
+			lastinfoobject = v;
 			modename.Visible = false;
 #if DEBUG
 			console.Visible = console.AlwaysOnTop; //mxd
@@ -3781,12 +3847,12 @@ namespace CodeImp.DoomBuilder.Windows
 
 			//mxd. let the plugins know
 			General.Plugins.OnHighlightVertex(v);
-            // [ZZ]
-            panelinfo.ResumeLayout();
-        }
+			// [ZZ]
+			panelinfo.ResumeLayout();
+		}
 
-        //mxd. Show sector info
-        public void ShowSectorInfo(Sector s) 
+		//mxd. Show sector info
+		public void ShowSectorInfo(Sector s) 
 		{
 			ShowSectorInfo(s, false, false);
 		}
@@ -3800,9 +3866,9 @@ namespace CodeImp.DoomBuilder.Windows
 				return;
 			}
 
-            // [ZZ]
-            panelinfo.SuspendLayout();
-            lastinfoobject = s;
+			// [ZZ]
+			panelinfo.SuspendLayout();
+			lastinfoobject = s;
 			modename.Visible = false;
 #if DEBUG
 			console.Visible = console.AlwaysOnTop; //mxd
@@ -3823,14 +3889,14 @@ namespace CodeImp.DoomBuilder.Windows
 
 			labelcollapsedinfo.Refresh();
 
-            //mxd. let the plugins know
-            General.Plugins.OnHighlightSector(s);
-            // [ZZ]
-            panelinfo.ResumeLayout();
-        }
+			//mxd. let the plugins know
+			General.Plugins.OnHighlightSector(s);
+			// [ZZ]
+			panelinfo.ResumeLayout();
+		}
 
-        // Show thing info
-        public void ShowThingInfo(Thing t)
+		// Show thing info
+		public void ShowThingInfo(Thing t)
 		{
 			if(t.IsDisposed)
 			{
@@ -3838,9 +3904,9 @@ namespace CodeImp.DoomBuilder.Windows
 				return;
 			}
 
-            // [ZZ]
-            panelinfo.SuspendLayout();
-            lastinfoobject = t;
+			// [ZZ]
+			panelinfo.SuspendLayout();
+			lastinfoobject = t;
 			modename.Visible = false;
 #if DEBUG
 			console.Visible = console.AlwaysOnTop; //mxd
@@ -3856,19 +3922,19 @@ namespace CodeImp.DoomBuilder.Windows
 			labelcollapsedinfo.Text = t.Type + " - " + ti.Title;
 			labelcollapsedinfo.Refresh();
 
-            //mxd. let the plugins know
-            General.Plugins.OnHighlightThing(t);
-            // [ZZ]
-            panelinfo.ResumeLayout();
-        }
+			//mxd. let the plugins know
+			General.Plugins.OnHighlightThing(t);
+			// [ZZ]
+			panelinfo.ResumeLayout();
+		}
 
-        #endregion
+		#endregion
 
-        #region ================== Dialogs
+		#region ================== Dialogs
 
-        // This browses for a texture
-        // Returns the new texture name or the same texture name when cancelled
-        public string BrowseTexture(IWin32Window owner, string initialvalue)
+		// This browses for a texture
+		// Returns the new texture name or the same texture name when cancelled
+		public string BrowseTexture(IWin32Window owner, string initialvalue)
 		{
 			return TextureBrowserForm.Browse(owner, initialvalue, false);//mxd
 		}
@@ -4111,6 +4177,12 @@ namespace CodeImp.DoomBuilder.Windows
 						base.WndProc(ref m);
 					}
 					break;
+
+				case General.WM_MOUSEHWHEEL:
+					int delta = m.WParam.ToInt32() >> 16;
+					OnMouseHWheel(delta);
+					m.Result = new IntPtr(delta);
+					break;
 					
 				default:
 					// Let the base handle the message
@@ -4178,7 +4250,7 @@ namespace CodeImp.DoomBuilder.Windows
 		internal void ImageDataLoaded(ImageData img)
 		{
 			// Image is used in the map?
-			if((img != null) && img.UsedInMap && !img.IsDisposed)
+			if ((img != null) && img.UsedInMap && !img.IsDisposed)
 			{
 				// Go for all setors
 				bool updated = false;
@@ -4416,12 +4488,29 @@ namespace CodeImp.DoomBuilder.Windows
 
 		public SizeF MeasureString(string text, Font font)
 		{
-			return graphics.MeasureString(text, font);
+			SizeF length;
+
+			// Be thread safe
+			lock(graphics)
+			{
+				length = graphics.MeasureString(text, font);
+			}
+
+			return length;
 		}
 
 		public SizeF MeasureString(string text, Font font, int width, StringFormat format)
 		{
-			return graphics.MeasureString(text, font, width, format);
+			SizeF length;
+
+			// Be thread safe
+			lock (graphics)
+			{
+
+				length = graphics.MeasureString(text, font, width, format);
+			}
+
+			return length;
 		}
 
 		#endregion

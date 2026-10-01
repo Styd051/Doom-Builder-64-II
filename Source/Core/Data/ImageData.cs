@@ -58,6 +58,8 @@ namespace CodeImp.DoomBuilder.Data
 		protected bool ismasked; //mxd. If true, has pixels with zero alpha
 		protected bool hasLongName; //mxd. Texture name is longer than DataManager.CLASIC_IMAGE_NAME_LENGTH
 		protected bool hasPatchWithSameName; //mxd
+		protected int namewidth; // biwa
+		protected int shortnamewidth; // biwa
 
 		//mxd. Hashing
 		private static int hashcounter;
@@ -84,6 +86,9 @@ namespace CodeImp.DoomBuilder.Data
 		
 		// Disposing
 		protected bool isdisposed;
+
+        // Dummy object used when we don't have a bitmap for locking
+        private object bitmapLocker = new object();
 		
 		#endregion
 		
@@ -101,7 +106,7 @@ namespace CodeImp.DoomBuilder.Data
 		public bool HasPatchWithSameName { get { return hasPatchWithSameName; } } //mxd
 		internal bool HasLongName { get { return hasLongName; } } //mxd
 		public bool UseColorCorrection { get { return usecolorcorrection; } set { usecolorcorrection = value; } }
-		public Texture Texture { get { lock(this) { return texture; } } }
+		public Texture Texture { get { lock (this) lock (bitmap ?? bitmapLocker) { return texture; } } }
 		public bool IsPreviewLoaded { get { return (previewstate == ImageLoadState.Ready); } }
 		public bool IsImageLoaded { get { return (imagestate == ImageLoadState.Ready); } }
 		public bool LoadFailed { get { return loadfailed; } }
@@ -120,6 +125,8 @@ namespace CodeImp.DoomBuilder.Data
 		public virtual float ScaledHeight { get { return (float)Math.Round(height * scale.y); } }
 		public virtual Vector2D Scale { get { return scale; } }
 		public bool WorldPanning { get { return worldpanning; } }
+		public int NameWidth {  get { return namewidth; } } // biwa
+		public int ShortNameWidth { get { return shortnamewidth; } } // biwa
 
 		#endregion
 
@@ -148,7 +155,7 @@ namespace CodeImp.DoomBuilder.Data
 			// Not already disposed?
 			if(!isdisposed)
 			{
-				lock(this)
+				lock (this) lock (bitmap ?? bitmapLocker)
 				{
 					// Clean up
 					if(bitmap != null) bitmap.Dispose();
@@ -203,24 +210,35 @@ namespace CodeImp.DoomBuilder.Data
 			this.virtualname = name; //mxd
 			this.displayname = name; //mxd
 			this.longname = Lump.MakeLongName(name); //mxd
+
+			ComputeNamesWidth(); // biwa
 		}
 		
 		// This unloads the image
 		public virtual void UnloadImage()
 		{
-			lock(this)
-			{
+            lock (this) lock (bitmap ?? bitmapLocker)
+            {
 				if(bitmap != null) bitmap.Dispose();
 				bitmap = null;
 				imagestate = ImageLoadState.None;
 			}
 		}
 
+		// biwa. Computing the widths in the constructor of ImageBrowserItem accumulates to taking forever when loading many images,
+		// like when showing the texture browser of huge texture sets like OTEX
+		internal void ComputeNamesWidth()
+		{
+			//mxd. Calculate names width
+			namewidth = (int)Math.Ceiling(General.Interface.MeasureString(name, SystemFonts.MessageBoxFont, 10000, StringFormat.GenericTypographic).Width) + 6;
+			shortnamewidth = (int)Math.Ceiling(General.Interface.MeasureString(shortname, SystemFonts.MessageBoxFont, 10000, StringFormat.GenericTypographic).Width) + 6;
+		}
+
 		// This returns the bitmap image
 		public Bitmap GetBitmap()
 		{
-			lock(this)
-			{
+            lock (this) lock (bitmap ?? bitmapLocker)
+            {
 				// Image loaded successfully?
 				if(!loadfailed && (imagestate == ImageLoadState.Ready) && (bitmap != null))
 					return bitmap;
@@ -238,14 +256,14 @@ namespace CodeImp.DoomBuilder.Data
 
 			// Notify the main thread about the change so that sectors can update their buffers
 			IntPtr strptr = Marshal.StringToCoTaskMemAuto(this.name);
-			General.SendMessage(General.MainWindow.Handle, (int)MainForm.ThreadMessages.ImageDataLoaded, strptr.ToInt32(), 0);
+			General.SendMessage(General.MainWindow.Handle, (int)MainForm.ThreadMessages.ImageDataLoaded, strptr, IntPtr.Zero);
 		}
 		
 		// This requests loading the image
 		protected virtual void LocalLoadImage()
 		{
-			lock(this)
-			{
+            lock (this) lock (bitmap ?? bitmapLocker)
+            {
 				// Bitmap loaded successfully?
 				if(bitmap != null)
 				{
@@ -443,8 +461,8 @@ namespace CodeImp.DoomBuilder.Data
 		// This creates the Direct3D texture
 		public virtual void CreateTexture()
 		{
-			lock(this)
-			{
+            lock (this) lock (bitmap ?? bitmapLocker)
+            {
 				// Only do this when texture is not created yet
 				if(((texture == null) || (texture.Disposed)) && this.IsImageLoaded && !loadfailed)
 				{
@@ -487,9 +505,9 @@ namespace CodeImp.DoomBuilder.Data
 		{
 			if(!dynamictexture)
 				throw new Exception("The image must be a dynamic image to support direct updating.");
-			
-			lock(this)
-			{
+
+            lock (this) lock (bitmap ?? bitmapLocker)
+            {
 				if((texture != null) && !texture.Disposed)
 				{
 					// Lock the bitmap and texture
@@ -523,8 +541,8 @@ namespace CodeImp.DoomBuilder.Data
 		// This destroys the Direct3D texture
 		public void ReleaseTexture()
 		{
-			lock(this)
-			{
+            lock (this) lock (bitmap ?? bitmapLocker)
+            {
 				// Trash it
 				if(texture != null) texture.Dispose();
 				texture = null;
@@ -534,8 +552,8 @@ namespace CodeImp.DoomBuilder.Data
 		// This draws a preview
 		public virtual void DrawPreview(Graphics target, Point targetpos)
 		{
-			lock(this)
-			{
+            lock (this) lock (bitmap ?? bitmapLocker)
+            {
 				// Preview ready?
 				if(!loadfailed && (previewstate == ImageLoadState.Ready))
 				{
@@ -563,8 +581,8 @@ namespace CodeImp.DoomBuilder.Data
 		// This returns a preview image
 		public virtual Image GetPreview()
 		{
-			lock(this)
-			{
+            lock (this) lock (bitmap ?? bitmapLocker)
+            {
 				// Preview ready?
 				if(previewstate == ImageLoadState.Ready)
 				{

@@ -46,10 +46,12 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			editnewthing.Checked = General.Settings.ReadPluginSetting("editnewthing", true);
 			editnewsector.Checked = General.Settings.ReadPluginSetting("editnewsector", false);
 			additiveselect.Checked = General.Settings.ReadPluginSetting("additiveselect", false);
+			additivepaintselect.Checked = General.Settings.ReadPluginSetting("additivepaintselect", additiveselect.Checked); // Use the same settign as additive select by default
 			stitchrange.Text = General.Settings.ReadPluginSetting("stitchrange", 20).ToString();
 			highlightrange.Text = General.Settings.ReadPluginSetting("highlightrange", 20).ToString();
 			highlightthingsrange.Text = General.Settings.ReadPluginSetting("highlightthingsrange", 10).ToString();
 			splitlinedefsrange.Text = General.Settings.ReadPluginSetting("splitlinedefsrange", 10).ToString();
+			mouseselectionthreshold.Text = General.Settings.ReadPluginSetting("mouseselectionthreshold", 2).ToString();
 			splitbehavior.SelectedIndex = (int)General.Settings.SplitLineBehavior; //mxd
 			autoclearselection.Checked = BuilderPlug.Me.AutoClearSelection;
 			visualmodeclearselection.Checked = BuilderPlug.Me.VisualModeClearSelection;
@@ -76,10 +78,12 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			General.Settings.WritePluginSetting("editnewthing", editnewthing.Checked);
 			General.Settings.WritePluginSetting("editnewsector", editnewsector.Checked);
 			General.Settings.WritePluginSetting("additiveselect", additiveselect.Checked);
+			General.Settings.WritePluginSetting("additivepaintselect", additivepaintselect.Checked);
 			General.Settings.WritePluginSetting("stitchrange", stitchrange.GetResult(0));
 			General.Settings.WritePluginSetting("highlightrange", highlightrange.GetResult(0));
 			General.Settings.WritePluginSetting("highlightthingsrange", highlightthingsrange.GetResult(0));
 			General.Settings.WritePluginSetting("splitlinedefsrange", splitlinedefsrange.GetResult(0));
+			General.Settings.WritePluginSetting("mouseselectionthreshold", mouseselectionthreshold.GetResult(0));
 			General.Settings.WritePluginSetting("autoclearselection", autoclearselection.Checked);
 			General.Settings.WritePluginSetting("visualmodeclearselection", visualmodeclearselection.Checked);
 			General.Settings.WritePluginSetting("autodragonpaste", autodragonpaste.Checked);
@@ -125,5 +129,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		}
 
 		#endregion
+
 	}
 }

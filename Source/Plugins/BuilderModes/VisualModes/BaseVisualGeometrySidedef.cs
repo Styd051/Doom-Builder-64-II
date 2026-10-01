@@ -528,11 +528,17 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			if(ignorelight) lightabsolute = false;
 		}
 
+		// biwa
+		protected static float GetNewTexutreOffset(float oldValue, float offset, float textureSize)
+		{
+			return GetRoundedTextureOffset(oldValue, offset, 1.0f, textureSize);
+		}
+
 		//mxd
 		protected static float GetRoundedTextureOffset(float oldValue, float offset, float scale, float textureSize) 
 		{
 			if(offset == 0f) return oldValue;
-			float scaledOffset = offset * scale;
+			float scaledOffset = offset * Math.Abs(scale);
 			float result = (float)Math.Round(oldValue + scaledOffset);
 			if(textureSize > 0) result %= textureSize;
 			if(result == oldValue) result += (scaledOffset < 0 ? -1 : 1);
@@ -678,16 +684,41 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			{
 				float scalex, offsetx;
 				float linelength = (float)Math.Round(Sidedef.Line.Length); // Let's use ZDoom-compatible line length here
+				float patternwidth = (options.AutoWidth && options.PatternWidth > 0) ? options.PatternWidth : Texture.Width;
+				float horizontalrepeat = options.HorizontalRepeat;
 
-				if(options.FitAcrossSurfaces) 
+				if (options.FitAcrossSurfaces)
 				{
-					scalex = Texture.ScaledWidth / (linelength * (options.GlobalBounds.Width / linelength)) * options.HorizontalRepeat;
+					if (options.AutoWidth)
+					{
+						horizontalrepeat = (float)Math.Round((float)options.GlobalBounds.Width / patternwidth);
+
+						if (horizontalrepeat == 0)
+							horizontalrepeat = 1.0f;
+
+						if (options.PatternWidth > 0)
+							horizontalrepeat /= Texture.Width / patternwidth;
+					}
+
+					scalex = Texture.ScaledWidth / (linelength * (options.GlobalBounds.Width / linelength)) * horizontalrepeat;
 					offsetx = (float)Math.Round((options.Bounds.X * scalex - Sidedef.OffsetX - options.ControlSideOffsetX), General.Map.FormatInterface.VertexDecimals);
 					if(Texture.IsImageLoaded) offsetx %= Texture.Width;
 				} 
 				else 
 				{
-					scalex = Texture.ScaledWidth / linelength * options.HorizontalRepeat;
+					if (options.AutoWidth)
+					{
+						horizontalrepeat = (float)Math.Round(linelength / patternwidth);
+
+						if (horizontalrepeat == 0)
+							horizontalrepeat = 1.0f;
+
+						if (options.PatternWidth > 0)
+							horizontalrepeat /= Texture.Width / patternwidth;
+					}
+
+
+					scalex = Texture.ScaledWidth / linelength * horizontalrepeat;
 					offsetx = -Sidedef.OffsetX - options.ControlSideOffsetX;
 				}
 
@@ -707,10 +738,23 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				if(Sidedef.Sector != null) 
 				{
 					float scaley, offsety;
+					float patternheight = (options.AutoHeight && options.PatternHeight > 0) ? options.PatternHeight : Texture.Height;
+					float verticalrepeat = options.VerticalRepeat;
 
-					if(options.FitAcrossSurfaces) 
+					if (options.FitAcrossSurfaces) 
 					{
-						scaley = Texture.ScaledHeight / (options.Bounds.Height * ((float)options.GlobalBounds.Height / options.Bounds.Height)) * options.VerticalRepeat;
+						if (options.AutoHeight)
+						{
+							verticalrepeat = (float)Math.Round((float)options.GlobalBounds.Height / patternheight);
+
+							if (verticalrepeat == 0)
+								verticalrepeat = 1.0f;
+
+							if (options.PatternHeight > 0)
+								verticalrepeat /= Texture.Height / patternheight;
+						}
+
+						scaley = Texture.ScaledHeight / (options.Bounds.Height * ((float)options.GlobalBounds.Height / options.Bounds.Height)) * verticalrepeat;
 
 						if(this is VisualLower) // Special cases, special cases...
 						{ 
@@ -731,7 +775,18 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					} 
 					else 
 					{
-						scaley = Texture.ScaledHeight / options.Bounds.Height * options.VerticalRepeat;
+						if (options.AutoHeight)
+						{
+							verticalrepeat = (float)Math.Round((float)options.Bounds.Height / patternheight);
+
+							if (verticalrepeat == 0)
+								verticalrepeat = 1.0f;
+
+							if (options.PatternHeight > 0)
+								verticalrepeat /= Texture.Height / patternheight;
+						}
+
+						scaley = Texture.ScaledHeight / options.Bounds.Height * verticalrepeat;
 
 						// Special cases, special cases...
 						if(this is VisualLower)
@@ -784,7 +839,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		protected abstract void MoveTextureOffset(int offsetx, int offsety);
 		protected abstract Point GetTextureOffset();
 		public virtual void OnTextureFit(FitTextureOptions options) { } //mxd
-		
+		public virtual void OnPaintSelectEnd() { } // biwa
+
 		// Insert middle texture
 		public virtual void OnInsert()
 		{
@@ -1365,6 +1421,35 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			{
 				UpdateDragUV();
 			}
+			else if (mode.PaintSelectPressed) // biwa. Paint selection going on?
+			{
+				if (mode.PaintSelectType == this.GetType().BaseType && mode.Highlighted != this) // using BaseType so that middle, upper, lower, etc can be selecting in one go
+				{
+					// toggle selected state
+					if (General.Interface.ShiftState ^ BuilderPlug.Me.AdditivePaintSelect)
+					{
+						this.selected = true;
+						mode.AddSelectedObject(this);
+					}
+					else if (General.Interface.CtrlState)
+					{
+						this.selected = false;
+						mode.RemoveSelectedObject(this);
+
+					}
+					else
+					{
+						if (this.selected)
+							mode.RemoveSelectedObject(this);
+						else
+							mode.AddSelectedObject(this);
+
+						this.selected = !this.selected;
+					}
+				}
+
+				return;
+			}
 			else
 			{
 				// Select button pressed?
@@ -1616,6 +1701,33 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			if(sd != null) sd.Reset(true);
 
 			mode.SetActionResult("Wall scale changed to " + scaleX.ToString("F03", CultureInfo.InvariantCulture) + ", " + scaleY.ToString("F03", CultureInfo.InvariantCulture) + " (" + (int)Math.Round(Texture.Width / scaleX) + " x " + (int)Math.Round(Texture.Height / scaleY) + ").");
+		}
+
+		// biwa
+		public virtual void OnPaintSelectBegin()
+		{
+			mode.PaintSelectType = this.GetType().BaseType; // using BaseType so that middle, upper, lower, etc can be selecting in one go
+
+			// toggle selected state
+			if (General.Interface.ShiftState ^ BuilderPlug.Me.AdditivePaintSelect)
+			{
+				this.selected = true;
+				mode.AddSelectedObject(this);
+			}
+			else if (General.Interface.CtrlState)
+			{
+				this.selected = false;
+				mode.RemoveSelectedObject(this);
+			}
+			else
+			{
+				if (this.selected)
+					mode.RemoveSelectedObject(this);
+				else
+					mode.AddSelectedObject(this);
+
+				this.selected = !this.selected;
+			}
 		}
 
 		#endregion

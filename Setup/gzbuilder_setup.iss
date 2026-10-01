@@ -2,18 +2,18 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 [Setup]
-AppName=3DGE Builder
-AppVerName=3DGE Builder 2.4
-AppPublisher=IsotopeSoftWorks
-AppPublisherURL=https://www.facebook.com/IsotopeSoftWorks/
-AppSupportURL=http://www.tdgmods.net/smf/viewforum.php?f=34
-AppUpdatesURL=http://www.tdgmods.net/smf/viewforum.php?f=34
-DefaultDirName={pf}\3DGE Builder
-DefaultGroupName=3DGE Builder
+AppName=GZDoom Builder
+AppVerName=GZDoom Builder 2.4
+AppPublisher=MaxED
+AppPublisherURL=http://forum.zdoom.org/memberlist.php?mode=viewprofile&u=7012
+AppSupportURL=http://forum.zdoom.org/viewtopic.php?f=3&t=32392
+AppUpdatesURL=http://devbuilds.drdteam.org/doombuilder2-gzdb/
+DefaultDirName={pf}\GZDoom Builder
+DefaultGroupName=GZDoom Builder
 AllowNoIcons=true
 InfoBeforeFile=..\Setup\disclaimer.txt
 OutputDir=..\Release
-OutputBaseFilename=3DGE-Builder Setup
+OutputBaseFilename=GZDB-Bugfix Setup
 Compression=lzma/ultra64
 SolidCompression=true
 SourceDir=..\Build
@@ -38,7 +38,10 @@ Source: Setup\dotnetfx35setup.exe; DestDir: {tmp}; Flags: dontcopy
 Source: Setup\dxwebsetup.exe; DestDir: {tmp}; Flags: dontcopy
 Source: Setup\vcredist_x86.exe; DestDir: {tmp}; Flags: dontcopy
 Source: Builder.exe; DestDir: {app}; Flags: ignoreversion
-Source: 3DGEBuilder.default.cfg; DestDir: {app}; Flags: ignoreversion
+Source: GZBuilder.default.cfg; DestDir: {app}; Flags: ignoreversion
+Source: Updater.exe; DestDir: {app}; Flags: ignoreversion
+Source: Updater.ini; DestDir: {app}; Flags: ignoreversion
+Source: Refmanual.chm; DestDir: {app}; Flags: ignoreversion
 Source: DevIL.dll; DestDir: {app}; Flags: ignoreversion
 Source: SharpCompress.3.5.dll; DestDir: {app}; Flags: ignoreversion
 Source: ScintillaNET.3.5.dll; DestDir: {app}; Flags: ignoreversion
@@ -65,9 +68,9 @@ Source: Sprites\*; DestDir: {app}\Sprites; Flags: ignoreversion recursesubdirs
 Source: Textures\*; DestDir: {app}\Textures; Flags: ignoreversion
 
 [Icons]
-Name: {group}\3DGE Builder; Filename: {app}\Builder.exe
+Name: {group}\GZDoom Builder; Filename: {app}\Builder.exe
 Name: {group}\{cm:UninstallProgram,GZDoom Builder}; Filename: {uninstallexe}
-Name: {commondesktop}\3DGE Builder; Filename: {app}\Builder.exe; Tasks: desktopicon
+Name: {commondesktop}\GZDoom Builder; Filename: {app}\Builder.exe; Tasks: desktopicon
 
 [UninstallDelete]
 Name: {app}; Type: filesandordirs
@@ -77,7 +80,7 @@ Name: {app}\Builder.pdb; Type: files
 Name: {app}\Builder.xml; Type: files
 
 [Registry]
-Root: HKLM; Subkey: SOFTWARE\MaxED\3DGE Builder\; ValueType: string; ValueName: Location; ValueData: {app}; Flags: uninsdeletevalue
+Root: HKLM; Subkey: SOFTWARE\MaxED\GZDoom Builder\; ValueType: string; ValueName: Location; ValueData: {app}; Flags: uninsdeletevalue
 
 [Messages]
 ReadyLabel2a=Continue to begin with the installation, or click Back if you want to review or change any settings.

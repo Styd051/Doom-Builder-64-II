@@ -11,7 +11,7 @@
     <RootNamespace>CodeImp.DoomBuilder</RootNamespace>
     <AssemblyName>Builder</AssemblyName>
     <StartupObject>CodeImp.DoomBuilder.General</StartupObject>
-    <ApplicationIcon>icon128x128.ico</ApplicationIcon>
+    <ApplicationIcon>Resources\GZDB2.ico</ApplicationIcon>
     <Win32Resource>
     </Win32Resource>
     <RunPostBuildEvent>OnBuildSuccess</RunPostBuildEvent>
@@ -20,23 +20,9 @@
     <OldToolsVersion>3.5</OldToolsVersion>
     <UpgradeBackupLocation>
     </UpgradeBackupLocation>
-    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <PublishUrl>publish\</PublishUrl>
-    <Install>true</Install>
-    <InstallFrom>Disk</InstallFrom>
-    <UpdateEnabled>false</UpdateEnabled>
-    <UpdateMode>Foreground</UpdateMode>
-    <UpdateInterval>7</UpdateInterval>
-    <UpdateIntervalUnits>Days</UpdateIntervalUnits>
-    <UpdatePeriodically>false</UpdatePeriodically>
-    <UpdateRequired>false</UpdateRequired>
-    <MapFileExtensions>true</MapFileExtensions>
-    <ApplicationRevision>0</ApplicationRevision>
-    <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
-    <IsWebBootstrapper>false</IsWebBootstrapper>
-    <UseApplicationTrust>false</UseApplicationTrust>
-    <BootstrapperEnabled>true</BootstrapperEnabled>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
     <DebugSymbols>true</DebugSymbols>
@@ -47,8 +33,10 @@
     <PlatformTarget>x86</PlatformTarget>
     <UseVSHostingProcess>false</UseVSHostingProcess>
     <ErrorReport>prompt</ErrorReport>
-    <DocumentationFile>..\..\Build\Builder.xml</DocumentationFile>
-    <WarningLevel>3</WarningLevel>
+    <DocumentationFile>
+    </DocumentationFile>
+    <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
     <OutputPath>..\..\Build\</OutputPath>
@@ -58,24 +46,28 @@
     <PlatformTarget>x86</PlatformTarget>
     <UseVSHostingProcess>false</UseVSHostingProcess>
     <ErrorReport>prompt</ErrorReport>
-    <DocumentationFile>..\..\Build\Builder.xml</DocumentationFile>
+    <DocumentationFile>
+    </DocumentationFile>
     <DefineConstants>
     </DefineConstants>
     <WarningLevel>4</WarningLevel>
     <DebugSymbols>true</DebugSymbols>
     <NoWarn>1591</NoWarn>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug + Profiler|x86' ">
     <DebugSymbols>true</DebugSymbols>
     <OutputPath>..\..\Build\</OutputPath>
     <DefineConstants>DEBUG;TRACE;PROFILE</DefineConstants>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <DocumentationFile>..\..\Build\Builder.xml</DocumentationFile>
+    <DocumentationFile>
+    </DocumentationFile>
     <WarningLevel>3</WarningLevel>
     <DebugType>full</DebugType>
     <PlatformTarget>x86</PlatformTarget>
     <UseVSHostingProcess>false</UseVSHostingProcess>
     <ErrorReport>prompt</ErrorReport>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release + Profiler|x86' ">
     <DebugSymbols>true</DebugSymbols>
@@ -89,6 +81,38 @@
     <UseVSHostingProcess>false</UseVSHostingProcess>
     <ErrorReport>prompt</ErrorReport>
     <DefineConstants>TRACE;PROFILE</DefineConstants>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
+    <PlatformTarget>x64</PlatformTarget>
+    <OutputPath>..\..\Build\</OutputPath>
+    <DocumentationFile>
+    </DocumentationFile>
+    <Prefer32Bit>false</Prefer32Bit>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DefineConstants>TRACE;DEBUG</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
+    <PlatformTarget>x64</PlatformTarget>
+    <OutputPath>..\..\Build\</OutputPath>
+    <Prefer32Bit>false</Prefer32Bit>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Optimize>true</Optimize>
+    <DefineConstants>TRACE</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug + Profiler|x64'">
+    <PlatformTarget>x64</PlatformTarget>
+    <OutputPath>..\..\Build\</OutputPath>
+    <Prefer32Bit>false</Prefer32Bit>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DefineConstants>TRACE;DEBUG;PROFILE</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release + Profiler|x64'">
+    <PlatformTarget>x64</PlatformTarget>
+    <OutputPath>..\..\Build\</OutputPath>
+    <Prefer32Bit>false</Prefer32Bit>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Optimize>true</Optimize>
   </PropertyGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
@@ -137,6 +161,7 @@
     <Compile Include="Controls\ArgumentBox.Designer.cs">
       <DependentUpon>ArgumentBox.cs</DependentUpon>
     </Compile>
+    <Compile Include="Controls\FolderSelectDialog.cs" />
     <Compile Include="Controls\TransparentTrackBar.cs">
       <SubType>Component</SubType>
     </Compile>
@@ -189,6 +214,11 @@
     </Compile>
     <Compile Include="Controls\PairedFloatControl.Designer.cs">
       <DependentUpon>PairedFloatControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Properties\Settings.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+      <DependentUpon>Settings.settings</DependentUpon>
     </Compile>
     <Compile Include="Windows\ThingStatisticsForm.cs">
       <SubType>Form</SubType>
@@ -553,13 +583,18 @@
     <Reference Include="JetBrains.Profiler.Core.Api, Version=1.3.1661.20096, Culture=neutral, PublicKeyToken=1010a0d8d6380325" Condition=" '$(Configuration)|$(Platform)' == 'Debug + Profiler|x86' Or '$(Configuration)|$(Platform)' == 'Release + Profiler|x86' ">
       <SpecificVersion>False</SpecificVersion>
     </Reference>
-    <Reference Include="ScintillaNET.3.5, Version=3.5.8.0, Culture=neutral, processorArchitecture=x86">
-      <Private>False</Private>
+    <Reference Include="ScintillaNET, Version=3.6.3.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\Build\ScintillaNET.dll</HintPath>
     </Reference>
-    <Reference Include="SharpCompress.3.5, Version=0.11.5.0, Culture=neutral, processorArchitecture=x86">
-      <Private>False</Private>
+    <Reference Include="SharpCompress, Version=0.20.0.0, Culture=neutral, PublicKeyToken=afb0a02973931d96, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\Build\SharpCompress.dll</HintPath>
     </Reference>
-    <Reference Include="SlimDX, Version=2.0.13.43, Culture=neutral, PublicKeyToken=b1b0c32fd1ffe4f9, processorArchitecture=x86" />
+    <Reference Include="SlimDX, Version=v4.0.30319, Culture=neutral, PublicKeyToken=b1b0c32fd1ffe4f9, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\Build\SlimDX.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core">
       <RequiredTargetFramework>3.5</RequiredTargetFramework>
@@ -608,6 +643,11 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
+    <None Include="app.config" />
+    <None Include="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
     <None Include="Resources\MissingTexture.png" />
     <None Include="Resources\UnknownImage.png" />
     <None Include="Resources\treeview.png" />
@@ -1220,7 +1260,6 @@
     <None Include="Resources\Angle5.png" />
     <None Include="Resources\Angle6.png" />
     <None Include="Resources\Angle7.png" />
-    <Content Include="icon128x128.ico" />
     <Content Include="Resources\DB2.ico" />
     <None Include="Resources\GZDB2.ico" />
     <None Include="Resources\fog.png" />
@@ -1467,21 +1506,25 @@
       <DependentUpon>VertexEditForm.cs</DependentUpon>
     </EmbeddedResource>
   </ItemGroup>
-  <ItemGroup>
-    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
-      <Visible>False</Visible>
-      <ProductName>.NET Framework 3.5 SP1</ProductName>
-      <Install>true</Install>
-    </BootstrapperPackage>
-  </ItemGroup>
+  <ItemGroup />
   <PropertyGroup>
-    <PreBuildEvent>
-    </PreBuildEvent>
-    <PostBuildEvent>if exist "%25VS140COMNTOOLS%25" goto tools140 
+    <PreBuildEvent>echo Current Output Directory: %25cd%25
+echo Copying platform-appropriate DevIL.dll file.
+copy /Y ..\DevIL\$(PlatformName)\DevIL.dll .\
+echo Copying platform-appropriate SlimDX.dll file.
+copy /Y ..\SlimDX\$(PlatformName)\SlimDX.dll .\
+echo Copying platform-appropriate Updater.ini.
+copy /Y ..\UpdaterConfig\Updater-$(PlatformName).ini Updater.ini</PreBuildEvent>
+    <PostBuildEvent>if exist "%25VSAPPIDDIR%25" goto tools17
+if exist "%25VS140COMNTOOLS%25" goto tools140 
 if exist "%25VS120COMNTOOLS%25" goto tools120 
 if exist "%25VS110COMNTOOLS%25" goto tools110 
 if exist "%25VS100COMNTOOLS%25" goto tools100
 if exist "%25VS90COMNTOOLS%25" goto tools90 
+
+:tools17
+call "%25VSAPPIDDIR%25..\Tools\vsdevcmd" -arch=x86
+goto end
 
 :tools140
 call "%25VS140COMNTOOLS%25vsvars32.bat"

@@ -39,6 +39,7 @@ using CodeImp.DoomBuilder.ZDoom;
 using SlimDX;
 using SlimDX.Direct3D9;
 using Matrix = SlimDX.Matrix;
+using CodeImp.DoomBuilder.Controls;
 
 #endregion
 
@@ -180,6 +181,7 @@ namespace CodeImp.DoomBuilder.Data
 		public bool IsDisposed { get { return isdisposed; } }
 		public ImageData MissingTexture3D { get { return missingtexture3d; } }
 		public ImageData UnknownTexture3D { get { return unknowntexture3d; } }
+        public ImageData UnknownImage {  get { return unknownimage; } }
 		public ImageData Hourglass3D { get { return hourglass3d; } }
 		public ImageData Crosshair3D { get { return crosshair; } }
 		public ImageData CrosshairBusy3D { get { return crosshairbusy; } }
@@ -207,13 +209,33 @@ namespace CodeImp.DoomBuilder.Data
 				return false;
 			}
 		}
-		
-		#endregion
 
-		#region ================== Constructor / Disposer
+        internal const float DOOM_PIXEL_RATIO = 1.2f;
 
-		// Constructor
-		internal DataManager()
+        public float VerticalViewStretch
+        {
+            get
+            {
+                if (mapinfo == null)
+                    return DOOM_PIXEL_RATIO;
+                return mapinfo.PixelRatio;
+            }
+        }
+
+        public float InvertedVerticalViewStretch
+        {
+            get
+            {
+                return 1.0f / VerticalViewStretch;
+            }
+        }
+
+        #endregion
+
+        #region ================== Constructor / Disposer
+
+        // Constructor
+        internal DataManager()
 		{
 			// We have no destructor
 			GC.SuppressFinalize(this);
@@ -459,9 +481,6 @@ namespace CodeImp.DoomBuilder.Data
 			LoadSndSeq();
 			LoadSndInfo();
 			LoadVoxels();
-			Dictionary<string, int> actorsbyclass = CreateActorsByClassList();
-			LoadModeldefs(actorsbyclass);
-			foreach(Thing t in General.Map.Map.Things) t.UpdateCache();
 			General.MainWindow.DisplayReady();
 			
 			// Process colormaps (we just put them in as textures)
@@ -546,7 +565,6 @@ namespace CodeImp.DoomBuilder.Data
 
 			//mxd. Should be done after loading textures...
 			int hirestexcount = LoadHiResTextures();
-			LoadGldefs(actorsbyclass);
 
 			//mxd. Create camera textures. Should be done after loading textures.
 			LoadAnimdefs();
@@ -558,8 +576,15 @@ namespace CodeImp.DoomBuilder.Data
 			texturenames.Sort();
 			flatnames.Sort();
 
+			// biwa. Moved model processing after texture processing, since the model might need one of those textures
+			Dictionary<string, int> actorsbyclass = CreateActorsByClassList();
+			LoadModeldefs(actorsbyclass);
+			foreach (Thing t in General.Map.Map.Things) t.UpdateCache();
+
+			LoadGldefs(actorsbyclass);
+
 			// Sort things
-			foreach(ThingCategory tc in thingcategories) tc.SortIfNeeded();
+			foreach (ThingCategory tc in thingcategories) tc.SortIfNeeded();
 
 			// Update the used textures
 			General.Map.Data.UpdateUsedTextures();
@@ -588,6 +613,9 @@ namespace CodeImp.DoomBuilder.Data
 
 			//mxd. Create skybox texture(s)
 			SetupSkybox();
+
+            // [ZZ] clear texture/flat cache in ImageSelectorPanel
+            ImageSelectorPanel.ClearCachedPreviews();
 			
 			// Start background loading
 			StartBackgroundLoader();
@@ -763,7 +791,7 @@ namespace CodeImp.DoomBuilder.Data
 				// Done
 				notifiedbusy = false;
 				backgroundloader = null;
-				General.SendMessage(General.MainWindow.Handle, (int)MainForm.ThreadMessages.UpdateStatus, 0, 0);
+				General.SendMessage(General.MainWindow.Handle, (int)MainForm.ThreadMessages.UpdateStatus, IntPtr.Zero, IntPtr.Zero);
 			}
 		}
 		
@@ -808,7 +836,7 @@ namespace CodeImp.DoomBuilder.Data
 						if(!notifiedbusy)
 						{
 							notifiedbusy = true;
-							General.SendMessage(General.MainWindow.Handle, (int)MainForm.ThreadMessages.UpdateStatus, 0, 0);
+							General.SendMessage(General.MainWindow.Handle, (int)MainForm.ThreadMessages.UpdateStatus, IntPtr.Zero, IntPtr.Zero);
 						}
 						Thread.Sleep(0);
 					}
@@ -822,7 +850,7 @@ namespace CodeImp.DoomBuilder.Data
 							if(!notifiedbusy)
 							{
 								notifiedbusy = true;
-								General.SendMessage(General.MainWindow.Handle, (int)MainForm.ThreadMessages.UpdateStatus, 0, 0);
+								General.SendMessage(General.MainWindow.Handle, (int)MainForm.ThreadMessages.UpdateStatus, IntPtr.Zero, IntPtr.Zero);
 							}
 							Thread.Sleep(0);
 						}
@@ -847,13 +875,13 @@ namespace CodeImp.DoomBuilder.Data
 								{
 									notifiedbusy = false;
 									IntPtr strptr = Marshal.StringToCoTaskMemAuto(deltatimesec);
-									General.SendMessage(General.MainWindow.Handle, (int)MainForm.ThreadMessages.ResourcesLoaded, strptr.ToInt32(), 0);
+									General.SendMessage(General.MainWindow.Handle, (int)MainForm.ThreadMessages.ResourcesLoaded, strptr, IntPtr.Zero);
 								}
 							}
 							else if(notifiedbusy) //mxd. Sould never happen (?)
 							{
 								notifiedbusy = false;
-								General.SendMessage(General.MainWindow.Handle, (int)MainForm.ThreadMessages.UpdateStatus, 0, 0);
+								General.SendMessage(General.MainWindow.Handle, (int)MainForm.ThreadMessages.UpdateStatus, IntPtr.Zero, IntPtr.Zero);
 							}
 							
 							// Wait longer to release CPU resources
@@ -886,7 +914,7 @@ namespace CodeImp.DoomBuilder.Data
 			}
 			
 			// Update icon
-			General.SendMessage(General.MainWindow.Handle, (int)MainForm.ThreadMessages.UpdateStatus, 0, 0);
+			General.SendMessage(General.MainWindow.Handle, (int)MainForm.ThreadMessages.UpdateStatus, IntPtr.Zero, IntPtr.Zero);
 		}
 
 		//mxd. This loads a model
@@ -1163,7 +1191,10 @@ namespace CodeImp.DoomBuilder.Data
 				{
 					// HiResImage will not give us it's actual scale
 					Bitmap texture = img.GetBitmap();
-					scale = new Vector2D((float)img.Width / texture.Width, (float)img.Height / texture.Height);
+                    lock (texture)
+                    {
+                        scale = new Vector2D((float)img.Width / texture.Width, (float)img.Height / texture.Height);
+                    }
 					return texture;
 				}
 			}
@@ -1334,11 +1365,14 @@ namespace CodeImp.DoomBuilder.Data
 			return GetFlatExists(Lump.MakeLongName(name)); //mxd
 		}
 
-		// This checks if a flat is known
-		public bool GetFlatExists(long longname)
-		{
-			return flats.ContainsKey(longname) || flatnamesshorttofull.ContainsKey(longname);
-		}
+        // This checks if a flat is known
+        public bool GetFlatExists(long longname)
+        {
+            if (flats.ContainsKey(longname))
+                return true;
+
+            return flatnamesshorttofull.ContainsKey(longname);
+        }
 		
 		// This returns an image by string
 		public ImageData GetFlatImage(string name)
@@ -1354,8 +1388,10 @@ namespace CodeImp.DoomBuilder.Data
 			// Does this flat exist?
 			if(flats.ContainsKey(longname) && (flats[longname] is TEXTURESImage || flats[longname] is HiResImage))
 				return flats[longname]; //TEXTURES and HiRes flats should still override regular ones...
-			if(flatnamesshorttofull.ContainsKey(longname)) return flats[flatnamesshorttofull[longname]]; //mxd
-			if(flats.ContainsKey(longname)) return flats[longname];
+			if(flatnamesshorttofull.ContainsKey(longname))
+                return flats[flatnamesshorttofull[longname]]; //mxd
+            if (flats.ContainsKey(longname))
+                return flats[longname];
 			
 			// Return null image
 			return unknownimage; //mxd
@@ -1533,11 +1569,22 @@ namespace CodeImp.DoomBuilder.Data
 		{
 			//mxd. Get all sprite names
 			HashSet<string> spritenames = new HashSet<string>(StringComparer.Ordinal);
-			foreach(DataReader dr in containers)
-			{
-				IEnumerable<string> result = dr.GetSpriteNames();
-				if(result != null) spritenames.UnionWith(result);
-			}
+            // [ZZ] in order to properly replace different rotation count, we need more complex processing here.
+            HashSet<string> loadedspritenames = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = containers.Count-1; i >= 0; i--)
+            {
+                IEnumerable<string> result = containers[i].GetSpriteNames();
+                if (result != null)
+                {
+                    // remove old sprites with this name
+                    result = result.Where(str => !loadedspritenames.Contains(str.Substring(0, 4))); // only sprites that we still don't have. remember, reverse iteration!
+                    // add new sprites with this name
+                    spritenames.UnionWith(result);
+                    // remember
+                    foreach (string spr in result)
+                        loadedspritenames.Add(spr.Substring(0, 4));
+                }
+            }
 
 			//mxd. Add sprites from sprites collection (because GetSpriteNames() doesn't return TEXTURES sprites)
 			foreach(ImageData data in sprites.Values) spritenames.Add(data.Name);
@@ -1609,7 +1656,8 @@ namespace CodeImp.DoomBuilder.Data
 							}
 							else
 							{
-								General.ErrorLogger.Add(ErrorType.Error, "Unable to find sprite lump \"" + info.Sprite + "\" used by actor \"" + ti.Title + "\":" + ti.Index + ". Forgot to include required resources?");
+                                if (!ti.Optional)
+								    General.ErrorLogger.Add(ErrorType.Error, "Unable to find sprite lump \"" + info.Sprite + "\" used by actor \"" + ti.Title + "\":" + ti.Index + ". Forgot to include required resources?");
 							}
 						}
 						else
@@ -1637,7 +1685,8 @@ namespace CodeImp.DoomBuilder.Data
 				{
 					// This container provides this sprite?
 					Stream spritedata = containers[i].GetSpriteData(pname, ref spritelocation);
-					if(spritedata != null) return spritedata;
+					if(spritedata != null)
+                        return spritedata;
 				}
 			}
 			
@@ -2227,6 +2276,24 @@ namespace CodeImp.DoomBuilder.Data
                 }
             }
         }
+
+        // This loads MODELDEF data from a specific file or lump name
+        private void LoadModeldefFromLocation(ModeldefParser parser, string location)
+        {
+            IEnumerable<TextResourceData> streams = currentreader.GetModeldefData(location);
+            foreach (TextResourceData data in streams)
+            {
+                // Parse this data
+                parser.Parse(data, false);
+
+                //mxd. DECORATE lumps are interdepandable. Can't carry on...
+                if (parser.HasError)
+                {
+                    parser.LogError();
+                    return;
+                }
+            }
+        }
 		
 		// This gets thing information by index
 		public ThingTypeInfo GetThingInfo(int thingtype)
@@ -2347,7 +2414,7 @@ namespace CodeImp.DoomBuilder.Data
 			// Abort if no classnames are defined in DECORATE or game config...
 			if(actorsbyclass.Count == 0) return;
 
-			ModeldefParser parser = new ModeldefParser(actorsbyclass);
+			ModeldefParser parser = new ModeldefParser(actorsbyclass) { OnInclude = LoadModeldefFromLocation };
 			foreach(DataReader dr in containers)
 			{
 				currentreader = dr;
@@ -3236,7 +3303,12 @@ namespace CodeImp.DoomBuilder.Data
 				{
 					ImageData tex = LoadInternalTexture("MissingSky3D.png");
 					tex.CreateTexture();
-					Bitmap sky = new Bitmap(tex.GetBitmap());
+                    Bitmap bmp = tex.GetBitmap();
+                    Bitmap sky;
+                    lock (bmp)
+                    {
+                        sky = new Bitmap(bmp);
+                    }
 					sky.RotateFlip(RotateFlipType.RotateNoneFlipX); // We don't want our built-in image mirrored...
 					skybox = MakeClassicSkyBox(sky);
 					tex.Dispose();

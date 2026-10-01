@@ -158,9 +158,10 @@ namespace CodeImp.DoomBuilder.BuilderModes
 						if(mode.VisualSectorExists(sd.Other.Sector))
 						{
 							SectorData other = mode.GetSectorDataEx(sd.Other.Sector);
+
 							if(other != null)
 							{
-								other.Reset(false);
+								other.Reset(other.UpdateAlso.Count > 0 ? true : false); // biwa. Make sure to reset the update status of dependend sectors. This fixes #250, where 3D floors where not updated when the control sector was sloped using line action 181
 							}
 							else
 							{
@@ -247,7 +248,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					}
 
 					//mxd. Create a floor
-					if(floorRequired) 
+					if(floorRequired && ef.Ceiling.sector.IsDisposed == false) 
 					{
 						VisualFloor vf = (i < extrafloors.Count) ? extrafloors[i] : new VisualFloor(mode, this);
 						if(vf.Setup(ef.Ceiling, ef)) 
@@ -285,7 +286,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				}
 
 				//mxd. Create a ceiling
-				if(ceilingRequired) 
+				if(ceilingRequired && ef.Floor.sector.IsDisposed == false) 
 				{
 					VisualCeiling vc = (i < extraceilings.Count) ? extraceilings[i] : new VisualCeiling(mode, this);
 					if(vc.Setup(ef.Floor, ef)) 

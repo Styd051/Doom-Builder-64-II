@@ -821,7 +821,10 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					if(General.Interface.IsActiveWindow)
 					{
 						// Show line edit dialog
+						General.Interface.OnEditFormValuesChanged += linedefEditForm_OnValuesChanged;
 						DialogResult result = General.Interface.ShowEditLinedefs(selected);
+						General.Interface.OnEditFormValuesChanged -= linedefEditForm_OnValuesChanged;
+
 						General.Map.Map.Update();
 						
 						// When a single line was selected, deselect it now
@@ -835,6 +838,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 						}
 
 						// Update entire display
+						SetupSectorLabels();
 						General.Map.Renderer2D.UpdateExtraFloorFlag(); //mxd
 						UpdateSelectionInfo(); //mxd
 						General.Interface.RedrawDisplay();
@@ -845,6 +849,12 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			editpressed = false;
 			selectionfromhighlight = false; //mxd
 			base.OnEditEnd();
+		}
+
+		private void linedefEditForm_OnValuesChanged(object sender, EventArgs e)
+		{
+			// This does nothing. It prevents automatic OnRedrawDisplay when closing the linedef edit form
+			// Required to prevent crash from issue #298
 		}
 
 		//mxd
@@ -878,8 +888,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			{
 				// Check if moved enough pixels for multiselect
 				Vector2D delta = mousedownpos - mousepos;
-				if((Math.Abs(delta.x) > MULTISELECT_START_MOVE_PIXELS) ||
-				   (Math.Abs(delta.y) > MULTISELECT_START_MOVE_PIXELS)) 
+				if((Math.Abs(delta.x) > BuilderPlug.Me.MouseSelectionThreshold) ||
+				   (Math.Abs(delta.y) > BuilderPlug.Me.MouseSelectionThreshold)) 
 				{
 					// Start multiselecting
 					StartMultiSelection();
@@ -895,7 +905,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					if(l != highlighted) 
 					{
 						//toggle selected state
-						if(General.Interface.ShiftState ^ BuilderPlug.Me.AdditiveSelect)
+						if(General.Interface.ShiftState ^ BuilderPlug.Me.AdditivePaintSelect)
 							l.Selected = true;
 						else if(General.Interface.CtrlState)
 							l.Selected = false;

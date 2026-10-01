@@ -48,6 +48,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		#region ================== Constants
 		// Object picking
 		private const long PICK_INTERVAL = 80;
+		private const long PICK_INTERVAL_PAINT_SELECT = 10; // biwa
 		private const float PICK_RANGE = 0.98f;
 
 		// Gravity
@@ -93,6 +94,11 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		//mxd. Used in Cut/PasteSelection actions
 		private readonly List<ThingCopyData> copybuffer;
 		private Type lasthighlighttype;
+
+		// biwa. Info for paint selection
+		protected bool paintselectpressed;
+		protected Type paintselecttype = null;
+		protected IVisualPickable highlighted; // biwa
 
 		//mxd. Moved here from Tools
 		private struct SidedefAlignJob
@@ -158,6 +164,10 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		
 		public bool IsSingleSelection { get { return singleselection; } }
 		public bool SelectionChanged { get { return selectionchanged; } set { selectionchanged |= value; } }
+
+		public bool PaintSelectPressed { get { return paintselectpressed; } } // biwa
+		public Type PaintSelectType { get { return paintselecttype; } set { paintselecttype = value; } } // biwa
+		public IVisualPickable Highlighted { get { return highlighted; } } // biwa
 
 		#endregion
 		
@@ -746,8 +756,10 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		internal void RebuildElementData()
 		{
 			HashSet<Sector> effectsectors = null; //mxd
+			List<Linedef>[] slopelinedefpass = new List<Linedef>[] { new List<Linedef>(), new List<Linedef>() };
+			List<Thing>[] slopethingpass = new List<Thing>[] { new List<Thing>(), new List<Thing>() };
 
-			if(!General.Settings.EnhancedRenderingEffects) //mxd
+			if (!General.Settings.EnhancedRenderingEffects) //mxd
 			{
 				// Store all sectors with effects
 				if(sectordata != null && sectordata.Count > 0) 
@@ -756,14 +768,19 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				// Remove all vertex handles from selection
 				if(vertices != null && vertices.Count > 0) 
 				{
-					foreach(IVisualEventReceiver i in selectedobjects)
-					{
-						if(i is BaseVisualVertex) RemoveSelectedObject(i);
-					}
+                    for (int i = 0; i < selectedobjects.Count; i++)
+                    {
+                        if (selectedobjects[i] is BaseVisualVertex)
+                        {
+                            RemoveSelectedObject(selectedobjects[i]);
+                            i--;
+                        }
+                    }
 				}
 			}
 
 			Dictionary<int, List<Sector>> sectortags = new Dictionary<int, List<Sector>>();
+			Dictionary<int, List<Linedef>> linetags = new Dictionary<int, List<Linedef>>();
 			sectordata = new Dictionary<Sector, SectorData>(General.Map.Map.Sectors.Count);
 			thingdata = new Dictionary<Thing, ThingData>(General.Map.Map.Things.Count);
 
@@ -799,110 +816,41 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				}
 			}
 
-			// Find sectors with 3 vertices, because they can be sloped
-			foreach(Sector s in General.Map.Map.Sectors)
+			// Find interesting linedefs (such as line slopes)
+			// This also determines which slope lines belong to pass one and pass two. See https://zdoom.org/wiki/Slope
+			foreach (Linedef l in General.Map.Map.Linedefs)
 			{
-				// ========== Thing vertex slope, vertices with UDMF vertex offsets ==========
-				if(s.Sidedefs.Count == 3)
+				// Builds a cache of linedef ids/tags. Used for slope things. Use linedef tags in UDMF
+				if(General.Map.UDMF)
 				{
-					if(General.Map.UDMF) GetSectorData(s).AddEffectVertexOffset(); //mxd
-					List<Thing> slopeceilingthings = new List<Thing>(3);
-					List<Thing> slopefloorthings = new List<Thing>(3);
-					
-					foreach(Sidedef sd in s.Sidedefs) 
+					foreach(int tag in l.Tags)
 					{
-						Vertex v = sd.IsFront ? sd.Line.End : sd.Line.Start;
-
-						// Check if a thing is at this vertex
-						VisualBlockEntry b = blockmap.GetBlock(blockmap.GetBlockCoordinates(v.Position));
-						foreach(Thing t in b.Things) 
-						{
-							if((Vector2D)t.Position == v.Position) 
-							{
-								switch(t.Type)
-								{
-									case 1504: slopefloorthings.Add(t); break;
-									case 1505: slopeceilingthings.Add(t); break;
-								}
-							}
-						}
-					}
-
-					// Slope any floor vertices?
-					if(slopefloorthings.Count > 0) 
-					{
-						SectorData sd = GetSectorData(s);
-						sd.AddEffectThingVertexSlope(slopefloorthings, true);
-					}
-
-					// Slope any ceiling vertices?
-					if(slopeceilingthings.Count > 0) 
-					{
-						SectorData sd = GetSectorData(s);
-						sd.AddEffectThingVertexSlope(slopeceilingthings, false);
+						if (!linetags.ContainsKey(tag)) linetags[tag] = new List<Linedef>();
+						linetags[tag].Add(l);
 					}
 				}
-			}
-			
-			// Find interesting linedefs (such as line slopes)
-			foreach(Linedef l in General.Map.Map.Linedefs)
-			{
+
 				//mxd. Rewritten to use action ID instead of number
-				if(l.Action == 0 || !General.Map.Config.LinedefActions.ContainsKey(l.Action)) continue;
+				if (l.Action == 0 || !General.Map.Config.LinedefActions.ContainsKey(l.Action)) continue;
 
 				switch(General.Map.Config.LinedefActions[l.Action].Id.ToLowerInvariant())
 				{
+					// ========== Line Set Identification (121) (see https://zdoom.org/wiki/Line_SetIdentification) ==========
+					// Builds a cache of linedef ids/tags. Used for slope things. Only used for Hexen format
+					case "line_setidentification":
+						int tag = l.Args[0] + l.Args[4] * 256;
+						if (!linetags.ContainsKey(tag)) linetags[tag] = new List<Linedef>();
+						linetags[tag].Add(l);
+						break;
+
 					// ========== Plane Align (181) (see http://zdoom.org/wiki/Plane_Align) ==========
 					case "plane_align":
-						if(((l.Args[0] == 1) || (l.Args[1] == 1)) && (l.Front != null))
-						{
-							SectorData sd = GetSectorData(l.Front.Sector);
-							sd.AddEffectLineSlope(l);
-						}
-						if(((l.Args[0] == 2) || (l.Args[1] == 2)) && (l.Back != null))
-						{
-							SectorData sd = GetSectorData(l.Back.Sector);
-							sd.AddEffectLineSlope(l);
-						}
+						slopelinedefpass[0].Add(l);
 						break;
 
 					// ========== Plane Copy (118) (mxd) (see http://zdoom.org/wiki/Plane_Copy) ==========
-					case "plane_copy": 
-					{
-						//check the flags...
-						bool floorCopyToBack = false;
-						bool floorCopyToFront = false;
-						bool ceilingCopyToBack = false;
-						bool ceilingCopyToFront = false;
-
-						if(l.Args[4] > 0 && l.Args[4] != 3 && l.Args[4] != 12) 
-						{
-							floorCopyToBack = (l.Args[4] & 1) == 1;
-							floorCopyToFront = (l.Args[4] & 2) == 2;
-							ceilingCopyToBack = (l.Args[4] & 4) == 4;
-							ceilingCopyToFront = (l.Args[4] & 8) == 8;
-						}
-					
-						// Copy slope to front sector
-						if(l.Front != null) 
-						{
-							if( (l.Args[0] > 0 || l.Args[1] > 0) || (l.Back != null && (floorCopyToFront || ceilingCopyToFront)) ) 
-							{
-								SectorData sd = GetSectorData(l.Front.Sector);
-								sd.AddEffectPlaneClopySlope(l, true);
-							}
-						}
-
-						// Copy slope to back sector
-						if(l.Back != null) 
-						{
-							if( (l.Args[2] > 0 || l.Args[3] > 0) || (l.Front != null && (floorCopyToBack || ceilingCopyToBack)) ) 
-							{
-								SectorData sd = GetSectorData(l.Back.Sector);
-								sd.AddEffectPlaneClopySlope(l, false);
-							}
-						}
-					}
+					case "plane_copy":
+						slopelinedefpass[1].Add(l);
 						break;
 
 					// ========== Sector 3D floor (160) (see http://zdoom.org/wiki/Sector_Set3dFloor) ==========
@@ -990,31 +938,55 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				}
 			}
 
-			// Find interesting things (such as sector slopes)
-			//TODO: rewrite using classnames instead of numbers
-			foreach(Thing t in General.Map.Map.Things)
+			// Pass one for linedefs
+			foreach (Linedef l in slopelinedefpass[0])
 			{
-				switch(t.Type)
+				//mxd. Rewritten to use action ID instead of number
+				if (l.Action == 0 || !General.Map.Config.LinedefActions.ContainsKey(l.Action)) continue;
+
+				switch (General.Map.Config.LinedefActions[l.Action].Id.ToLowerInvariant())
+				{
+					// ========== Plane Align (181) (see http://zdoom.org/wiki/Plane_Align) ==========
+					case "plane_align":
+						if (((l.Args[0] == 1) || (l.Args[1] == 1)) && (l.Front != null))
+						{
+							SectorData sd = GetSectorData(l.Front.Sector);
+							sd.AddEffectLineSlope(l);
+						}
+						if (((l.Args[0] == 2) || (l.Args[1] == 2)) && (l.Back != null))
+						{
+							SectorData sd = GetSectorData(l.Back.Sector);
+							sd.AddEffectLineSlope(l);
+						}
+						break;
+				}
+			}
+
+			// Find interesting things (such as sector slopes)
+			// Pass one of slope things, and determine which one are for pass two
+			//TODO: rewrite using classnames instead of numbers
+			foreach (Thing t in General.Map.Map.Things)
+			{
+				switch (t.Type)
 				{
 					// ========== Copy slope ==========
 					case 9511:
 					case 9510:
-						t.DetermineSector(blockmap);
-						if(t.Sector != null)
-						{
-							SectorData sd = GetSectorData(t.Sector);
-							sd.AddEffectCopySlope(t);
-						}
+						slopethingpass[1].Add(t);
 						break;
 
 					// ========== Thing line slope ==========
 					case 9501:
 					case 9500:
-						t.DetermineSector(blockmap);
-						if(t.Sector != null)
+						if(linetags.ContainsKey(t.Args[0]))
 						{
-							SectorData sd = GetSectorData(t.Sector);
-							sd.AddEffectThingLineSlope(t);
+							foreach(Linedef ld in linetags[t.Args[0]])
+							{
+								if (ld.Line.GetSideOfLine(t.Position) < 0.0f)
+									GetSectorData(ld.Front.Sector).AddEffectThingLineSlope(t, ld.Front);
+								else if (ld.Back != null)
+									GetSectorData(ld.Back.Sector).AddEffectThingLineSlope(t, ld.Back);
+							}
 						}
 						break;
 
@@ -1022,10 +994,122 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					case 9503:
 					case 9502:
 						t.DetermineSector(blockmap);
-						if(t.Sector != null)
+						if (t.Sector != null)
 						{
 							SectorData sd = GetSectorData(t.Sector);
 							sd.AddEffectThingSlope(t);
+						}
+						break;
+				}
+			}
+
+			// Pass two of slope things
+			//TODO: rewrite using classnames instead of numbers
+			foreach (Thing t in slopethingpass[1])
+			{
+				switch (t.Type)
+				{
+					// ========== Copy slope ==========
+					case 9511:
+					case 9510:
+						t.DetermineSector(blockmap);
+						if (t.Sector != null)
+						{
+							SectorData sd = GetSectorData(t.Sector);
+							sd.AddEffectCopySlope(t);
+						}
+						break;
+				}
+			}
+
+			// Find sectors with 3 vertices, because they can be sloped
+			foreach (Sector s in General.Map.Map.Sectors)
+			{
+				// ========== Thing vertex slope, vertices with UDMF vertex offsets ==========
+				if (s.Sidedefs.Count == 3)
+				{
+					if (General.Map.UDMF) GetSectorData(s).AddEffectVertexOffset(); //mxd
+					List<Thing> slopeceilingthings = new List<Thing>(3);
+					List<Thing> slopefloorthings = new List<Thing>(3);
+
+					foreach (Sidedef sd in s.Sidedefs)
+					{
+						Vertex v = sd.IsFront ? sd.Line.End : sd.Line.Start;
+
+						// Check if a thing is at this vertex
+						VisualBlockEntry b = blockmap.GetBlock(blockmap.GetBlockCoordinates(v.Position));
+						foreach (Thing t in b.Things)
+						{
+							if ((Vector2D)t.Position == v.Position)
+							{
+								switch (t.Type)
+								{
+									case 1504: slopefloorthings.Add(t); break;
+									case 1505: slopeceilingthings.Add(t); break;
+								}
+							}
+						}
+					}
+
+					// Slope any floor vertices?
+					if (slopefloorthings.Count > 0)
+					{
+						SectorData sd = GetSectorData(s);
+						sd.AddEffectThingVertexSlope(slopefloorthings, true);
+					}
+
+					// Slope any ceiling vertices?
+					if (slopeceilingthings.Count > 0)
+					{
+						SectorData sd = GetSectorData(s);
+						sd.AddEffectThingVertexSlope(slopeceilingthings, false);
+					}
+				}
+			}
+
+			// Pass two for linedefs
+			foreach (Linedef l in slopelinedefpass[1])
+			{
+				if (l.Action == 0 || !General.Map.Config.LinedefActions.ContainsKey(l.Action)) continue;
+
+				switch (General.Map.Config.LinedefActions[l.Action].Id.ToLowerInvariant())
+				{
+					// ========== Plane Copy (118) (mxd) (see http://zdoom.org/wiki/Plane_Copy) ==========
+					case "plane_copy":
+						{
+							//check the flags...
+							bool floorCopyToBack = false;
+							bool floorCopyToFront = false;
+							bool ceilingCopyToBack = false;
+							bool ceilingCopyToFront = false;
+
+							if (l.Args[4] > 0 && l.Args[4] != 3 && l.Args[4] != 12)
+							{
+								floorCopyToBack = (l.Args[4] & 1) == 1;
+								floorCopyToFront = (l.Args[4] & 2) == 2;
+								ceilingCopyToBack = (l.Args[4] & 4) == 4;
+								ceilingCopyToFront = (l.Args[4] & 8) == 8;
+							}
+
+							// Copy slope to front sector
+							if (l.Front != null)
+							{
+								if ((l.Args[0] > 0 || l.Args[1] > 0) || (l.Back != null && (floorCopyToFront || ceilingCopyToFront)))
+								{
+									SectorData sd = GetSectorData(l.Front.Sector);
+									sd.AddEffectPlaneClopySlope(l, true);
+								}
+							}
+
+							// Copy slope to back sector
+							if (l.Back != null)
+							{
+								if ((l.Args[2] > 0 || l.Args[3] > 0) || (l.Front != null && (floorCopyToBack || ceilingCopyToBack)))
+								{
+									SectorData sd = GetSectorData(l.Back.Sector);
+									sd.AddEffectPlaneClopySlope(l, false);
+								}
+							}
 						}
 						break;
 				}
@@ -1045,8 +1129,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// When entering this mode
 		public override void OnEngage()
 		{
-			base.OnEngage();
-
 			//mxd
 			useSelectionFromClassicMode = BuilderPlug.Me.SyncSelection ? !General.Interface.ShiftState : General.Interface.ShiftState;
 			if(useSelectionFromClassicMode)	UpdateSelectionInfo();
@@ -1055,15 +1137,23 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			cameraflooroffset = General.Map.Config.ReadSetting("cameraflooroffset", cameraflooroffset);
 			cameraceilingoffset = General.Map.Config.ReadSetting("cameraceilingoffset", cameraceilingoffset);
 
-			//mxd. Update fog color (otherwise FogBoundaries won't be setup correctly)
-			foreach(Sector s in General.Map.Map.Sectors) s.UpdateFogColor();
+            //mxd. Update fog color (otherwise FogBoundaries won't be setup correctly)
+            foreach (Sector s in General.Map.Map.Sectors)
+                s.UpdateFogColor();
 
-			// (Re)create special effects
-			RebuildElementData();
+			// biwa. We need a blockmap for the slope things. Can't wait until it's built in base.OnEngage
+			// This was the root cause for issue #160
+			FillBlockMap();
 
-			//mxd. Update event lines
-			renderer.SetEventLines(LinksCollector.GetHelperShapes(General.Map.ThingsFilter.VisibleThings, blockmap));
-		}
+            // (Re)create special effects
+            RebuildElementData();
+
+            //mxd. Update event lines
+            renderer.SetEventLines(LinksCollector.GetHelperShapes(General.Map.ThingsFilter.VisibleThings, blockmap));
+
+            // [ZZ] this enables calling of this object from the outside world. Only after properly initialized pls.
+            base.OnEngage();
+        }
 
 		// When returning to another mode
 		public override void OnDisengage()
@@ -1124,6 +1214,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// Processing
 		public override void OnProcess(long deltatime)
 		{
+			long pickinterval = PICK_INTERVAL; // biwa
 			// Process things?
 			base.ProcessThings = (BuilderPlug.Me.ShowVisualThings != 0);
 			
@@ -1197,9 +1288,13 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			{
 				g.OnProcess(deltatime);
 			}
+
+			// biwa. Use a lower pick interval for paint selection, to make it more reliable
+			if (paintselectpressed)
+				pickinterval = PICK_INTERVAL_PAINT_SELECT;
 			
 			// Time to pick a new target?
-			if(Clock.CurrentTime > (lastpicktime + PICK_INTERVAL))
+			if(Clock.CurrentTime > (lastpicktime + pickinterval))
 			{
 				PickTargetUnlocked();
 				lastpicktime = Clock.CurrentTime;
@@ -1437,6 +1532,14 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 				lasthighlighttype = o.GetType();
 			}
+
+			// biwa
+			if (o is NullVisualEventReceiver)
+				highlighted = null;
+			else if (o is VisualGeometry)
+				highlighted = (VisualGeometry)o;
+			else if (o is VisualThing)
+				highlighted = (VisualThing)o;
 		}
 		
 		// Undo performed
@@ -1688,8 +1791,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			}
 		}
 
-		// This returns all selected objects
-		internal List<IVisualEventReceiver> GetSelectedObjects(bool includesectors, bool includesidedefs, bool includethings, bool includevertices)
+        // This returns all selected objects
+        internal List<IVisualEventReceiver> GetSelectedObjects(bool includesectors, bool includesidedefs, bool includethings, bool includevertices)
 		{
 			List<IVisualEventReceiver> objs = new List<IVisualEventReceiver>();
 			foreach(IVisualEventReceiver i in selectedobjects)
@@ -1951,54 +2054,82 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			}
 
 			return t;
-		}
+        }
 		
 		#endregion
 
 		#region ================== Actions
 
-		[BeginAction("clearselection", BaseAction = true)]
+        // [ZZ] I moved this out of ClearSelection because "cut selection" action needs this to only affect things.
+        private void ClearSelection(bool clearsectors, bool clearsidedefs, bool clearthings, bool clearvertices, bool displaystatus)
+        {
+            selectedobjects.RemoveAll(obj =>
+            {
+                return ((obj is BaseVisualGeometrySector && clearsectors) ||
+                        (obj is BaseVisualGeometrySidedef && clearsidedefs) ||
+                        (obj is BaseVisualThing && clearthings) ||
+                        (obj is BaseVisualVertex && clearvertices));
+            });
+
+            //
+            foreach (KeyValuePair<Sector, VisualSector> vs in allsectors)
+            {
+                if (vs.Value != null)
+                {
+                    BaseVisualSector bvs = (BaseVisualSector)vs.Value;
+                    if (clearsectors)
+                    {
+                        if (bvs.Floor != null) bvs.Floor.Selected = false;
+                        if (bvs.Ceiling != null) bvs.Ceiling.Selected = false;
+                        foreach (VisualFloor vf in bvs.ExtraFloors) vf.Selected = false;
+                        foreach (VisualCeiling vc in bvs.ExtraCeilings) vc.Selected = false;
+                        foreach (VisualFloor vf in bvs.ExtraBackFloors) vf.Selected = false; //mxd
+                        foreach (VisualCeiling vc in bvs.ExtraBackCeilings) vc.Selected = false; //mxd
+                    }
+
+                    if (clearsidedefs)
+                    {
+                        foreach (Sidedef sd in vs.Key.Sidedefs)
+                        {
+                            //mxd. VisualSidedefParts can contain references to visual geometry, which is not present in VisualSector.sidedefgeometry
+                            bvs.GetSidedefParts(sd).DeselectAllParts();
+                        }
+                    }
+                }
+            }
+
+            if (clearthings)
+            {
+                foreach (KeyValuePair<Thing, VisualThing> vt in allthings)
+                {
+                    if (vt.Value != null)
+                    {
+                        BaseVisualThing bvt = (BaseVisualThing)vt.Value;
+                        bvt.Selected = false;
+                    }
+                }
+            }
+
+            //mxd
+            if (clearvertices)
+            {
+                if (General.Map.UDMF)
+                {
+                    foreach (KeyValuePair<Vertex, VisualVertexPair> pair in vertices) pair.Value.Deselect();
+                }
+            }
+
+            //mxd
+            if (displaystatus)
+            {
+                General.Interface.DisplayStatus(StatusType.Selection, string.Empty);
+            }
+        }
+
+        [BeginAction("clearselection", BaseAction = true)]
 		public void ClearSelection()
 		{
-			selectedobjects = new List<IVisualEventReceiver>();
-			
-			foreach(KeyValuePair<Sector, VisualSector> vs in allsectors)
-			{
-				if(vs.Value != null)
-				{
-					BaseVisualSector bvs = (BaseVisualSector)vs.Value;
-					if(bvs.Floor != null) bvs.Floor.Selected = false;
-					if(bvs.Ceiling != null) bvs.Ceiling.Selected = false;
-					foreach(VisualFloor vf in bvs.ExtraFloors) vf.Selected = false;
-					foreach(VisualCeiling vc in bvs.ExtraCeilings) vc.Selected = false;
-					foreach(VisualFloor vf in bvs.ExtraBackFloors) vf.Selected = false; //mxd
-					foreach(VisualCeiling vc in bvs.ExtraBackCeilings) vc.Selected = false; //mxd
-
-					foreach(Sidedef sd in vs.Key.Sidedefs)
-					{
-						//mxd. VisualSidedefParts can contain references to visual geometry, which is not present in VisualSector.sidedefgeometry
-						bvs.GetSidedefParts(sd).DeselectAllParts();
-					}
-				}
-			}
-
-			foreach(KeyValuePair<Thing, VisualThing> vt in allthings)
-			{
-				if(vt.Value != null)
-				{
-					BaseVisualThing bvt = (BaseVisualThing)vt.Value;
-					bvt.Selected = false;
-				}
-			}
-
-			//mxd
-			if(General.Map.UDMF) 
-			{
-				foreach(KeyValuePair<Vertex, VisualVertexPair> pair in vertices) pair.Value.Deselect();
-			}
-
-			//mxd
-			General.Interface.DisplayStatus(StatusType.Selection, string.Empty);
+            ClearSelection(true, true, true, true, true);
 		}
 
 		[BeginAction("visualselect", BaseAction = true)]
@@ -2072,26 +2203,45 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			PostAction();
 		}
 
-		[BeginAction("raisesector1")]
-		public void RaiseSector1()
-		{
-			PreAction(UndoGroup.SectorHeightChange);
-			List<IVisualEventReceiver> objs = GetSelectedObjects(true, true, true, true);
-			foreach(IVisualEventReceiver i in objs) i.OnChangeTargetHeight(1);
-			PostAction();
-		}
+	    [BeginAction("raisesector1")]
+	    public void RaiseSector1() {
+	        PreAction(UndoGroup.SectorHeightChange);
+	        List<IVisualEventReceiver> objs = GetSelectedObjects(true, true, true, true);
+	        foreach (IVisualEventReceiver i in objs)
+	            i.OnChangeTargetHeight(1);
+	        PostAction();
+	    }
 
-		[BeginAction("lowersector1")]
-		public void LowerSector1()
-		{
-			PreAction(UndoGroup.SectorHeightChange);
-			List<IVisualEventReceiver> objs = GetSelectedObjects(true, true, true, true);
-			foreach(IVisualEventReceiver i in objs) i.OnChangeTargetHeight(-1);
-			PostAction();
-		}
+	    [BeginAction("lowersector1")]
+	    public void LowerSector1() {
+	        PreAction(UndoGroup.SectorHeightChange);
+	        List<IVisualEventReceiver> objs = GetSelectedObjects(true, true, true, true);
+	        foreach (IVisualEventReceiver i in objs)
+	            i.OnChangeTargetHeight(-1);
+	        PostAction();
+	    }
 
-		//mxd
-		[BeginAction("raisesectortonearest")]
+	    [BeginAction("raisesector128")]
+	    public void RaiseSector128() {
+	        PreAction(UndoGroup.SectorHeightChange);
+	        List<IVisualEventReceiver> objs = GetSelectedObjects(true, true, true, true);
+	        foreach (IVisualEventReceiver i in objs)
+	            i.OnChangeTargetHeight(128);
+	        PostAction();
+	    }
+
+	    [BeginAction("lowersector128")]
+	    public void LowerSector128() {
+	        PreAction(UndoGroup.SectorHeightChange);
+	        List<IVisualEventReceiver> objs = GetSelectedObjects(true, true, true, true);
+	        foreach (IVisualEventReceiver i in objs)
+	            i.OnChangeTargetHeight(-128);
+	        PostAction();
+	    }
+
+
+        //mxd
+        [BeginAction("raisesectortonearest")]
 		public void RaiseSectorToNearest() 
 		{
 			Dictionary<Sector, VisualFloor> floors = new Dictionary<Sector, VisualFloor>();
@@ -3111,8 +3261,13 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		{
 			PreAction(UndoGroup.None);
 			List<IVisualEventReceiver> objs = GetSelectedObjects(true, true, true, true);
-			foreach(IVisualEventReceiver i in objs) i.OnDelete();
-			PostAction();
+            foreach (IVisualEventReceiver i in objs)
+            {
+                if (i is BaseVisualThing)
+                    visiblethings.Remove(((BaseVisualThing)i).Thing); // [ZZ] if any
+                i.OnDelete();
+            }
+            PostAction();
 
 			ClearSelection();
 		}
@@ -3150,7 +3305,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			foreach(IVisualEventReceiver i in objs) 
 			{
 				BaseVisualThing thing = (BaseVisualThing)i;
-				thing.Thing.Fields.BeforeFieldsChange();
+                visiblethings.Remove(thing.Thing); // [ZZ] if any
+                thing.Thing.Fields.BeforeFieldsChange();
 				thing.Thing.Dispose();
 				thing.Dispose();
 			}
@@ -3158,8 +3314,11 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			General.Map.IsChanged = true;
 			General.Map.ThingsFilter.Update();
 
-			// Update event lines
-			renderer.SetEventLines(LinksCollector.GetHelperShapes(General.Map.ThingsFilter.VisibleThings, blockmap));
+            // [ZZ] Clear selected things.
+            ClearSelection(false, false, true, false, false);
+
+            // Update event lines
+            renderer.SetEventLines(LinksCollector.GetHelperShapes(General.Map.ThingsFilter.VisibleThings, blockmap));
 		}
 
 		//mxd. We'll just use currently selected objects 
@@ -3679,6 +3838,23 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			General.Interface.DisplayStatus(StatusType.Info, "Alpha-based textures highlighting is " + (BuilderPlug.Me.AlphaBasedTextureHighlighting ? "ENABLED" : "DISABLED"));
 		}
 
+		// biwa
+		[BeginAction("visualpaintselect")]
+		protected virtual void OnPaintSelectBegin()
+		{
+			paintselectpressed = true;
+			GetTargetEventReceiver(true).OnPaintSelectBegin();
+		}
+
+		// biwa
+		[EndAction("visualpaintselect")]
+		protected virtual void OnPaintSelectEnd()
+		{
+			paintselectpressed = false;
+			paintselecttype = null;
+			GetTargetEventReceiver(true).OnPaintSelectEnd();
+		}
+
 		#endregion
 
 		#region ================== Texture Alignment
@@ -3737,6 +3913,13 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				// Get the align job to do
 				SidedefAlignJob j = todo.Pop();
 
+				// Make sure to not align already aligned textures. This prevents unexpected
+				// results when aligning textures on circular shapes
+				if (j.sidedef.Marked)
+					continue;
+
+				DebugConsole.WriteLine("Aligning " + j.sidedef);
+
 				if(j.forward) 
 				{
 					// Apply alignment
@@ -3744,32 +3927,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					if(aligny) j.sidedef.OffsetY = (int)Math.Round((first.ceilingHeight - j.ceilingHeight) / scaley) + ystartalign;
 					int forwardoffset = (int)j.offsetx + (int)Math.Round(j.sidedef.Line.Length / scalex);
 					int backwardoffset = (int)j.offsetx;
-
-					j.sidedef.Marked = true;
-
-					// Wrap the value within the width of the texture (to prevent ridiculous values)
-					// NOTE: We don't use ScaledWidth here because the texture offset is in pixels, not mappixels
-					if(texture.IsImageLoaded && BuilderModesTools.SidedefTextureMatch(this, j.sidedef, texturehashes)) 
-					{
-						if(alignx) j.sidedef.OffsetX %= texture.Width;
-						if(aligny) j.sidedef.OffsetY %= texture.Height;
-					}
-
-					// Add sidedefs forward (connected to the right vertex)
-					Vertex v = j.sidedef.IsFront ? j.sidedef.Line.End : j.sidedef.Line.Start;
-					AddSidedefsForAlignment(todo, v, true, forwardoffset, 1.0f, texturehashes, false);
-
-					// Add sidedefs backward (connected to the left vertex)
-					v = j.sidedef.IsFront ? j.sidedef.Line.Start : j.sidedef.Line.End;
-					AddSidedefsForAlignment(todo, v, false, backwardoffset, 1.0f, texturehashes, false);
-				} 
-				else 
-				{
-					// Apply alignment
-					if(alignx) j.controlSide.OffsetX = (int)j.offsetx - (int)Math.Round(j.sidedef.Line.Length / scalex);
-					if(aligny) j.sidedef.OffsetY = (int)Math.Round((first.ceilingHeight - j.ceilingHeight) / scaley) + ystartalign;
-					int forwardoffset = (int)j.offsetx;
-					int backwardoffset = (int)j.offsetx - (int)Math.Round(j.sidedef.Line.Length / scalex);
 
 					j.sidedef.Marked = true;
 
@@ -3789,6 +3946,32 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					v = j.sidedef.IsFront ? j.sidedef.Line.End : j.sidedef.Line.Start;
 					AddSidedefsForAlignment(todo, v, true, forwardoffset, 1.0f, texturehashes, false);
 				}
+				else 
+				{
+					// Apply alignment
+					if(alignx) j.controlSide.OffsetX = (int)j.offsetx - (int)Math.Round(j.sidedef.Line.Length / scalex);
+					if(aligny) j.sidedef.OffsetY = (int)Math.Round((first.ceilingHeight - j.ceilingHeight) / scaley) + ystartalign;
+					int forwardoffset = (int)j.offsetx;
+					int backwardoffset = (int)j.offsetx - (int)Math.Round(j.sidedef.Line.Length / scalex);
+
+					j.sidedef.Marked = true;
+
+					// Wrap the value within the width of the texture (to prevent ridiculous values)
+					// NOTE: We don't use ScaledWidth here because the texture offset is in pixels, not mappixels
+					if(texture.IsImageLoaded && BuilderModesTools.SidedefTextureMatch(this, j.sidedef, texturehashes)) 
+					{
+						if(alignx) j.sidedef.OffsetX %= texture.Width;
+						if(aligny) j.sidedef.OffsetY %= texture.Height;
+					}
+
+					// Add sidedefs forward (connected to the right vertex)
+					Vertex v = j.sidedef.IsFront ? j.sidedef.Line.End : j.sidedef.Line.Start;
+					AddSidedefsForAlignment(todo, v, true, forwardoffset, 1.0f, texturehashes, false);
+
+					// Add sidedefs backward (connected to the left vertex)
+					v = j.sidedef.IsFront ? j.sidedef.Line.Start : j.sidedef.Line.End;
+					AddSidedefsForAlignment(todo, v, false, backwardoffset, 1.0f, texturehashes, false);
+				}
 			}
 		}
 
@@ -3803,6 +3986,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			// Mark all sidedefs false (they will be marked true when the texture is aligned)
 			if(resetsidemarks) General.Map.Map.ClearMarkedSidedefs(false);
 			if(!texture.IsImageLoaded) return;
+
+			bool worldpanning = texture.WorldPanning || General.Map.Data.MapInfo.ForceWorldPanning;
 
 			Stack<SidedefAlignJob> todo = new Stack<SidedefAlignJob>(50);
 			float scalex = (General.Map.Config.ScaledTextureOffsets && !texture.WorldPanning) ? texture.Scale.x : 1.0f;
@@ -3858,15 +4043,19 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					break;
 			}
 
+			// biwa
+			float vwidth = worldpanning ? texture.ScaledWidth / first.scaleX : texture.Width;
+			float vheight = worldpanning ? texture.ScaledHeight / first.scaleY : texture.Height;
+
 			// Determine the Y alignment
 			float ystartalign = start.Sidedef.OffsetY;
 			switch(start.GeometryType) 
 			{
 				case VisualGeometryType.WALL_UPPER:
-					ystartalign += Tools.GetSidedefTopOffsetY(start.Sidedef, start.Sidedef.Fields.GetValue("offsety_top", 0.0f), first.scaleY / scaley, false);//mxd
+					ystartalign += Tools.GetSidedefTopOffsetY(start.Sidedef, start.Sidedef.Fields.GetValue("offsety_top", 0.0f), worldpanning ? 1.0f : first.scaleY / scaley, false);//mxd
 					break;
 				case VisualGeometryType.WALL_MIDDLE:
-					ystartalign += Tools.GetSidedefMiddleOffsetY(start.Sidedef, start.Sidedef.Fields.GetValue("offsety_mid", 0.0f), first.scaleY / scaley, false);//mxd
+					ystartalign += Tools.GetSidedefMiddleOffsetY(start.Sidedef, start.Sidedef.Fields.GetValue("offsety_mid", 0.0f), worldpanning ? 1.0f : first.scaleY / scaley, false);//mxd
 					break;
 				case VisualGeometryType.WALL_MIDDLE_3D: //mxd. 3d-floors are not affected by Lower/Upper unpegged flags
 					ystartalign += first.controlSide.OffsetY - (start.Sidedef.Sector.CeilHeight - first.ceilingHeight);
@@ -3874,7 +4063,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					ystartalign += first.controlSide.Fields.GetValue("offsety_mid", 0.0f);
 					break;
 				case VisualGeometryType.WALL_LOWER:
-					ystartalign += Tools.GetSidedefBottomOffsetY(start.Sidedef, start.Sidedef.Fields.GetValue("offsety_bottom", 0.0f), first.scaleY / scaley, false);//mxd
+					ystartalign += Tools.GetSidedefBottomOffsetY(start.Sidedef, start.Sidedef.Fields.GetValue("offsety_bottom", 0.0f), worldpanning ? 1.0f : first.scaleY / scaley, false);//mxd
 					break;
 			}
 
@@ -3911,8 +4100,13 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				// Get the align job to do
 				SidedefAlignJob j = todo.Pop();
 
+				// Make sure to not align already aligned textures. This prevents unexpected
+				// results when aligning textures on circular shapes
+				if (j.sidedef.Marked)
+					continue;
+
 				//mxd. Get visual parts
-				if(VisualSectorExists(j.sidedef.Sector))
+				if (VisualSectorExists(j.sidedef.Sector))
 				{
 					VisualSidedefParts parts = ((BaseVisualSector)GetVisualSector(j.sidedef.Sector)).GetSidedefParts(j.sidedef);
 					VisualSidedefParts controlparts = (j.sidedef != j.controlSide ? ((BaseVisualSector)GetVisualSector(j.controlSide.Sector)).GetSidedefParts(j.controlSide) : parts);
@@ -3975,13 +4169,13 @@ namespace CodeImp.DoomBuilder.BuilderModes
 						{
 							ImageData tex = General.Map.Data.GetTextureImage(j.sidedef.LongHighTexture);
 							int texwidth = (tex != null && tex.IsImageLoaded) ? tex.Width : 1;
-							j.sidedef.Fields["offsetx_top"] = new UniValue(UniversalType.Float, (float)Math.Round(offset % texwidth, General.Map.FormatInterface.VertexDecimals));
+							j.sidedef.Fields["offsetx_top"] = new UniValue(UniversalType.Float, (float)Math.Round(offset % vwidth, General.Map.FormatInterface.VertexDecimals));
 						}
 						if(matchbottom)
 						{
 							ImageData tex = General.Map.Data.GetTextureImage(j.sidedef.LongLowTexture);
 							int texwidth = (tex != null && tex.IsImageLoaded) ? tex.Width : 1;
-							j.sidedef.Fields["offsetx_bottom"] = new UniValue(UniversalType.Float, (float)Math.Round(offset % texwidth, General.Map.FormatInterface.VertexDecimals));
+							j.sidedef.Fields["offsetx_bottom"] = new UniValue(UniversalType.Float, (float)Math.Round(offset % vwidth, General.Map.FormatInterface.VertexDecimals));
 						}
 						if(matchmid) 
 						{
@@ -3993,28 +4187,37 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 							ImageData tex = General.Map.Data.GetTextureImage(j.controlSide.LongMiddleTexture);
 							int texwidth = (tex != null && tex.IsImageLoaded) ? tex.Width : 1;
-							j.sidedef.Fields["offsetx_mid"] = new UniValue(UniversalType.Float, (float)Math.Round(offset % texwidth, General.Map.FormatInterface.VertexDecimals));
+							j.sidedef.Fields["offsetx_mid"] = new UniValue(UniversalType.Float, (float)Math.Round(offset % vwidth, General.Map.FormatInterface.VertexDecimals));
 						}
 					}
 
 					if(aligny) 
 					{
-						float offset = ((start.Sidedef.Sector.CeilHeight - j.ceilingHeight) / scaley) * j.scaleY + ystartalign; //mxd
-						offset -= j.sidedef.OffsetY; //mxd
-						
-						if(matchtop)
+						float offset;
+
+						if (!texture.WorldPanning && !General.Map.Data.MapInfo.ForceWorldPanning)
+							offset = ((start.Sidedef.Sector.CeilHeight - j.ceilingHeight) / scaley) * j.scaleY + ystartalign - j.sidedef.OffsetY; //mxd
+						else
+							offset = (start.Sidedef.Sector.CeilHeight - j.ceilingHeight + ystartalign - j.sidedef.OffsetY);
+
+						if (matchtop)
 						{
 							ImageData tex = General.Map.Data.GetTextureImage(j.sidedef.LongHighTexture);
 							int texheight = (tex != null && tex.IsImageLoaded) ? tex.Height : 1;
-							j.sidedef.Fields["offsety_top"] = new UniValue(UniversalType.Float, 
-								(float)Math.Round(Tools.GetSidedefTopOffsetY(j.sidedef, offset, j.scaleY / scaley, true) % texheight, General.Map.FormatInterface.VertexDecimals)); //mxd
+							float scale = !worldpanning ? j.scaleY / scaley : 1.0f;
+
+							j.sidedef.Fields["offsety_top"] = new UniValue(UniversalType.Float,
+								(float)Math.Round(Tools.GetSidedefTopOffsetY(j.sidedef, offset, scale, true) % vheight, General.Map.FormatInterface.VertexDecimals)); //mxd
+
 						}
-						if(matchbottom)
+						if (matchbottom)
 						{
 							ImageData tex = General.Map.Data.GetTextureImage(j.sidedef.LongLowTexture);
 							int texheight = (tex != null && tex.IsImageLoaded) ? tex.Height : 1;
+							float scale = !worldpanning ? j.scaleY / scaley : 1.0f;
+
 							j.sidedef.Fields["offsety_bottom"] = new UniValue(UniversalType.Float,
-								(float)Math.Round(Tools.GetSidedefBottomOffsetY(j.sidedef, offset, j.scaleY / scaley, true) % texheight, General.Map.FormatInterface.VertexDecimals)); //mxd
+								(float)Math.Round(Tools.GetSidedefBottomOffsetY(j.sidedef, offset, scale, true) % vheight, General.Map.FormatInterface.VertexDecimals)); //mxd
 						}
 						if(matchmid) 
 						{
@@ -4027,41 +4230,42 @@ namespace CodeImp.DoomBuilder.BuilderModes
 								ImageData tex = General.Map.Data.GetTextureImage(j.controlSide.LongMiddleTexture);
 								int texheight = (tex != null && tex.IsImageLoaded) ? tex.Height : 1;
 								j.sidedef.Fields["offsety_mid"] = new UniValue(UniversalType.Float,
-									(float)Math.Round(offset % texheight, General.Map.FormatInterface.VertexDecimals));
+									(float)Math.Round(offset % vheight, General.Map.FormatInterface.VertexDecimals));
 							} 
 							else
 							{
 								ImageData tex = General.Map.Data.GetTextureImage(j.sidedef.LongMiddleTexture);
-								offset = Tools.GetSidedefMiddleOffsetY(j.sidedef, offset, j.scaleY / scaley, true);
+								float scale = !worldpanning ? j.scaleY / scaley : 1.0f;
+								offset = Tools.GetSidedefMiddleOffsetY(j.sidedef, offset, scale, true);
 
-								if(tex != null && tex.IsImageLoaded)
+								if (tex != null && tex.IsImageLoaded)
 								{
 									bool startisnonwrappedmidtex = (start.Sidedef.Other != null && start.GeometryType == VisualGeometryType.WALL_MIDDLE && !start.Sidedef.IsFlagSet("wrapmidtex") && !start.Sidedef.Line.IsFlagSet("wrapmidtex"));
 									bool cursideisnonwrappedmidtex = (j.sidedef.Other != null && !j.sidedef.IsFlagSet("wrapmidtex") && !j.sidedef.Line.IsFlagSet("wrapmidtex"));
 									
 									//mxd. Only clamp when the texture is wrapped 
-									if(!cursideisnonwrappedmidtex) offset %= tex.Height;
+									if(!cursideisnonwrappedmidtex) offset %= vheight;
 
 									if(!startisnonwrappedmidtex && cursideisnonwrappedmidtex)
 									{
 										//mxd. This should be doublesided non-wrapped line. Find the nearset aligned position
 										float curoffset = UniFields.GetFloat(j.sidedef.Fields, "offsety_mid") + j.sidedef.OffsetY;
-										offset += tex.Height * (float)Math.Round(curoffset / tex.Height - 0.5f * Math.Sign(j.scaleY));
+										offset += vheight * (float)Math.Round(curoffset / vheight - 0.5f * Math.Sign(j.scaleY));
 
 										// Make sure the surface stays between floor and ceiling
 										if(j.sidedef.Line.IsFlagSet(General.Map.Config.LowerUnpeggedFlag) || Math.Sign(j.scaleY) == -1)
 										{
-											if(offset < -tex.Height)
-												offset += tex.Height;
+											if(offset < -vheight)
+												offset += vheight;
 											else if(offset > j.sidedef.GetMiddleHeight())
-												offset -= tex.Height;
+												offset -= vheight;
 										}
 										else
 										{
-											if(offset < -(j.sidedef.GetMiddleHeight() + tex.Height))
-												offset += tex.Height;
-											else if(offset > tex.Height)
-												offset -= tex.Height;
+											if(offset < -(j.sidedef.GetMiddleHeight() + vheight))
+												offset += vheight;
+											else if(offset > vheight)
+												offset -= vheight;
 										}
 									}
 								}
@@ -4072,8 +4276,12 @@ namespace CodeImp.DoomBuilder.BuilderModes
 						}
 					}
 
-					forwardoffset = j.offsetx + (float)Math.Round((float)Math.Round(j.sidedef.Line.Length) / scalex * first.scaleX, General.Map.FormatInterface.VertexDecimals);
 					backwardoffset = j.offsetx;
+
+					if(!worldpanning)
+						forwardoffset = (float)Math.Round((j.offsetx + (float)Math.Round(j.sidedef.Line.Length) / scalex * first.scaleX) % vwidth, General.Map.FormatInterface.VertexDecimals);
+					else
+						forwardoffset = (float)Math.Round((j.offsetx + (float)Math.Round(j.sidedef.Line.Length)) % vwidth, General.Map.FormatInterface.VertexDecimals); 
 
 					// Done this sidedef
 					j.sidedef.Marked = true;
@@ -4087,27 +4295,31 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					v = j.sidedef.IsFront ? j.sidedef.Line.End : j.sidedef.Line.Start;
 					AddSidedefsForAlignment(todo, v, true, forwardoffset, j.scaleY, texturehashes, true);
 				} 
-				else 
+				else // backward
 				{
 					// Apply alignment
 					if(alignx) 
 					{
-						float offset = j.offsetx - (float)Math.Round((float)Math.Round(j.sidedef.Line.Length) / scalex * first.scaleX, General.Map.FormatInterface.VertexDecimals);
-						offset -= j.sidedef.OffsetX;
+						float offset;
+						
+						if(!worldpanning)
+							offset = (float)Math.Round((j.offsetx - j.sidedef.OffsetX - (float)Math.Round(j.sidedef.Line.Length) / scalex * first.scaleX) % vwidth, General.Map.FormatInterface.VertexDecimals);
+						else
+							offset = (float)Math.Round((j.offsetx - j.sidedef.OffsetX - (float)Math.Round(j.sidedef.Line.Length)) % vwidth, General.Map.FormatInterface.VertexDecimals);
 
 						if(matchtop)
 						{
 							ImageData tex = General.Map.Data.GetTextureImage(j.sidedef.LongHighTexture);
 							int texwidth = (tex != null && tex.IsImageLoaded) ? tex.Width : 1;
 							j.sidedef.Fields["offsetx_top"] = new UniValue(UniversalType.Float,
-								(float)Math.Round(offset % texwidth, General.Map.FormatInterface.VertexDecimals));
+								(float)Math.Round(offset % vwidth, General.Map.FormatInterface.VertexDecimals));
 						}
 						if(matchbottom)
 						{
 							ImageData tex = General.Map.Data.GetTextureImage(j.sidedef.LongLowTexture);
 							int texwidth = (tex != null && tex.IsImageLoaded) ? tex.Width : 1;
 							j.sidedef.Fields["offsetx_bottom"] = new UniValue(UniversalType.Float,
-								(float)Math.Round(offset % texwidth, General.Map.FormatInterface.VertexDecimals));
+								(float)Math.Round(offset % vwidth, General.Map.FormatInterface.VertexDecimals));
 						}
 						if(matchmid) 
 						{
@@ -4120,7 +4332,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 							ImageData tex = General.Map.Data.GetTextureImage(j.controlSide.LongMiddleTexture);
 							int texwidth = (tex != null && tex.IsImageLoaded) ? tex.Width : 1;
 							j.sidedef.Fields["offsetx_mid"] = new UniValue(UniversalType.Float, 
-								(float)Math.Round(offset % texwidth, General.Map.FormatInterface.VertexDecimals));
+								(float)Math.Round(offset % vwidth, General.Map.FormatInterface.VertexDecimals));
 						}
 					}
 
@@ -4133,15 +4345,19 @@ namespace CodeImp.DoomBuilder.BuilderModes
 						{
 							ImageData tex = General.Map.Data.GetTextureImage(j.sidedef.LongHighTexture);
 							int texheight = (tex != null && tex.IsImageLoaded) ? tex.Height : 1;
+							float scale = !worldpanning ? j.scaleY / scaley : 1.0f;
+
 							j.sidedef.Fields["offsety_top"] = new UniValue(UniversalType.Float, 
-								(float)Math.Round(Tools.GetSidedefTopOffsetY(j.sidedef, offset, j.scaleY / scaley, true) % texheight, General.Map.FormatInterface.VertexDecimals)); //mxd
+								(float)Math.Round(Tools.GetSidedefTopOffsetY(j.sidedef, offset, scale, true) % vheight, General.Map.FormatInterface.VertexDecimals)); //mxd
 						}
 						if(matchbottom)
 						{
 							ImageData tex = General.Map.Data.GetTextureImage(j.sidedef.LongLowTexture);
 							int texheight = (tex != null && tex.IsImageLoaded) ? tex.Height : 1;
+							float scale = !worldpanning ? j.scaleY / scaley : 1.0f;
+
 							j.sidedef.Fields["offsety_bottom"] = new UniValue(UniversalType.Float,
-								(float)Math.Round(Tools.GetSidedefBottomOffsetY(j.sidedef, offset, j.scaleY / scaley, true) % texheight, General.Map.FormatInterface.VertexDecimals)); //mxd
+								(float)Math.Round(Tools.GetSidedefBottomOffsetY(j.sidedef, offset, scale, true) % vheight, General.Map.FormatInterface.VertexDecimals)); //mxd
 						}
 						if(matchmid) 
 						{
@@ -4154,12 +4370,13 @@ namespace CodeImp.DoomBuilder.BuilderModes
 								ImageData tex = General.Map.Data.GetTextureImage(j.controlSide.LongMiddleTexture);
 								int texheight = (tex != null && tex.IsImageLoaded) ? tex.Height : 1;
 								j.sidedef.Fields["offsety_mid"] = new UniValue(UniversalType.Float,
-									(float)Math.Round(offset % texheight, General.Map.FormatInterface.VertexDecimals)); //mxd
+									(float)Math.Round(offset % vheight, General.Map.FormatInterface.VertexDecimals)); //mxd
 							} 
 							else 
 							{
 								ImageData tex = General.Map.Data.GetTextureImage(j.sidedef.LongMiddleTexture);
-								offset = Tools.GetSidedefMiddleOffsetY(j.sidedef, offset, j.scaleY / scaley, true);
+								float scale = !worldpanning ? j.scaleY / scaley : 1.0f;
+								offset = Tools.GetSidedefMiddleOffsetY(j.sidedef, offset, scale, true);
 
 								if(tex != null && tex.IsImageLoaded)
 								{
@@ -4167,28 +4384,28 @@ namespace CodeImp.DoomBuilder.BuilderModes
 									bool cursideisnonwrappedmidtex = (j.sidedef.Other != null && !j.sidedef.IsFlagSet("wrapmidtex") && !j.sidedef.Line.IsFlagSet("wrapmidtex"));
 									
 									//mxd. Only clamp when the texture is wrapped 
-									if(!cursideisnonwrappedmidtex) offset %= tex.Height;
+									if(!cursideisnonwrappedmidtex) offset %= vheight;
 
 									if(!startisnonwrappedmidtex && cursideisnonwrappedmidtex)
 									{
 										//mxd. This should be doublesided non-wrapped line. Find the nearset aligned position
 										float curoffset = UniFields.GetFloat(j.sidedef.Fields, "offsety_mid") + j.sidedef.OffsetY;
-										offset += tex.Height * (float)Math.Round(curoffset / tex.Height - 0.5f * Math.Sign(j.scaleY));
+										offset += tex.Height * (float)Math.Round(curoffset / vheight - 0.5f * Math.Sign(j.scaleY));
 
 										// Make sure the surface stays between floor and ceiling
 										if(j.sidedef.Line.IsFlagSet(General.Map.Config.LowerUnpeggedFlag) || Math.Sign(j.scaleY) == -1)
 										{
-											if(offset < -tex.Height)
-												offset += tex.Height;
+											if(offset < -vheight)
+												offset += vheight;
 											else if(offset > j.sidedef.GetMiddleHeight())
-												offset -= tex.Height;
+												offset -= vheight;
 										}
 										else
 										{
-											if(offset < -(j.sidedef.GetMiddleHeight() + tex.Height))
-												offset += tex.Height;
-											else if(offset > tex.Height)
-												offset -= tex.Height;
+											if(offset < -(j.sidedef.GetMiddleHeight() + vheight))
+												offset += vheight;
+											else if(offset > vheight)
+												offset -= vheight;
 										}
 									}
 								}
@@ -4200,7 +4417,11 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					}
 
 					forwardoffset = j.offsetx;
-					backwardoffset = j.offsetx - (float)Math.Round((float)Math.Round(j.sidedef.Line.Length) / scalex * first.scaleX, General.Map.FormatInterface.VertexDecimals);
+
+					if (!worldpanning)
+						backwardoffset = (float)Math.Round((j.offsetx - (float)Math.Round(j.sidedef.Line.Length) / scalex * first.scaleX) % vwidth, General.Map.FormatInterface.VertexDecimals);
+					else
+						backwardoffset = (float)Math.Round((j.offsetx - (float)Math.Round(j.sidedef.Line.Length)) % vwidth, General.Map.FormatInterface.VertexDecimals);
 
 					// Done this sidedef
 					j.sidedef.Marked = true;
@@ -4234,7 +4455,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				{
 					List<Sidedef> controlSides = GetControlSides(side1, udmf); //mxd
 
-					foreach(Sidedef s in controlSides) 
+					foreach(Sidedef s in controlSides)
 					{
 						if(!singleselection || BuilderModesTools.SidedefTextureMatch(this, s, texturelongnames)) 
 						{

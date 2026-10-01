@@ -394,6 +394,10 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// This updates the selection
 		private void Update()
 		{
+			// biwa. This is a fix for autodrag, since it will actually fire OnMouseLeave and would crash when Update is called while the
+			// mouse is outside the window. This does *not* happen when dragging without autodrag.
+			if (!mouseinside) return;
+
 			// Not in any modifying mode?
 			if(mode == ModifyMode.None)
 			{
@@ -889,13 +893,14 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			float texrotation = Angle2D.PI2 - rotation;
 
 			// Update texture offsets
-			if(transformoffsets)
+			if (transformoffsets)
 			{
-				Vector2D toffset = (selectionbasecenter - selectioncenter).GetRotated((texrotation + si.Rotation));
-				Vector2D soffset = si.Offset.GetRotated(texrotation + si.Rotation);
+				float trotation = rotateoffsets ? (si.Rotation + texrotation) : (si.Rotation);
+				Vector2D offset = selectioncenter.GetRotated(trotation);
 
-				fields["xpanning" + si.Part] = new UniValue(UniversalType.Float, (float)Math.Round(soffset.x + toffset.x, General.Map.FormatInterface.VertexDecimals) % si.TextureSize.Width);
-				fields["ypanning" + si.Part] = new UniValue(UniversalType.Float, (float)Math.Round(-(soffset.y + toffset.y), General.Map.FormatInterface.VertexDecimals) % si.TextureSize.Height);
+				fields["xpanning" + si.Part] = new UniValue(UniversalType.Float, (float)Math.Round(-offset.x, General.Map.FormatInterface.VertexDecimals));
+				fields["ypanning" + si.Part] = new UniValue(UniversalType.Float, (float)Math.Round(offset.y, General.Map.FormatInterface.VertexDecimals));
+
 			}
 			// Restore texture offsets
 			else 
@@ -1821,7 +1826,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					renderer.RenderRectangleFilled(rotategrips[i], General.Colors.Background, true);
 					renderer.RenderRectangle(rotategrips[i], 2, General.Colors.Indication, true);
 				}
-				
+
 				renderer.Finish();
 			}
 

@@ -26,6 +26,7 @@ using CodeImp.DoomBuilder.IO;
 using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Plugins;
 using CodeImp.DoomBuilder.Rendering;
+using CodeImp.DoomBuilder.Types;
 
 #endregion
 

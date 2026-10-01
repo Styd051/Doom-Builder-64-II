@@ -1,5 +1,6 @@
 ﻿#region ================== Namespaces
 
+using CodeImp.DoomBuilder.Data;
 using SlimDX;
 
 #endregion
@@ -46,6 +47,12 @@ namespace CodeImp.DoomBuilder.GZBuilder.Data
 		private int vertwallshade;
 		private int horizwallshade;
 
+        // [ZZ]
+        private float pixelratio;
+
+		// biwa
+		private bool forceworldpanning;
+
 		#endregion
 
 		#region ================== Properties
@@ -71,6 +78,12 @@ namespace CodeImp.DoomBuilder.GZBuilder.Data
 		public int VertWallShade { get { return vertwallshade; } internal set { vertwallshade = value; isdefined = true; } }
 		public int HorizWallShade { get { return horizwallshade; } internal set { horizwallshade = value; isdefined = true; } }
 
+        // [ZZ]
+        public float PixelRatio { get { return pixelratio; } internal set { pixelratio = value; isdefined = true; } }
+
+		// biwa
+		public bool ForceWorldPanning { get { return forceworldpanning; } internal set { forceworldpanning = value; isdefined = true; } }
+
 		#endregion
 
 		#region ================== Constructor
@@ -82,6 +95,7 @@ namespace CodeImp.DoomBuilder.GZBuilder.Data
 			fogdensity = 255;
 			outsidefogdensity = 255;
 			lightmode = GZDoomLightMode.UNDEFINED;
+            pixelratio = DataManager.DOOM_PIXEL_RATIO;
 		}
 
 		#endregion

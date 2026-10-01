@@ -20,6 +20,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using System.Linq; // biwa
 using CodeImp.DoomBuilder.Data;
 using CodeImp.DoomBuilder.Windows;
 
@@ -474,7 +475,17 @@ namespace CodeImp.DoomBuilder.Controls
         //      C# not Java.
 		public void AddItem(ImageData image, string tooltip = "")
 		{
-			items.Add(new ImageBrowserItem(image, tooltip, uselongtexturenames));
+            ImageBrowserItem newItem = new ImageBrowserItem(image, tooltip, uselongtexturenames);
+			items.Add(newItem);
+		}
+
+		// biwa. Removes all duplicates. That was done each time in AddItem before. Much faster
+		// to do it in one go. Not sure when there are actually duplicates
+		// Depending on whether a floor or a wall is selected the corrosponding images come first
+		// in the list, so alawys keep the first occurence
+		public void MakeTexturesUnique()
+		{
+			items = items.GroupBy(item => item.TextureName).Select(item => item.First()).ToList();
 		}
 
 		// This fills the list based on the objectname filter
@@ -539,7 +550,11 @@ namespace CodeImp.DoomBuilder.Controls
 				// Select specific item?
 				if(keepselected > -1)
 				{
-					list.SetSelectedItem(list.Items[keepselected]);
+					// If the last item doesn't exist anymore select the new last item
+					if(keepselected >= list.Items.Count)
+						list.SetSelectedItem(list.Items[list.Items.Count-1]);
+					else
+						list.SetSelectedItem(list.Items[keepselected]);
 				}
 				// Select first item?
 				else if(selectfirst)
@@ -596,18 +611,17 @@ namespace CodeImp.DoomBuilder.Controls
 		// This validates an item
 		private bool ValidateItem(ImageBrowserItem item, ImageBrowserItem previtem)
 		{
-			//mxd. Don't show duplicate items
-			if(previtem != null && item.TextureName == previtem.TextureName) return false; //mxd
-			
-			//mxd. mixMode: 0 = All, 1 = Textures, 2 = Flats, 3 = Based on BrowseFlats
-			if(!splitter.Panel2Collapsed) 
+            //mxd. mixMode: 0 = All, 1 = Textures, 2 = Flats, 3 = Based on BrowseFlats
+            //if (!splitter.Panel2Collapsed) 
 			{
-				if(texturetype == 1 && item.Icon.IsFlat) return false;
-				if(texturetype == 2 && !item.Icon.IsFlat) return false;
-				if(texturetype == 3 && (browseflats != item.Icon.IsFlat)) return false;
+                if (texturetype == 0 && previtem != null && item.TextureName == previtem.TextureName) return false;
+				if (texturetype == 1 && item.Icon.IsFlat) return false;
+				if (texturetype == 2 && !item.Icon.IsFlat) return false;
+				if (texturetype == 3 && (browseflats != item.Icon.IsFlat)) return false;
 			}
+            //else if (previtem != null && item.TextureName == previtem.TextureName) return false;
 
-			return item.TextureName.ToUpperInvariant().Contains(objectname.Text.ToUpperInvariant());
+            return item.TextureName.ToUpperInvariant().Contains(objectname.Text.ToUpperInvariant());
 		}
 
 		//mxd. This validates an item's texture size
