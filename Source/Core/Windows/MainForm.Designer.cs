@@ -149,7 +149,6 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemShortcutReference = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemopenconfigfolder = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemhelpeditmode = new System.Windows.Forms.ToolStripMenuItem();
-			this.itemhelpcheckupdates = new System.Windows.Forms.ToolStripMenuItem();
 			this.seperatorhelpmanual = new System.Windows.Forms.ToolStripSeparator();
 			this.itemhelpissues = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemhelpabout = new System.Windows.Forms.ToolStripMenuItem();
@@ -1307,7 +1306,6 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemopenconfigfolder,
 			this.itemhelpeditmode,
 			this.itemhelpissues,
-			this.itemhelpcheckupdates,
 			this.seperatorhelpmanual,
 			this.itemhelpabout});
 			this.menuhelp.Name = "menuhelp";
@@ -1348,14 +1346,6 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemhelpeditmode.Text = "About this &Editing Mode";
 			this.itemhelpeditmode.Click += new System.EventHandler(this.itemhelpeditmode_Click);
 			// 
-			// itemhelpcheckupdates
-			// 
-			this.itemhelpcheckupdates.Image = global::CodeImp.DoomBuilder.Properties.Resources.Update;
-			this.itemhelpcheckupdates.Name = "itemhelpcheckupdates";
-			this.itemhelpcheckupdates.Size = new System.Drawing.Size(232, 22);
-			this.itemhelpcheckupdates.Text = "&Check for updates...";
-			this.itemhelpcheckupdates.Click += new System.EventHandler(this.itemhelpcheckupdates_Click);
-			// 
 			// seperatorhelpmanual
 			// 
 			this.seperatorhelpmanual.Margin = new System.Windows.Forms.Padding(0, 3, 0, 3);
@@ -1375,7 +1365,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemhelpabout.Image = global::CodeImp.DoomBuilder.Properties.Resources.About;
 			this.itemhelpabout.Name = "itemhelpabout";
 			this.itemhelpabout.Size = new System.Drawing.Size(232, 22);
-			this.itemhelpabout.Text = "&About GZDoom Builder...";
+			this.itemhelpabout.Text = "&About Doom Builder 64 II...";
 			this.itemhelpabout.Click += new System.EventHandler(this.itemhelpabout_Click);
 			// 
 			// toolbar
@@ -2951,7 +2941,6 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.ToolStripMenuItem menuhelp;
 		private System.Windows.Forms.ToolStripMenuItem itemhelpissues;
 		private System.Windows.Forms.ToolStripMenuItem itemhelpabout;
-		private System.Windows.Forms.ToolStripMenuItem itemhelpcheckupdates;
 		private CodeImp.DoomBuilder.Controls.RenderTargetControl display;
 		private System.Windows.Forms.ToolStripMenuItem itemnorecent;
 		private System.Windows.Forms.ToolStripStatusLabel xposlabel;

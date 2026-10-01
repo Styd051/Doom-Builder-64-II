@@ -11,7 +11,7 @@
     <RootNamespace>CodeImp.DoomBuilder</RootNamespace>
     <AssemblyName>Builder</AssemblyName>
     <StartupObject>CodeImp.DoomBuilder.General</StartupObject>
-    <ApplicationIcon>Resources\GZDB2.ico</ApplicationIcon>
+    <ApplicationIcon>Resources\Builder64II.ico</ApplicationIcon>
     <Win32Resource>
     </Win32Resource>
     <RunPostBuildEvent>OnBuildSuccess</RunPostBuildEvent>
@@ -951,7 +951,6 @@
     <Compile Include="General\MD5Hash.cs" />
     <Compile Include="General\MurmurHash2.cs" />
     <Compile Include="General\SavePurpose.cs" />
-    <Compile Include="General\UpdateChecker.cs" />
     <Compile Include="Geometry\CurveTools.cs" />
     <Compile Include="Geometry\InterpolationTools.cs" />
     <Compile Include="Controls\AngleControlEx.cs">
@@ -1150,12 +1149,6 @@
       <DependentUpon>ThingEditFormUDMF.cs</DependentUpon>
     </Compile>
     <Compile Include="Windows\ToolbarSection.cs" />
-    <Compile Include="Windows\UpdateForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Windows\UpdateForm.Designer.cs">
-      <DependentUpon>UpdateForm.cs</DependentUpon>
-    </Compile>
     <Compile Include="Windows\VertexEditForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -1272,6 +1265,8 @@
     <None Include="Resources\Angle7.png" />
     <Content Include="Resources\DB2.ico" />
     <None Include="Resources\GZDB2.ico" />
+    <None Include="Resources\Builder64II.ico" />
+    <None Include="Resources\Builder64II_Logo.png" />
     <None Include="Resources\fog.png" />
     <None Include="Resources\GZDB_Logo_small.png" />
     <None Include="Resources\InfoLine.png" />
@@ -1511,9 +1506,6 @@
       <DependentUpon>ThingsFiltersForm.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Resources\White.png" />
-    <EmbeddedResource Include="Windows\UpdateForm.resx">
-      <DependentUpon>UpdateForm.cs</DependentUpon>
-    </EmbeddedResource>
     <EmbeddedResource Include="Windows\VertexEditForm.resx">
       <SubType>Designer</SubType>
       <DependentUpon>VertexEditForm.cs</DependentUpon>
@@ -1525,9 +1517,7 @@
 echo Copying platform-appropriate DevIL.dll file.
 copy /Y ..\DevIL\$(PlatformName)\DevIL.dll .\
 echo Copying platform-appropriate SlimDX.dll file.
-copy /Y ..\SlimDX\$(PlatformName)\SlimDX.dll .\
-echo Copying platform-appropriate Updater.ini.
-copy /Y ..\UpdaterConfig\Updater-$(PlatformName).ini Updater.ini</PreBuildEvent>
+copy /Y ..\SlimDX\$(PlatformName)\SlimDX.dll .\</PreBuildEvent>
     <PostBuildEvent>if exist "%25VSAPPIDDIR%25" goto tools17
 if exist "%25VS140COMNTOOLS%25" goto tools140 
 if exist "%25VS120COMNTOOLS%25" goto tools120 

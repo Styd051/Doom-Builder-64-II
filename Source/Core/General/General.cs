@@ -118,10 +118,12 @@ namespace CodeImp.DoomBuilder
 		//internal const int SIF_ALL = SIF_RANGE + SIF_PAGE + SIF_POS + SIF_TRACKPOS;
 		
 		// Files and Folders
-		private const string SETTINGS_FILE = "GZBuilder.cfg";
-		private const string DEFAULT_SETTINGS_FILE = "GZBuilder.default.cfg"; //mxd
-		private const string SETTINGS_DIR = "Doom Builder";
-		private const string LOG_FILE = "GZBuilder.log";
+		// styd: Doom Builder 64 II keeps its settings in a directory of its own. The settings of the older
+		// Doom Builder 64 II (in "Doom Builder\Builder64II.cfg") and of GZDoom Builder are not compatible.
+		private const string SETTINGS_FILE = "Builder64II.cfg";
+		private const string DEFAULT_SETTINGS_FILE = "Builder64II.default.cfg"; //mxd
+		private const string SETTINGS_DIR = "Doom Builder 64 II";
+		private const string LOG_FILE = "Builder64II.log";
 		private const string GAME_CONFIGS_DIR = "Configurations";
 		private const string COMPILERS_DIR = "Compilers";
 		private const string PLUGINS_DIR = "Plugins";
@@ -594,7 +596,7 @@ namespace CodeImp.DoomBuilder
 			// Remove the previous log file and start logging
 			if(File.Exists(logfile)) File.Delete(logfile);
             string platform = Environment.Is64BitProcess ? "x64" : "x86";
-			General.WriteLogLine("GZDoom Builder R" + thisasm.GetName().Version.Revision + " (" + platform + ", " + commithash + ") startup"); //mxd
+			General.WriteLogLine(Application.ProductName + " R" + thisasm.GetName().Version.Revision + " (" + platform + ", " + commithash + ") startup"); //mxd
 			General.WriteLogLine("Application path:        \"" + apppath + "\"");
 			General.WriteLogLine("Temporary path:          \"" + temppath + "\"");
 			General.WriteLogLine("Local settings path:     \"" + settingspath + "\"");
@@ -728,9 +730,6 @@ namespace CodeImp.DoomBuilder
 					}
 				}
 
-				//mxd. Check for updates?
-				if(General.Settings.CheckForUpdates) UpdateChecker.PerformCheck(false);
-				
 				// Run application from the main window
 				Application.Run(mainwindow);
 			}

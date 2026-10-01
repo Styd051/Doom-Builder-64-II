@@ -100,7 +100,6 @@ namespace CodeImp.DoomBuilder.Windows
 			//mxd
 			locatetexturegroup.Checked = General.Settings.LocateTextureGroup;
 			cbStoreEditTab.Checked = General.Settings.StoreSelectedEditTab;
-			checkforupdates.Checked = General.Settings.CheckForUpdates;
 			toolbar_gzdoom.Checked = General.Settings.GZToolbarGZDoom;
 			cbSynchCameras.Checked = General.Settings.GZSynchCameras;
 			tbDynLightCount.Value = General.Clamp(General.Settings.GZMaxDynamicLights / 16, tbDynLightCount.Minimum, tbDynLightCount.Maximum);
@@ -333,7 +332,6 @@ namespace CodeImp.DoomBuilder.Windows
 			General.Settings.ShowTextureSizes = showtexturesizes.Checked;
             General.Settings.TextureSizesBelow = texturesizesbelow.Checked; // [ZZ]
 			General.Settings.StoreSelectedEditTab = cbStoreEditTab.Checked; //mxd
-			General.Settings.CheckForUpdates = checkforupdates.Checked; //mxd
 			General.Settings.LocateTextureGroup = locatetexturegroup.Checked; //mxd
 			General.Settings.MaxRecentFiles = recentFiles.Value; //mxd
 			General.Settings.ScreenshotsPath = screenshotsfolderpath.Text.Trim(); //mxd

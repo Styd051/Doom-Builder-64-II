@@ -174,7 +174,7 @@ ECHO.
 ECHO Building Setup Installer...
 ECHO.
 IF EXIST "Release\*.exe" DEL /F /Q "Release\*.exe" > NUL
-"%ISSDIR%\iscc.exe" "Setup\gzbuilder_setup.iss"
+"%ISSDIR%\iscc.exe" "Setup\builder64ii_setup.iss"
 IF %ERRORLEVEL% NEQ 0 GOTO ERRORFAIL
 IF NOT EXIST "Release\GZDB-Bugfix Setup.exe" GOTO FILEFAIL
 

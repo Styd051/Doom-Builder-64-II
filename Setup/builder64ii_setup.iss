@@ -2,28 +2,28 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 [Setup]
-AppName=GZDoom Builder
-AppVerName=GZDoom Builder 2.4
-AppPublisher=MaxED
-AppPublisherURL=http://forum.zdoom.org/memberlist.php?mode=viewprofile&u=7012
-AppSupportURL=http://forum.zdoom.org/viewtopic.php?f=3&t=32392
-AppUpdatesURL=http://devbuilds.drdteam.org/doombuilder2-gzdb/
-DefaultDirName={pf}\GZDoom Builder
-DefaultGroupName=GZDoom Builder
+AppName=Doom Builder 64 II
+AppVerName=Doom Builder 64 II R3112
+AppPublisher=Styd051
+AppPublisherURL=https://github.com/Styd051/Doom-Builder-64-II
+AppSupportURL=https://github.com/Styd051/Doom-Builder-64-II/issues
+AppUpdatesURL=https://github.com/Styd051/Doom-Builder-64-II/releases
+DefaultDirName={pf}\Doom Builder 64 II
+DefaultGroupName=Doom Builder 64 II
 AllowNoIcons=true
 InfoBeforeFile=..\Setup\disclaimer.txt
 OutputDir=..\Release
-OutputBaseFilename=GZDB-Bugfix Setup
+OutputBaseFilename=Doom Builder 64 II Setup
 Compression=lzma/ultra64
 SolidCompression=true
 SourceDir=..\Build
 SetupLogging=false
-AppMutex=gzdoombuilder
+AppMutex=doombuilder64ii
 PrivilegesRequired=admin
 ShowLanguageDialog=no
 LanguageDetectionMethod=none
 MinVersion=0,5.01.2600
-UninstallDisplayIcon={app}\Updater.exe
+UninstallDisplayIcon={app}\Builder.exe
 WizardImageFile=..\Setup\WizModernImage-IS.bmp
 WizardSmallImageFile=..\Setup\WizModernSmallImage-IS.bmp
 
@@ -38,13 +38,11 @@ Source: Setup\dotnetfx35setup.exe; DestDir: {tmp}; Flags: dontcopy
 Source: Setup\dxwebsetup.exe; DestDir: {tmp}; Flags: dontcopy
 Source: Setup\vcredist_x86.exe; DestDir: {tmp}; Flags: dontcopy
 Source: Builder.exe; DestDir: {app}; Flags: ignoreversion
-Source: GZBuilder.default.cfg; DestDir: {app}; Flags: ignoreversion
-Source: Updater.exe; DestDir: {app}; Flags: ignoreversion
-Source: Updater.ini; DestDir: {app}; Flags: ignoreversion
+Source: Builder64II.default.cfg; DestDir: {app}; Flags: ignoreversion
 Source: Refmanual.chm; DestDir: {app}; Flags: ignoreversion
 Source: DevIL.dll; DestDir: {app}; Flags: ignoreversion
-Source: SharpCompress.3.5.dll; DestDir: {app}; Flags: ignoreversion
-Source: ScintillaNET.3.5.dll; DestDir: {app}; Flags: ignoreversion
+Source: SharpCompress.dll; DestDir: {app}; Flags: ignoreversion
+Source: ScintillaNET.dll; DestDir: {app}; Flags: ignoreversion
 Source: SlimDX.dll; DestDir: {app}; Flags: ignoreversion
 Source: TabControlEX.dll; DestDir: {app}; Flags: ignoreversion
 Source: GPL.txt; DestDir: {app}; Flags: ignoreversion
@@ -53,6 +51,7 @@ Source: Configurations\*; DestDir: {app}\Configurations; Flags: ignoreversion re
 Source: Scripting\*; DestDir: {app}\Scripting; Flags: ignoreversion recursesubdirs
 Source: Snippets\*; DestDir: {app}\Snippets; Flags: ignoreversion recursesubdirs
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
+Source: Plugins\AutomapMode.dll; DestDir: {app}\Plugins; Flags: ignoreversion
 Source: Plugins\BuilderModes.dll; DestDir: {app}\Plugins; Flags: ignoreversion
 Source: Plugins\BuilderEffects.dll; DestDir: {app}\Plugins; Flags: ignoreversion
 Source: Plugins\ColorPicker.dll; DestDir: {app}\Plugins; Flags: ignoreversion
@@ -62,15 +61,16 @@ Source: Plugins\SoundPropagationMode.dll; DestDir: {app}\Plugins; Flags: ignorev
 Source: Plugins\StairSectorBuilder.dll; DestDir: {app}\Plugins; Flags: ignoreversion
 Source: Plugins\TagExplorer.dll; DestDir: {app}\Plugins; Flags: ignoreversion
 Source: Plugins\TagRange.dll; DestDir: {app}\Plugins; Flags: ignoreversion
+Source: Plugins\ThreeDFloorMode.dll; DestDir: {app}\Plugins; Flags: ignoreversion
 Source: Plugins\VisplaneExplorer.dll; DestDir: {app}\Plugins; Flags: ignoreversion
 Source: Plugins\Loadorder.cfg; DestDir: {app}\Plugins; Flags: ignoreversion onlyifdoesntexist
 Source: Sprites\*; DestDir: {app}\Sprites; Flags: ignoreversion recursesubdirs
 Source: Textures\*; DestDir: {app}\Textures; Flags: ignoreversion
 
 [Icons]
-Name: {group}\GZDoom Builder; Filename: {app}\Builder.exe
-Name: {group}\{cm:UninstallProgram,GZDoom Builder}; Filename: {uninstallexe}
-Name: {commondesktop}\GZDoom Builder; Filename: {app}\Builder.exe; Tasks: desktopicon
+Name: {group}\Doom Builder 64 II; Filename: {app}\Builder.exe
+Name: {group}\{cm:UninstallProgram,Doom Builder 64 II}; Filename: {uninstallexe}
+Name: {commondesktop}\Doom Builder 64 II; Filename: {app}\Builder.exe; Tasks: desktopicon
 
 [UninstallDelete]
 Name: {app}; Type: filesandordirs
@@ -80,7 +80,7 @@ Name: {app}\Builder.pdb; Type: files
 Name: {app}\Builder.xml; Type: files
 
 [Registry]
-Root: HKLM; Subkey: SOFTWARE\MaxED\GZDoom Builder\; ValueType: string; ValueName: Location; ValueData: {app}; Flags: uninsdeletevalue
+Root: HKLM; Subkey: SOFTWARE\Styd051\Doom Builder 64 II\; ValueType: string; ValueName: Location; ValueData: {app}; Flags: uninsdeletevalue
 
 [Messages]
 ReadyLabel2a=Continue to begin with the installation, or click Back if you want to review or change any settings.
@@ -356,11 +356,11 @@ begin
 	if MsgBox('Delete map restore data and program configuration files?', mbConfirmation, MB_YESNO) = IDYES then
 	begin
 		// Remove restore data
-		DelTree(ExpandConstant('{localappdata}\Doom Builder\Restore'), True, True, True);
+		DelTree(ExpandConstant('{localappdata}\Doom Builder 64 II\Restore'), True, True, True);
 
 		// Remove configs
-		DeleteFile(ExpandConstant('{localappdata}\Doom Builder\GZBuilder.cfg'));
-		DeleteFile(ExpandConstant('{localappdata}\Doom Builder\GZBuilder.log'));
-		DeleteFile(ExpandConstant('{localappdata}\Doom Builder\GZCrash.txt'));
+		DeleteFile(ExpandConstant('{localappdata}\Doom Builder 64 II\Builder64II.cfg'));
+		DeleteFile(ExpandConstant('{localappdata}\Doom Builder 64 II\Builder64II.log'));
+		DeleteFile(ExpandConstant('{localappdata}\Doom Builder 64 II\GZCrash.txt'));
 	end;
 end;

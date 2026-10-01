@@ -135,12 +135,10 @@ namespace CodeImp.DoomBuilder.Config
 		private int maxRecentFiles;
 		private bool autoClearSideTextures;
 		private bool storeSelectedEditTab;
-		private bool checkforupdates;
 		private bool rendercomments; //mxd
 		private bool fixedthingsscale; //mxd
 		private bool rendergrid;
 		private bool dynamicgridsize;
-		private int ignoredremoterevision;
 		
 		// These are not stored in the configuration, only used at runtime
 		private int defaultbrightness;
@@ -258,12 +256,10 @@ namespace CodeImp.DoomBuilder.Config
 		public int MaxRecentFiles { get { return maxRecentFiles; } internal set { maxRecentFiles = General.Clamp(value, 8, 25); } }
 		public bool AutoClearSidedefTextures { get { return autoClearSideTextures; } internal set { autoClearSideTextures = value; } }
 		public bool StoreSelectedEditTab { get { return storeSelectedEditTab; } internal set { storeSelectedEditTab = value; } }
-		internal bool CheckForUpdates { get { return checkforupdates; } set { checkforupdates = value; } } //mxd
 		public bool RenderComments { get { return rendercomments; } internal set { rendercomments = value; } } //mxd
 		public bool FixedThingsScale { get { return fixedthingsscale; } internal set { fixedthingsscale = value; } } //mxd
 		public bool RenderGrid { get { return rendergrid; } internal set { rendergrid = value; } } //mxd
 		public bool DynamicGridSize { get { return dynamicgridsize; } internal set { dynamicgridsize = value; } } //mxd
-		internal int IgnoredRemoteRevision { get { return ignoredremoterevision; } set { ignoredremoterevision = value; } } //mxd
 
 		//mxd. Left here for compatibility reasons...
 		public string DefaultTexture { get { return General.Map != null ? General.Map.Options.DefaultWallTexture : "-"; } set { if(General.Map != null) General.Map.Options.DefaultWallTexture = value; } }
@@ -390,12 +386,10 @@ namespace CodeImp.DoomBuilder.Config
 				maxRecentFiles = cfg.ReadSetting("maxrecentfiles", 8);
 				autoClearSideTextures = cfg.ReadSetting("autoclearsidetextures", true);
 				storeSelectedEditTab = cfg.ReadSetting("storeselectededittab", true);
-				checkforupdates = cfg.ReadSetting("checkforupdates", true); //mxd
 				rendercomments = cfg.ReadSetting("rendercomments", true); //mxd
 				fixedthingsscale = cfg.ReadSetting("fixedthingsscale", false); //mxd
 				rendergrid = cfg.ReadSetting("rendergrid", true); //mxd
 				dynamicgridsize = cfg.ReadSetting("dynamicgridsize", true); //mxd
-				ignoredremoterevision = cfg.ReadSetting("ignoredremoterevision", 0); //mxd
 
 				//mxd. Sector defaults
 				defaultceilheight = cfg.ReadSetting("defaultceilheight", 128);
@@ -506,12 +500,10 @@ namespace CodeImp.DoomBuilder.Config
 			cfg.WriteSetting("maxrecentfiles", maxRecentFiles);
 			cfg.WriteSetting("autoclearsidetextures", autoClearSideTextures);
 			cfg.WriteSetting("storeselectededittab", storeSelectedEditTab);
-			cfg.WriteSetting("checkforupdates", checkforupdates); //mxd
 			cfg.WriteSetting("rendercomments", rendercomments); //mxd
 			cfg.WriteSetting("fixedthingsscale", fixedthingsscale); //mxd
 			cfg.WriteSetting("rendergrid", rendergrid); //mxd
 			cfg.WriteSetting("dynamicgridsize", dynamicgridsize); //mxd
-			cfg.WriteSetting("ignoredremoterevision", ignoredremoterevision); //mxd
 
 			//mxd. Sector defaults
 			cfg.WriteSetting("defaultceilheight", defaultceilheight);

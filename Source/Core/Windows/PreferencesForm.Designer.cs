@@ -40,7 +40,6 @@ namespace CodeImp.DoomBuilder.Windows
 			System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(PreferencesForm));
 			this.texturesizesbelow = new System.Windows.Forms.CheckBox();
 			this.blackbrowsers = new System.Windows.Forms.CheckBox();
-			this.checkforupdates = new System.Windows.Forms.CheckBox();
 			this.cbStoreEditTab = new System.Windows.Forms.CheckBox();
 			this.locatetexturegroup = new System.Windows.Forms.CheckBox();
 			this.recentFiles = new CodeImp.DoomBuilder.Controls.TransparentTrackBar();
@@ -264,7 +263,6 @@ namespace CodeImp.DoomBuilder.Windows
 			// 
 			groupBox1.Controls.Add(this.texturesizesbelow);
 			groupBox1.Controls.Add(this.blackbrowsers);
-			groupBox1.Controls.Add(this.checkforupdates);
 			groupBox1.Controls.Add(this.cbStoreEditTab);
 			groupBox1.Controls.Add(this.locatetexturegroup);
 			groupBox1.Controls.Add(this.recentFiles);
@@ -310,16 +308,6 @@ namespace CodeImp.DoomBuilder.Windows
 			this.blackbrowsers.TabIndex = 10;
 			this.blackbrowsers.Text = "Black background in image browser";
 			this.blackbrowsers.UseVisualStyleBackColor = true;
-			// 
-			// checkforupdates
-			// 
-			this.checkforupdates.AutoSize = true;
-			this.checkforupdates.Location = new System.Drawing.Point(16, 369);
-			this.checkforupdates.Name = "checkforupdates";
-			this.checkforupdates.Size = new System.Drawing.Size(160, 17);
-			this.checkforupdates.TabIndex = 14;
-			this.checkforupdates.Text = "Check for updates at startup";
-			this.checkforupdates.UseVisualStyleBackColor = true;
 			// 
 			// cbStoreEditTab
 			// 
@@ -2590,7 +2578,6 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.Label label26;
 		private System.Windows.Forms.CheckBox locatetexturegroup;
 		private System.Windows.Forms.CheckBox cbStoreEditTab;
-		private System.Windows.Forms.CheckBox checkforupdates;
 		private System.Windows.Forms.TabPage tabscripteditor;
 		private System.Windows.Forms.GroupBox previewgroup;
 		private System.Windows.Forms.CheckBox scriptallmanstyle;

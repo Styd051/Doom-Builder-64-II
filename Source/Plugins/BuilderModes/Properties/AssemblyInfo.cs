@@ -6,10 +6,10 @@ using System.Resources;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("Builder Modes")]
-[assembly: AssemblyDescription("GZDoom Builder Editing Modes")]
+[assembly: AssemblyDescription("Doom Builder 64 II Editing Modes")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("CodeImp, MaxED")]
-[assembly: AssemblyProduct("GZDoom Builder")]
+[assembly: AssemblyCompany("CodeImp, MaxED, Kaiser, Styd051")]
+[assembly: AssemblyProduct("Doom Builder 64 II")]
 [assembly: AssemblyCopyright("Copyright ©  2007, 2016")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]

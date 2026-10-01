@@ -37,8 +37,11 @@ namespace CodeImp.DoomBuilder.Windows
 #if DEBUG
 			version.Text = Application.ProductName + " [DEVBUILD]";
 #else
-			version.Text = Application.ProductName + " v" + Application.ProductVersion + " (" + General.CommitHash + ")";
+			version.Text = Application.ProductName + " R" + General.ThisAssembly.GetName().Version.Revision;
 #endif
+
+			// styd: the base this editor is built on
+			basedon.Text = "Base: GZDoom Builder (Bugfix) R" + General.ThisAssembly.GetName().Version.Revision + " (" + General.CommitHash + ")";
 		}
 
 		// Launch Doom Builder website
@@ -63,6 +66,12 @@ namespace CodeImp.DoomBuilder.Windows
 		private void gitlink_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
 		{
 			General.OpenWebsite("https://github.com/jewalky/GZDoom-Builder-Bugfix");
+		}
+
+		// styd: the project page of Doom Builder 64 II
+		private void db64link_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+		{
+			General.OpenWebsite("https://github.com/Styd051/Doom-Builder-64-II");
 		}
 
 		// This copies the version number to clipboard

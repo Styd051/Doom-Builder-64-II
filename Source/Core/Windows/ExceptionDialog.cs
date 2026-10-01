@@ -72,7 +72,7 @@ namespace CodeImp.DoomBuilder.Windows
 				"At least it's not BSoD...",
 				"User Error. Please Replace User",
 				"Brought to you by MaxED!",
-				"GZDoom Builder proudly presents:",
+				"Doom Builder 64 II proudly presents:",
 				"You aren't expected to understand this",
 				"Back to the drawing board...",
 				"I'm sorry... :(",
@@ -98,12 +98,12 @@ namespace CodeImp.DoomBuilder.Windows
 				"I'm good at writing bad code",
 				"$FUNNY_ERROR_CAPTION",
 				"In Soviet Russia, exception throws YOU!",
-				"...and then GZDB was the demons!",
+				"...and then the builder was the demons!",
 				"B U S T E D",
 				"Freeze mode enabled",
 				"You feel strange...",
 				"That doesn't seem to work",
-				"This function is only available in the retail version of GZDoom Builder",
+				"This function is only available in the retail version of Doom Builder 64 II",
 				"You picked up the Random Exception.",
 				"Pinky says that you're the new hope. Bear that in mind.",
 				"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -129,7 +129,7 @@ namespace CodeImp.DoomBuilder.Windows
 				"No error occurred",
 				"Hey! It looks like you're having an error!",
 				"What, what, what, what, what, what, what, what, what, what?",
-				"WARNING: PROGRAMMING BUG IN GZDB!",
+				"WARNING: PROGRAMMING BUG IN THE BUILDER!",
 				"Something happened",
 				"The Device is Error",
                 "Worship me, and I may yet be merciful... then again, maybe not."
@@ -164,8 +164,8 @@ namespace CodeImp.DoomBuilder.Windows
 				}
 			}
 
-            // Get GZDB version
-            result += "GZDB: R" + General.ThisAssembly.GetName().Version.Revision + Environment.NewLine;
+            // Get the version of the editor
+            result += Application.ProductName + ": R" + General.ThisAssembly.GetName().Version.Revision + Environment.NewLine;
             result += "Platform: " + (Environment.Is64BitProcess ? "x64" : "x86") + Environment.NewLine + Environment.NewLine;
 
 			return result;
@@ -205,7 +205,7 @@ namespace CodeImp.DoomBuilder.Windows
 
 		private void newissue_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e) 
 		{
-			try { System.Diagnostics.Process.Start("https://github.com/jewalky/GZDoom-Builder-Bugfix/issues"); } 
+			try { System.Diagnostics.Process.Start("https://github.com/Styd051/Doom-Builder-64-II/issues"); } 
 			catch { MessageBox.Show("Unable to open URL..."); }
 			newissue.LinkVisited = true;
 		}

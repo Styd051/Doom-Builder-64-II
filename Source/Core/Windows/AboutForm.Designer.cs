@@ -44,13 +44,20 @@ namespace CodeImp.DoomBuilder.Windows
             this.copyversion = new System.Windows.Forms.Button();
             this.version = new System.Windows.Forms.Label();
             this.tabPage2 = new System.Windows.Forms.TabPage();
+            this.tabPage0 = new System.Windows.Forms.TabPage();
+            this.logo64 = new System.Windows.Forms.PictureBox();
+            this.label3 = new System.Windows.Forms.Label();
+            this.basedon = new System.Windows.Forms.Label();
+            this.db64link = new System.Windows.Forms.LinkLabel();
             label1 = new System.Windows.Forms.Label();
             pictureBox1 = new System.Windows.Forms.PictureBox();
             pictureBox3 = new System.Windows.Forms.PictureBox();
             ((System.ComponentModel.ISupportInitialize)(pictureBox1)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(pictureBox3)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox2)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.logo64)).BeginInit();
             this.tabControl1.SuspendLayout();
+            this.tabPage0.SuspendLayout();
             this.tabPage1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox4)).BeginInit();
             this.tabPage2.SuspendLayout();
@@ -136,12 +143,13 @@ namespace CodeImp.DoomBuilder.Windows
             // 
             // tabControl1
             // 
+            this.tabControl1.Controls.Add(this.tabPage0);
             this.tabControl1.Controls.Add(this.tabPage1);
             this.tabControl1.Controls.Add(this.tabPage2);
             this.tabControl1.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(204)));
             this.tabControl1.Location = new System.Drawing.Point(12, 12);
             this.tabControl1.Name = "tabControl1";
-            this.tabControl1.Padding = new System.Drawing.Point(24, 3);
+            this.tabControl1.Padding = new System.Drawing.Point(12, 3);
             this.tabControl1.SelectedIndex = 0;
             this.tabControl1.Size = new System.Drawing.Size(391, 227);
             this.tabControl1.TabIndex = 11;
@@ -153,15 +161,13 @@ namespace CodeImp.DoomBuilder.Windows
             this.tabPage1.Controls.Add(pictureBox3);
             this.tabPage1.Controls.Add(this.pictureBox4);
             this.tabPage1.Controls.Add(this.zdoomorglink);
-            this.tabPage1.Controls.Add(this.copyversion);
-            this.tabPage1.Controls.Add(this.version);
             this.tabPage1.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(204)));
             this.tabPage1.Location = new System.Drawing.Point(4, 22);
             this.tabPage1.Name = "tabPage1";
             this.tabPage1.Padding = new System.Windows.Forms.Padding(3);
             this.tabPage1.Size = new System.Drawing.Size(383, 201);
             this.tabPage1.TabIndex = 0;
-            this.tabPage1.Text = "About GZDoom Builder";
+            this.tabPage1.Text = "GZDoom Builder";
             this.tabPage1.UseVisualStyleBackColor = true;
             // 
             // gitlink
@@ -179,7 +185,7 @@ namespace CodeImp.DoomBuilder.Windows
             // label2
             // 
             this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(14, 135);
+            this.label2.Location = new System.Drawing.Point(14, 112);
             this.label2.Name = "label2";
             this.label2.Size = new System.Drawing.Size(286, 39);
             this.label2.TabIndex = 17;
@@ -210,7 +216,7 @@ namespace CodeImp.DoomBuilder.Windows
             // 
             // copyversion
             // 
-            this.copyversion.Location = new System.Drawing.Point(291, 95);
+            this.copyversion.Location = new System.Drawing.Point(118, 114);
             this.copyversion.Name = "copyversion";
             this.copyversion.Size = new System.Drawing.Size(81, 25);
             this.copyversion.TabIndex = 13;
@@ -222,11 +228,67 @@ namespace CodeImp.DoomBuilder.Windows
             // 
             this.version.AutoSize = true;
             this.version.FlatStyle = System.Windows.Forms.FlatStyle.System;
-            this.version.Location = new System.Drawing.Point(14, 102);
+            this.version.Location = new System.Drawing.Point(115, 14);
             this.version.Name = "version";
             this.version.Size = new System.Drawing.Size(150, 13);
             this.version.TabIndex = 11;
-            this.version.Text = "GZDoom Builder some version";
+            this.version.Text = "Doom Builder 64 II some version";
+            // 
+            // tabPage0
+            // 
+            this.tabPage0.Controls.Add(this.logo64);
+            this.tabPage0.Controls.Add(this.version);
+            this.tabPage0.Controls.Add(this.label3);
+            this.tabPage0.Controls.Add(this.basedon);
+            this.tabPage0.Controls.Add(this.copyversion);
+            this.tabPage0.Controls.Add(this.db64link);
+            this.tabPage0.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(204)));
+            this.tabPage0.Location = new System.Drawing.Point(4, 22);
+            this.tabPage0.Name = "tabPage0";
+            this.tabPage0.Padding = new System.Windows.Forms.Padding(3);
+            this.tabPage0.Size = new System.Drawing.Size(383, 201);
+            this.tabPage0.TabIndex = 2;
+            this.tabPage0.Text = "Doom Builder 64 II";
+            this.tabPage0.UseVisualStyleBackColor = true;
+            // 
+            // logo64
+            // 
+            this.logo64.Image = global::CodeImp.DoomBuilder.Properties.Resources.Builder64II_Logo;
+            this.logo64.Location = new System.Drawing.Point(9, 9);
+            this.logo64.Name = "logo64";
+            this.logo64.Size = new System.Drawing.Size(96, 96);
+            this.logo64.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
+            this.logo64.TabIndex = 19;
+            this.logo64.TabStop = false;
+            // 
+            // label3
+            // 
+            this.label3.Location = new System.Drawing.Point(115, 36);
+            this.label3.Name = "label3";
+            this.label3.Size = new System.Drawing.Size(262, 45);
+            this.label3.TabIndex = 20;
+            this.label3.Text = "Modified and maintained by Styd051.\r\nDoom Builder 64 by Kaiser (villsa).\r\nDoom Builder 2 by Pascal vd Heiden (CodeImp).";
+            // 
+            // basedon
+            // 
+            this.basedon.AutoSize = true;
+            this.basedon.Location = new System.Drawing.Point(115, 88);
+            this.basedon.Name = "basedon";
+            this.basedon.Size = new System.Drawing.Size(200, 13);
+            this.basedon.TabIndex = 21;
+            this.basedon.Text = "Base: GZDoom Builder (Bugfix)";
+            // 
+            // db64link
+            // 
+            this.db64link.AutoSize = true;
+            this.db64link.LinkColor = System.Drawing.SystemColors.HotTrack;
+            this.db64link.Location = new System.Drawing.Point(14, 181);
+            this.db64link.Name = "db64link";
+            this.db64link.Size = new System.Drawing.Size(134, 13);
+            this.db64link.TabIndex = 22;
+            this.db64link.TabStop = true;
+            this.db64link.Text = "Project page at github.com";
+            this.db64link.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.db64link_LinkClicked);
             // 
             // tabPage2
             // 
@@ -241,7 +303,7 @@ namespace CodeImp.DoomBuilder.Windows
             this.tabPage2.Padding = new System.Windows.Forms.Padding(3);
             this.tabPage2.Size = new System.Drawing.Size(383, 201);
             this.tabPage2.TabIndex = 1;
-            this.tabPage2.Text = "About Doom Builder";
+            this.tabPage2.Text = "Doom Builder";
             this.tabPage2.UseVisualStyleBackColor = true;
             // 
             // AboutForm
@@ -265,7 +327,10 @@ namespace CodeImp.DoomBuilder.Windows
             ((System.ComponentModel.ISupportInitialize)(pictureBox1)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(pictureBox3)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox2)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.logo64)).EndInit();
             this.tabControl1.ResumeLayout(false);
+            this.tabPage0.ResumeLayout(false);
+            this.tabPage0.PerformLayout();
             this.tabPage1.ResumeLayout(false);
             this.tabPage1.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox4)).EndInit();
@@ -290,5 +355,10 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.TabPage tabPage2;
 		private System.Windows.Forms.Label label2;
 		private System.Windows.Forms.LinkLabel gitlink;
+		private System.Windows.Forms.TabPage tabPage0;
+		private System.Windows.Forms.PictureBox logo64;
+		private System.Windows.Forms.Label label3;
+		private System.Windows.Forms.Label basedon;
+		private System.Windows.Forms.LinkLabel db64link;
 	}
 }

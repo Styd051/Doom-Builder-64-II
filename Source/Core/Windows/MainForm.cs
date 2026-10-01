@@ -3176,16 +3176,10 @@ namespace CodeImp.DoomBuilder.Windows
 			itemhelpeditmode.Enabled = (General.Map != null && General.Editing.Mode != null);
 		}
 
-		//mxd. Check updates clicked
-		private void itemhelpcheckupdates_Click(object sender, EventArgs e)
-		{
-			UpdateChecker.PerformCheck(true);
-		}
-
 		//mxd. Github issues clicked
 		private void itemhelpissues_Click(object sender, EventArgs e)
 		{
-			General.OpenWebsite("https://github.com/jewalky/GZDoom-Builder-Bugfix/issues");
+			General.OpenWebsite("https://github.com/Styd051/Doom-Builder-64-II/issues");
 		}
 		
 		// About clicked
@@ -3216,7 +3210,7 @@ namespace CodeImp.DoomBuilder.Windows
 			const string categoryPadding = "<tr><td colspan=\"4\"></td></tr>";
 			const string categoryStart = "<tr><td colspan=\"4\" bgcolor=\"#333333\"><strong style=\"color:#FFFFFF\">";
 			const string categoryEnd = "</strong><div style=\"text-align:right; float:right\"><a style=\"color:#FFFFFF\" href=\"#top\">[to top]</a></div></td></tr>";
-			const string fileName = "GZDB Actions Reference.html";
+			const string fileName = "Doom Builder 64 II Actions Reference.html";
 
 			Actions.Action[] actions = General.Actions.GetAllActions();
 			Dictionary<string, List<Actions.Action>> sortedActions = new Dictionary<string, List<Actions.Action>>(StringComparer.Ordinal);
@@ -3233,13 +3227,13 @@ namespace CodeImp.DoomBuilder.Windows
 			//head
 			html.AppendLine("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">" + Environment.NewLine +
 								"<html xmlns=\"http://www.w3.org/1999/xhtml\">" + Environment.NewLine +
-								"<head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" /><title>GZDoom Builder Actions Reference</title></head>" + Environment.NewLine +
+								"<head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" /><title>Doom Builder 64 II Actions Reference</title></head>" + Environment.NewLine +
 								"<body bgcolor=\"#666666\">" + Environment.NewLine +
 									"<div style=\"padding-left:60px; padding-right:60px; padding-top:20px; padding-bottom:20px;\">" + Environment.NewLine);
 
 			//table header
 			html.AppendLine("<table bgcolor=\"#FFFFFF\" width=\"100%\" border=\"0\" cellspacing=\"6\" cellpadding=\"6\" style=\"font-family: 'Trebuchet MS',georgia,Verdana,Sans-serif;\">" + Environment.NewLine +
-							"<tr><td colspan=\"4\" bgcolor=\"#333333\"><span style=\"font-size: 24px\"><a name=\"top\" id=\"top\"></a><strong style=\"color:#FFFFFF\">GZDoom Builder Actions Reference</strong></span></td></tr>");
+							"<tr><td colspan=\"4\" bgcolor=\"#333333\"><span style=\"font-size: 24px\"><a name=\"top\" id=\"top\"></a><strong style=\"color:#FFFFFF\">Doom Builder 64 II Actions Reference</strong></span></td></tr>");
 
 			//categories navigator
 			List<string> catnames = new List<string>(sortedActions.Count);
@@ -4472,31 +4466,6 @@ namespace CodeImp.DoomBuilder.Windows
 			}
 		}
 		
-		#endregion
-
-		#region ================== Updater (mxd)
-
-		private delegate void UpdateAvailableCallback(int remoterev, string changelog);
-		internal void UpdateAvailable(int remoterev, string changelog)
-		{
-			if(this.InvokeRequired)
-			{
-				UpdateAvailableCallback d = UpdateAvailable;
-				this.Invoke(d, new object[] { remoterev, changelog });
-			} 
-			else 
-			{
-				// Show the window
-				UpdateForm form = new UpdateForm(remoterev, changelog);
-				form.FormClosing += delegate
-				{
-					// Update ignored revision number
-					General.Settings.IgnoredRemoteRevision = (form.IgnoreThisUpdate ? remoterev : 0);
-				};
-				form.Show(this);
-			}
-		}
-
 		#endregion
 
 		#region ================== Graphics (mxd)

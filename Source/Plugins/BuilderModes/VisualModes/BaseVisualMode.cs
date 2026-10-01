@@ -36,7 +36,7 @@ using CodeImp.DoomBuilder.Data;
 
 namespace CodeImp.DoomBuilder.BuilderModes
 {
-	[EditMode(DisplayName = "GZDB Visual Mode",
+	[EditMode(DisplayName = "Visual Mode",
 			  SwitchAction = "gzdbvisualmode", // Action name used to switch to this mode
 			  ButtonImage = "VisualModeGZ.png",	// Image resource name for the button
 			  ButtonOrder = 1,					// Position of the button (lower is more to the left)

@@ -100,7 +100,7 @@ namespace CodeImp.DoomBuilder.Controls
 			this.SetStyle(ControlStyles.AllPaintingInWmPaint, true);
 			this.SetStyle(ControlStyles.Opaque, false);
 			this.UpdateStyles();
-			this.BackColor = SystemColors.ControlDarkDark;
+			this.BackColor = Color.Black; // villsa
 			this.BackgroundImage = Properties.Resources.Splash3_trans;
 			this.BackgroundImageLayout = ImageLayout.Center;
 		}
