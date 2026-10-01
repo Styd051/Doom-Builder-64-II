@@ -203,7 +203,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 			//mxd. Update sky render flag
 			bool isrenderedassky = renderassky;
-			renderassky = (level.sector.CeilTexture == General.Map.Config.SkyFlatName);
+			renderassky = General.Map.Data.IsSkyFlat(level.sector.CeilTexture);
 			if(isrenderedassky != renderassky && Sector.Sides != null)
 			{
 				// Upper sidedef geometry may need updating...
@@ -216,7 +216,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					{
 						parts.upper.UpdateSkyRenderFlag();
 					}
-					else if(side.Other != null && side.Other.Sector != null && side.Other.Sector.CeilTexture == General.Map.Config.SkyFlatName)
+					// styd. In Doom 64 the upper side of the neighbour depends on this ceiling alone
+					else if(side.Other != null && side.Other.Sector != null && (General.Map.DOOM64 || General.Map.Data.IsSkyFlat(side.Other.Sector.CeilTexture)))
 					{
 						// Update upper side of the neightbouring sector
 						BaseVisualSector other = (BaseVisualSector)mode.GetVisualSector(side.Other.Sector);

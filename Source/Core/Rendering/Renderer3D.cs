@@ -326,6 +326,9 @@ namespace CodeImp.DoomBuilder.Rendering
             if (!fpsWatch.IsRunning)
                 fpsWatch.Start();
 
+			// styd. The sky of a Doom 64 map follows its sky ceilings
+			if(General.Map.DOOM64) General.Map.Data.UpdateDoom64Sky();
+
             // Start drawing
             if (graphics.StartRendering(true, General.Colors.Background.ToColorValue(), graphics.BackBuffer, graphics.DepthBuffer))
 			{

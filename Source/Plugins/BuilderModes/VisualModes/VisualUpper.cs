@@ -224,8 +224,17 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		//mxd
 		internal void UpdateSkyRenderFlag()
 		{
-			renderassky = (Sidedef.Other != null && Sidedef.Sector != null && Sidedef.Other.Sector != null 
-				&& Sidedef.Sector.CeilTexture == General.Map.Config.SkyFlatName 
+			// styd. Doom 64 does not draw an upper part below the sky ceiling of the other sector,
+			// whatever the ceiling of this sector is: the sky shows there
+			if(General.Map.DOOM64)
+			{
+				renderassky = (Sidedef.Other != null && Sidedef.Other.Sector != null
+					&& General.Map.Data.IsSkyFlat(Sidedef.Other.Sector.CeilTexture));
+				return;
+			}
+
+			renderassky = (Sidedef.Other != null && Sidedef.Sector != null && Sidedef.Other.Sector != null
+				&& Sidedef.Sector.CeilTexture == General.Map.Config.SkyFlatName
 				&& Sidedef.Other.Sector.CeilTexture == General.Map.Config.SkyFlatName);
 		}
 		

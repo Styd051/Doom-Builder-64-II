@@ -129,6 +129,10 @@ namespace CodeImp.DoomBuilder.Data
 		//mxd. Sky textures
 		private CubeTexture skybox; // GZDoom skybox
 
+		// styd. The skies of Doom 64
+		private Dictionary<string, Doom64SkyDef> doom64skies; // The skies of the SKYDEFS lumps, by the name of their flat
+		private string doom64skyname; // The sky that the skybox shows, or null when it must be made
+
 		//mxd. Comment icons
 		private ImageData[] commenttextures;
 		
@@ -353,6 +357,7 @@ namespace CodeImp.DoomBuilder.Data
 			flats = new Dictionary<long, ImageData>();
 			sprites = new Dictionary<long, ImageData>();
 			thingpalettes = new Dictionary<string, Playpal>(StringComparer.OrdinalIgnoreCase); // villsa
+			doom64skies = new Dictionary<string, Doom64SkyDef>(StringComparer.OrdinalIgnoreCase); // styd
 			texturenames = new List<string>();
 			flatnames = new List<string>();
 			texturenamesshorttofull = new Dictionary<long, long>(); //mxd
@@ -456,6 +461,7 @@ namespace CodeImp.DoomBuilder.Data
 			LoadX11R6RGB(); //mxd
 			LoadPalette();
 			LoadThingPalettes(); // villsa
+			LoadDoom64Skies(); // styd
 			Dictionary<string, TexturesParser> cachedparsers = new Dictionary<string, TexturesParser>(); //mxd
 			int texcount = LoadTextures(texturesonly, texturenamesshorttofull, cachedparsers);
 			int flatcount = LoadFlats(flatsonly, flatnamesshorttofull, cachedparsers);
@@ -654,6 +660,7 @@ namespace CodeImp.DoomBuilder.Data
 			foreach(KeyValuePair<long, ImageData> i in sprites) i.Value.Dispose();
 			palette = null;
 			thingpalettes = null; // villsa
+			doom64skies = null; // styd
 
 			//mxd. Dispose models
 			foreach(ModelData md in modeldefentries.Values) md.Dispose();
@@ -3322,6 +3329,14 @@ namespace CodeImp.DoomBuilder.Data
 			// Get rid of old texture
 			if(skybox != null) skybox.Dispose(); skybox = null;
 
+			// styd. The sky of a Doom 64 map comes from SKYDEFS and from the sky ceilings of the map.
+			// Its texture is made when the map is drawn (see UpdateDoom64Sky).
+			if(General.Map.DOOM64)
+			{
+				doom64skyname = null;
+				return;
+			}
+
 			// Determine which texture name to use
 			string skytex = string.Empty;
 			if(!string.IsNullOrEmpty(mapinfo.Sky1))
@@ -3405,6 +3420,91 @@ namespace CodeImp.DoomBuilder.Data
 					General.ErrorLogger.Add(ErrorType.Warning, "Skybox creation failed: Direct3D device is not available");
 				}
 			}
+		}
+
+		// styd. This tells if a flat stands for the sky. Doom 64 has several of these: the skies of SKYDEFS.
+		public bool IsSkyFlat(string flatname)
+		{
+			if(General.Map.DOOM64) return (doom64skies != null) && doom64skies.ContainsKey(flatname);
+			return (flatname == General.Map.Config.SkyFlatName);
+		}
+
+		// styd. This loads the sky definitions of Doom 64 from the SKYDEFS lumps.
+		// A resource that is loaded later replaces the skies of the same name.
+		private void LoadDoom64Skies()
+		{
+			if(!General.Map.DOOM64) return;
+
+			foreach(DataReader dr in containers)
+			{
+				string name = "SKYDEFS";
+				if(dr is PK3StructuredReader)
+				{
+					name = ((PK3StructuredReader)dr).FindFirstFile(name, false);
+					if(string.IsNullOrEmpty(name)) continue;
+				}
+
+				if(!dr.FileExists(name)) continue;
+				MemoryStream mem = dr.LoadFile(name);
+				if(mem == null) continue;
+
+				mem.Seek(0, SeekOrigin.Begin);
+				using(StreamReader reader = new StreamReader(mem, System.Text.Encoding.ASCII))
+					Doom64Sky.Parse(reader.ReadToEnd(), dr.Location.GetDisplayName(), doom64skies);
+			}
+		}
+
+		// styd. This makes the skybox of a Doom 64 map again when its sky has changed.
+		// As in the game, the sky of a map is the sky of its last sector with a sky ceiling.
+		internal void UpdateDoom64Sky()
+		{
+			if((doom64skies == null) || (doom64skies.Count == 0)) return;
+
+			string name = string.Empty;
+			foreach(Sector s in General.Map.Map.Sectors)
+				if(doom64skies.ContainsKey(s.CeilTexture)) name = s.CeilTexture;
+
+			if((name == doom64skyname) || !General.Map.Graphics.CheckAvailability()) return;
+			doom64skyname = name;
+
+			// Without a sky ceiling the game draws no sky at all
+			Doom64SkyDef sky;
+			if(name.Length > 0) sky = doom64skies[name];
+			else { sky = new Doom64SkyDef(); sky.Void = true; }
+
+			Bitmap pic = GetDoom64SkyPicture(sky, sky.Pic);
+			Bitmap backpic = GetDoom64SkyPicture(sky, sky.BackPic);
+			Bitmap fire = (sky.Fire ? GetDoom64SkyPicture(sky, Doom64Sky.FIRE_PIC) : null);
+
+			// One color needs no detail
+			int size = (sky.Void ? 16 : Doom64Sky.FACE_SIZE);
+			Bitmap[] faces = Doom64Sky.MakeFaces(size, Doom64Sky.MakeSampler(sky, pic, backpic, fire, size));
+
+			if(skybox != null) skybox.Dispose();
+			skybox = MakeDoom64SkyBox(faces);
+		}
+
+		// styd. This loads a picture of a Doom 64 sky. These are lumps outside of the textures.
+		private Bitmap GetDoom64SkyPicture(Doom64SkyDef sky, string name)
+		{
+			if(string.IsNullOrEmpty(name)) return null;
+			Bitmap picture = GetTextureBitmap(name);
+			if(picture == null)
+				General.ErrorLogger.Add(ErrorType.Warning, "Unable to load the picture \"" + name + "\" of the sky \"" + sky.Flat + "\".");
+			return picture;
+		}
+
+		// styd. This makes a CubeTexture from 6 images, in the order of the faces of a cube texture
+		private static CubeTexture MakeDoom64SkyBox(Bitmap[] faces)
+		{
+			CubeTexture cubemap = new CubeTexture(General.Map.Graphics.Device, faces[0].Width, 1, Usage.None, Format.A8R8G8B8, Pool.Managed);
+			for(int i = 0; i < faces.Length; i++)
+			{
+				DrawCubemapFace(cubemap, (CubeMapFace)i, faces[i]);
+				faces[i].Dispose();
+			}
+
+			return cubemap;
 		}
 
 		//INFO: 1. Looks like GZDoom tries to tile a sky texture into a 1024 pixel width texture.

@@ -182,6 +182,7 @@
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="Data\DirectoryReader.cs" />
+    <Compile Include="Data\Doom64Sky.cs" />
     <Compile Include="Data\FileImage.cs" />
     <Compile Include="Data\FlatImage.cs" />
     <Compile Include="Data\ImageLoadState.cs" />
