@@ -25,7 +25,7 @@ namespace CodeImp.DoomBuilder.AutomapMode
 			General.Interface.BeginToolbarUpdate(); //mxd
 			General.Interface.AddButton(showhiddenlines);
 			General.Interface.AddButton(showsecretsectors);
-			if(!General.Map.DOOM) General.Interface.AddButton(showlocks);
+			if(!General.Map.DOOM && !General.Map.DOOM64) General.Interface.AddButton(showlocks);
 			General.Interface.AddButton(colorpresetseparator);
 			General.Interface.AddButton(colorpresetlabel);
 			General.Interface.AddButton(colorpreset);

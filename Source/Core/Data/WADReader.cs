@@ -409,6 +409,19 @@ namespace CodeImp.DoomBuilder.Data
 
 		#region ================== Textures
 
+		// villsa. This returns the names of all textures between the texture range markers, in lump order.
+		// Doom 64 maps refer to their textures by a hash of these names (see Doom64MapSetIO).
+		internal List<string> GetTextureRangeNames()
+		{
+			List<string> names = new List<string>();
+			foreach(LumpRange range in textureranges)
+			{
+				for(int i = range.start + 1; i < range.end; i++)
+					if(file.Lumps[i].Length > 0) names.Add(file.Lumps[i].Name);
+			}
+			return names;
+		}
+
 		// This loads the textures
 		public override IEnumerable<ImageData> LoadTextures(PatchNames pnames, Dictionary<string, TexturesParser> cachedparsers)
 		{

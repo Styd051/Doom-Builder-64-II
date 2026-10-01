@@ -586,9 +586,12 @@ namespace CodeImp.DoomBuilder.Data
 			// Sort things
 			foreach (ThingCategory tc in thingcategories) tc.SortIfNeeded();
 
+			// villsa. A Doom 64 map only knows the hashes of its texture names until now
+			if(General.Map.DOOM64) Doom64MapSetIO.ResolveTextureNames(General.Map.Map, this);
+
 			// Update the used textures
 			General.Map.Data.UpdateUsedTextures();
-			
+
 			// Add texture names to texture sets
 			foreach(KeyValuePair<long, ImageData> img in textures)
 			{

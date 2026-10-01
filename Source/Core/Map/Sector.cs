@@ -43,6 +43,7 @@ namespace CodeImp.DoomBuilder.Map
 		#region ================== Constants
 
 		internal const int SLOPE_DECIMALS = 7;
+		public const int NUM_COLORS = 5; // villsa. Doom 64 colored lighting
 
 		#endregion
 
@@ -71,6 +72,13 @@ namespace CodeImp.DoomBuilder.Map
 
 		//mxd. UDMF properties
 		private Dictionary<string, bool> flags;
+
+		// villsa. Doom 64 colored lighting
+		private Lights ceilcolor;
+		private Lights floorcolor;
+		private Lights thingcolor;
+		private Lights topcolor;
+		private Lights lowercolor;
 
 		// Cloning
 		private Sector clone;
@@ -125,6 +133,13 @@ namespace CodeImp.DoomBuilder.Map
 		public FlatVertex[] FlatVertices { get { return flatvertices; } }
 		public ReadOnlyCollection<LabelPositionInfo> Labels { get { return labels; } }
 
+		// villsa. Doom 64 colored lighting
+		public Lights CeilColor { get { return ceilcolor; } set { BeforePropsChange(); ceilcolor = value; updateneeded = true; } }
+		public Lights FloorColor { get { return floorcolor; } set { BeforePropsChange(); floorcolor = value; updateneeded = true; } }
+		public Lights ThingColor { get { return thingcolor; } set { BeforePropsChange(); thingcolor = value; updateneeded = true; } }
+		public Lights TopColor { get { return topcolor; } set { BeforePropsChange(); topcolor = value; updateneeded = true; } }
+		public Lights LowerColor { get { return lowercolor; } set { BeforePropsChange(); lowercolor = value; updateneeded = true; } }
+
 		//mxd. Rednering
 		public Color4 FogColor { get { return fogcolor; } }
 		public SectorFogMode FogMode { get { return fogmode; } }
@@ -163,6 +178,11 @@ namespace CodeImp.DoomBuilder.Map
 			this.longceiltexname = MapSet.EmptyLongName;
 			this.flags = new Dictionary<string, bool>(StringComparer.Ordinal); //mxd
 			this.tags = new List<int> { 0 }; //mxd
+			this.ceilcolor = new Lights(128, 128, 128, 0); // villsa
+			this.floorcolor = new Lights(128, 128, 128, 0); // villsa
+			this.thingcolor = new Lights(128, 128, 128, 0); // villsa
+			this.topcolor = new Lights(128, 128, 128, 0); // villsa
+			this.lowercolor = new Lights(128, 128, 128, 0); // villsa
 			this.updateneeded = true;
 			this.triangulationneeded = true;
 			this.triangles = new Triangulation(); //mxd
@@ -295,6 +315,13 @@ namespace CodeImp.DoomBuilder.Map
 			s.rwVector3D(ref floorslope);
 			s.rwFloat(ref ceiloffset);
 			s.rwVector3D(ref ceilslope);
+
+			// villsa. Doom 64 colored lighting
+			ceilcolor.ReadWrite(s);
+			floorcolor.ReadWrite(s);
+			thingcolor.ReadWrite(s);
+			topcolor.ReadWrite(s);
+			lowercolor.ReadWrite(s);
 		}
 		
 		// After deserialization
@@ -325,6 +352,11 @@ namespace CodeImp.DoomBuilder.Map
 			s.floorslope = floorslope; //mxd
 			s.ceiloffset = ceiloffset; //mxd
 			s.ceilslope = ceilslope; //mxd
+			s.ceilcolor = ceilcolor; // villsa
+			s.floorcolor = floorcolor; // villsa
+			s.thingcolor = thingcolor; // villsa
+			s.topcolor = topcolor; // villsa
+			s.lowercolor = lowercolor; // villsa
 			s.updateneeded = true;
 			base.CopyPropertiesTo(s);
 		}

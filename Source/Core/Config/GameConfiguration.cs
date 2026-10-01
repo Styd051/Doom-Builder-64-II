@@ -101,6 +101,7 @@ namespace CodeImp.DoomBuilder.Config
 		private readonly bool doommapformat;
 		private readonly bool hexenmapformat;
 		private readonly bool universalmapformat;
+		private readonly bool doom64mapformat;
 		
 		// Texture/flat/voxel sources
 		private readonly IDictionary textureranges;
@@ -238,6 +239,7 @@ namespace CodeImp.DoomBuilder.Config
 		public bool UDMF { get { return universalmapformat; } }
 		public bool HEXEN { get { return hexenmapformat; } }
 		public bool DOOM { get { return doommapformat; } }
+		public bool DOOM64 { get { return doom64mapformat; } }
 
 		public bool UseLocalSidedefTextureOffsets { get { return localsidedeftextureoffsets; } } //MaxW
 
@@ -411,6 +413,7 @@ namespace CodeImp.DoomBuilder.Config
 			universalmapformat = (formatinterface == "UniversalMapSetIO");
 			hexenmapformat = (formatinterface == "HexenMapSetIO");
 			doommapformat = (formatinterface == "DoomMapSetIO");
+			doom64mapformat = (formatinterface == "Doom64MapSetIO");
 
 			//mxd. Texture names length
 			longtexturenames = cfg.ReadSetting("longtexturenames", false);
@@ -630,18 +633,19 @@ namespace CodeImp.DoomBuilder.Config
 			if(io.HasNumericLinedefFlags)
 			{
 				// Make list for integers that we can sort
-				List<int> sortlist = new List<int>(linedefflags.Count);
+				// villsa. Unsigned, because Doom 64 uses all 32 bits
+				List<uint> sortlist = new List<uint>(linedefflags.Count);
 				foreach(KeyValuePair<string, string> f in linedefflags)
 				{
-					int num;
-					if(int.TryParse(f.Key, NumberStyles.Integer, CultureInfo.InvariantCulture, out num)) sortlist.Add(num);
+					uint num;
+					if(uint.TryParse(f.Key, NumberStyles.Integer, CultureInfo.InvariantCulture, out num)) sortlist.Add(num);
 				}
-				
+
 				// Sort
 				sortlist.Sort();
-				
+
 				// Make list of strings
-				foreach(int i in sortlist)
+				foreach(uint i in sortlist)
 					sortedlinedefflags.Add(i.ToString(CultureInfo.InvariantCulture));
 			}
 			

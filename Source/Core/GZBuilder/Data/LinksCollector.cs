@@ -723,7 +723,7 @@ namespace CodeImp.DoomBuilder.GZBuilder.Data
         public static List<Line3D> GetDynamicLightShapes(IEnumerable<Thing> things, bool highlight)
         {
             List<Line3D> circles = new List<Line3D>();
-            if (General.Map.DOOM) return circles;
+            if (General.Map.DOOM || General.Map.DOOM64) return circles;
 
             const int linealpha = 128;
             foreach (Thing t in things)
@@ -767,7 +767,7 @@ namespace CodeImp.DoomBuilder.GZBuilder.Data
 					minradius = info.AmbientSound.MinimumRadius;
 					maxradius = info.AmbientSound.MaximumRadius;
 				}
-				else if(!General.Map.DOOM && (info.ClassName == "AmbientSound" || info.ClassName == "AmbientSoundNoGravity"))
+				else if(!General.Map.DOOM && !General.Map.DOOM64 && (info.ClassName == "AmbientSound" || info.ClassName == "AmbientSoundNoGravity"))
 				{
 					//arg0: ambient slot
 					//arg1: (optional) sound volume, in percent. 1 is nearly silent, 100 and above are full volume. If left to zero, full volume is also used.

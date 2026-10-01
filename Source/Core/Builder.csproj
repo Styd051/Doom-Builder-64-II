@@ -507,6 +507,7 @@
     <Compile Include="IO\HexenMapSetIO.cs" />
     <Compile Include="IO\DoomFlatReader.cs" />
     <Compile Include="IO\DoomMapSetIO.cs" />
+    <Compile Include="IO\Doom64MapSetIO.cs" />
     <Compile Include="IO\DoomPictureReader.cs" />
     <Compile Include="IO\FileImageReader.cs" />
     <Compile Include="IO\IImageReader.cs" />
@@ -523,6 +524,7 @@
     <Compile Include="Windows\MainForm.Designer.cs">
       <DependentUpon>MainForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="Map\Lights.cs" />
     <Compile Include="Map\Linedef.cs" />
     <Compile Include="Geometry\LinedefSide.cs" />
     <Compile Include="Map\MapOptions.cs" />

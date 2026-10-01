@@ -71,6 +71,7 @@ namespace CodeImp.DoomBuilder.Map
 		private int activate;
 		private List<int> tags; //mxd
 		private int[] args;
+		private int switchmask; // villsa. Doom 64 switch setup bits
 		private bool frontinterior;		// for drawing only
 		private int colorPresetIndex;//mxd
 
@@ -90,6 +91,7 @@ namespace CodeImp.DoomBuilder.Map
 		internal Dictionary<string, bool> Flags { get { return flags; } }
 		public int Action { get { return action; } set { BeforePropsChange(); action = value; UpdateColorPreset(); } }
 		public int Activate { get { return activate; } set { BeforePropsChange(); activate = value; UpdateColorPreset(); } }
+		public int SwitchMask { get { return switchmask; } set { BeforePropsChange(); switchmask = value; } } // villsa
 
 		public int Tag { get { return tags[0]; } set { BeforePropsChange(); tags[0] = value; if((value < General.Map.FormatInterface.MinTag) || (value > General.Map.FormatInterface.MaxTag)) throw new ArgumentOutOfRangeException("Tag", "Invalid tag number"); } } //mxd
 		public List<int> Tags { get { return tags; } set { BeforePropsChange(); tags = value; } } //mxd
@@ -244,6 +246,7 @@ namespace CodeImp.DoomBuilder.Map
 			}
 
 			for(int i = 0; i < NUM_ARGS; i++) s.rwInt(ref args[i]);
+			s.rwInt(ref switchmask); // villsa
 
 			//mxd
 			if(!s.IsWriting) UpdateColorPreset();
@@ -308,6 +311,7 @@ namespace CodeImp.DoomBuilder.Map
 			l.tags = new List<int>(tags); //mxd
 			l.updateneeded = true;
 			l.activate = activate;
+			l.switchmask = switchmask; // villsa
 			l.impassableflag = impassableflag;
 			l.UpdateColorPreset();//mxd
 			base.CopyPropertiesTo(l);

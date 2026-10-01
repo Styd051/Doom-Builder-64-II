@@ -4197,8 +4197,10 @@ namespace CodeImp.DoomBuilder.Windows
 		{
 			if(this.InvokeRequired)
 			{
+				// Don't wait for the interface thread here: the caller holds the ErrorLogger lock,
+				// and the interface thread may be waiting for that same lock to add its own error
 				SetWarningsCountCallback d = SetWarningsCount;
-				this.Invoke(d, new object[] { count, blink });
+				this.BeginInvoke(d, new object[] { count, blink });
 				return;
 			}
 

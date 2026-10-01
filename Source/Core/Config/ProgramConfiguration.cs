@@ -49,6 +49,7 @@ namespace CodeImp.DoomBuilder.Config
 		private float visualmousesensx;
 		private float visualmousesensy;
 		private int imagebrightness;
+		private int lightintensity; // villsa. Doom 64 colored lighting
 		private float doublesidedalpha;
 		private float activethingsalpha; //mxd
 		private float inactivethingsalpha; //mxd
@@ -157,6 +158,7 @@ namespace CodeImp.DoomBuilder.Config
 		public bool BlackBrowsers { get { return blackbrowsers; } internal set { blackbrowsers = value; } }
 		public int VisualFOV { get { return visualfov; } internal set { visualfov = value; } }
 		public int ImageBrightness { get { return imagebrightness; } internal set { imagebrightness = value; } }
+		public int LightIntensity { get { return lightintensity; } internal set { lightintensity = value; } } // villsa
 		public float DoubleSidedAlpha { get { return doublesidedalpha; } internal set { doublesidedalpha = value; doublesidedalphabyte = (byte)(doublesidedalpha * 255f); } }
 		public byte DoubleSidedAlphaByte { get { return doublesidedalphabyte; } }
 		public float ActiveThingsAlpha { get { return activethingsalpha; } internal set { activethingsalpha = value; } } //mxd
@@ -303,6 +305,7 @@ namespace CodeImp.DoomBuilder.Config
 				visualmousesensx = cfg.ReadSetting("visualmousesensx", 40f);
 				visualmousesensy = cfg.ReadSetting("visualmousesensy", 40f);
 				imagebrightness = cfg.ReadSetting("imagebrightness", 3);
+				lightintensity = cfg.ReadSetting("lightintensity", 0); // villsa
 				doublesidedalpha = cfg.ReadSetting("doublesidedalpha", 0.4f);
 				doublesidedalphabyte = (byte)(doublesidedalpha * 255f);
 				activethingsalpha = cfg.ReadSetting("activethingsalpha", Presentation.THINGS_ALPHA); //mxd
@@ -417,6 +420,7 @@ namespace CodeImp.DoomBuilder.Config
 			cfg.WriteSetting("visualmousesensx", visualmousesensx);
 			cfg.WriteSetting("visualmousesensy", visualmousesensy);
 			cfg.WriteSetting("imagebrightness", imagebrightness);
+			cfg.WriteSetting("lightintensity", lightintensity); // villsa
 			cfg.WriteSetting("qualitydisplay", qualitydisplay);
 			cfg.WriteSetting("testmonsters", testmonsters);
 			cfg.WriteSetting("doublesidedalpha", doublesidedalpha);

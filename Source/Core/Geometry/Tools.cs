@@ -1005,6 +1005,7 @@ namespace CodeImp.DoomBuilder.Geometry
 					if(ld == null) return false;
 					ld.Marked = true;
 					ld.ApplySidedFlags();
+					if(General.Map.DOOM64) ld.SetFlag(Lights.FLAG_USE_MULTI_COLORS, true); // villsa
 					ld.UpdateCache();
 					newlines.Add(ld);
 
