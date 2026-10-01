@@ -168,28 +168,21 @@ namespace CodeImp.DoomBuilder.Config
 			list = General.Settings.ReadSetting("configurations." + settingskey + ".linedefcolorpresets", new ListDictionary());
 
 			//no presets? add "classic" ones then.
-			if(list.Count == 0) 
+			if(list.Count == 0)
 			{
-				colorPresets.Add(new LinedefColorPreset("Any action", PixelColor.FromColor(System.Drawing.Color.PaleGreen), -1, 0, new List<string>(), new List<string>(), true));
-			} 
-			else 
+				// villsa. A game configuration can have its own default presets
+				IDictionary defaults = config.ReadSetting("linedefcolorpresets", new ListDictionary());
+				foreach(DictionaryEntry de in defaults)
+					colorPresets.Add(ReadLinedefColorPreset(config, "linedefcolorpresets." + de.Key));
+
+				if(colorPresets.Count == 0)
+					colorPresets.Add(new LinedefColorPreset("Any action", PixelColor.FromColor(System.Drawing.Color.PaleGreen), -1, 0, new List<string>(), new List<string>(), true));
+			}
+			else
 			{
 				//read custom linedef colors from config
-				foreach(DictionaryEntry de in list) 
-				{
-					string path = "configurations." + settingskey + ".linedefcolorpresets." + de.Key;
-					string presetname = General.Settings.ReadSetting(path + ".name", "Unnamed");
-					bool presetenabled = General.Settings.ReadSetting(path + ".enabled", true);
-					PixelColor color = PixelColor.FromInt(General.Settings.ReadSetting(path + ".color", -1));
-					int action = General.Settings.ReadSetting(path + ".action", 0);
-					int activation = General.Settings.ReadSetting(path + ".activation", 0);
-					List<string> flags = new List<string>();
-					flags.AddRange(General.Settings.ReadSetting(path + ".flags", "").Split(LINEDEF_COLOR_PRESET_FLAGS_SEPARATOR, StringSplitOptions.RemoveEmptyEntries));
-					List<string> restrictedFlags = new List<string>();
-					restrictedFlags.AddRange(General.Settings.ReadSetting(path + ".restrictedflags", "").Split(LINEDEF_COLOR_PRESET_FLAGS_SEPARATOR, StringSplitOptions.RemoveEmptyEntries));
-					LinedefColorPreset preset = new LinedefColorPreset(presetname, color, action, activation, flags, restrictedFlags, presetenabled);
-					colorPresets.Add(preset);
-				}
+				foreach(DictionaryEntry de in list)
+					colorPresets.Add(ReadLinedefColorPreset(General.Settings.Config, "configurations." + settingskey + ".linedefcolorpresets." + de.Key));
 			}
 			linedefColorPresets = colorPresets.ToArray();
 
@@ -328,6 +321,23 @@ namespace CodeImp.DoomBuilder.Config
 			General.Settings.Config.WriteSetting("configurations." + settingskey + ".engines", resinfo);
 		}
 
+		// This reads a linedef color preset from the program configuration or from a game configuration
+		private LinedefColorPreset ReadLinedefColorPreset(Configuration source, string path)
+		{
+			string presetname = source.ReadSetting(path + ".name", "Unnamed");
+			bool presetenabled = source.ReadSetting(path + ".enabled", true);
+			PixelColor color = PixelColor.FromInt(source.ReadSetting(path + ".color", -1));
+			int action = source.ReadSetting(path + ".action", 0);
+			int activation = source.ReadSetting(path + ".activation", 0);
+			List<string> flags = new List<string>();
+			flags.AddRange(source.ReadSetting(path + ".flags", "").Split(LINEDEF_COLOR_PRESET_FLAGS_SEPARATOR, StringSplitOptions.RemoveEmptyEntries));
+			List<string> restrictedFlags = new List<string>();
+			restrictedFlags.AddRange(source.ReadSetting(path + ".restrictedflags", "").Split(LINEDEF_COLOR_PRESET_FLAGS_SEPARATOR, StringSplitOptions.RemoveEmptyEntries));
+			LinedefColorPreset preset = new LinedefColorPreset(presetname, color, action, activation, flags, restrictedFlags, presetenabled);
+			preset.TagOnly = source.ReadSetting(path + ".tagonly", false); // villsa
+			return preset;
+		}
+
 		//mxd
 		private void SaveLinedefColorPresets() 
 		{
@@ -344,6 +354,7 @@ namespace CodeImp.DoomBuilder.Config
 				rlinfo.Add("activation", linedefColorPresets[i].Activation);
 				rlinfo.Add("flags", string.Join(LINEDEF_COLOR_PRESET_FLAGS_SEPARATOR[0], linedefColorPresets[i].Flags.ToArray()));
 				rlinfo.Add("restrictedflags", string.Join(LINEDEF_COLOR_PRESET_FLAGS_SEPARATOR[0], linedefColorPresets[i].RestrictedFlags.ToArray()));
+				if(linedefColorPresets[i].TagOnly) rlinfo.Add("tagonly", true); // villsa
 
 				// Add structure
 				resinfo.Add("preset" + i.ToString(CultureInfo.InvariantCulture), rlinfo);

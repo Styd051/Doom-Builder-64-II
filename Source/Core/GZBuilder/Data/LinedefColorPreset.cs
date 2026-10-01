@@ -17,6 +17,7 @@ namespace CodeImp.DoomBuilder.GZBuilder.Data
 		public bool Enabled;
 		public int Action;
 		public int Activation; //Hexen activation type
+		public bool TagOnly; // villsa. Lines with a tag and without an action (used by Doom 64 macros)
 		public readonly List<string> Flags;
 		public readonly List<string> RestrictedFlags;
 
@@ -51,6 +52,7 @@ namespace CodeImp.DoomBuilder.GZBuilder.Data
 			Action = other.Action;
 			Activation = other.Activation;
 			Enabled = other.Enabled;
+			TagOnly = other.TagOnly; // villsa
 			Flags = new List<string>(other.Flags);
 			RestrictedFlags = new List<string>(other.RestrictedFlags);
 		}
@@ -62,6 +64,9 @@ namespace CodeImp.DoomBuilder.GZBuilder.Data
 		public bool Matches(Linedef l)
 		{
 			if(!Enabled) return false;
+
+			// villsa. Tag without action?
+			if(TagOnly && ((l.Tag == 0) || (l.Action != 0))) return false;
 			
 			// Check action; -1 means Any Action
 			if(Action != 0) 
@@ -88,7 +93,7 @@ namespace CodeImp.DoomBuilder.GZBuilder.Data
 
 		public bool IsValid()
 		{
-			return Action != 0 || Flags.Count > 0 || RestrictedFlags.Count > 0 || Activation != 0;
+			return Action != 0 || Flags.Count > 0 || RestrictedFlags.Count > 0 || Activation != 0 || TagOnly;
 		}
 
 		public override string ToString() 

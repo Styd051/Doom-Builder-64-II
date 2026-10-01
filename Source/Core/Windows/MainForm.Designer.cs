@@ -98,6 +98,9 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemviewbrightness = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemviewfloors = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemviewceilings = new System.Windows.Forms.ToolStripMenuItem();
+			this.itemviewfloorcolor = new System.Windows.Forms.ToolStripMenuItem();
+			this.itemviewceilingcolor = new System.Windows.Forms.ToolStripMenuItem();
+			this.itemviewthingcolor = new System.Windows.Forms.ToolStripMenuItem();
 			this.seperatorviewviews = new System.Windows.Forms.ToolStripSeparator();
 			this.itemmergegeoclassic = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemmergegeo = new System.Windows.Forms.ToolStripMenuItem();
@@ -201,6 +204,9 @@ namespace CodeImp.DoomBuilder.Windows
 			this.buttonviewbrightness = new System.Windows.Forms.ToolStripButton();
 			this.buttonviewfloors = new System.Windows.Forms.ToolStripButton();
 			this.buttonviewceilings = new System.Windows.Forms.ToolStripButton();
+			this.buttonviewfloorcolor = new System.Windows.Forms.ToolStripButton();
+			this.buttonviewceilingcolor = new System.Windows.Forms.ToolStripButton();
+			this.buttonviewthingcolor = new System.Windows.Forms.ToolStripButton();
 			this.separatorgeomergemodes = new System.Windows.Forms.ToolStripSeparator();
 			this.buttonmergegeoclassic = new System.Windows.Forms.ToolStripButton();
 			this.buttonmergegeo = new System.Windows.Forms.ToolStripButton();
@@ -788,6 +794,9 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemviewbrightness,
 			this.itemviewfloors,
 			this.itemviewceilings,
+			this.itemviewfloorcolor,
+			this.itemviewceilingcolor,
+			this.itemviewthingcolor,
 			this.seperatorviewviews,
 			this.itemfullbrightness,
 			this.itemtogglegrid,
@@ -870,6 +879,33 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemviewceilings.Tag = "builder_viewmodeceilings";
 			this.itemviewceilings.Text = "&Ceiling Textures";
 			this.itemviewceilings.Click += new System.EventHandler(this.InvokeTaggedAction);
+			// 
+			// itemviewfloorcolor
+			// 
+			this.itemviewfloorcolor.Image = global::CodeImp.DoomBuilder.Properties.Resources.ViewColorFloor;
+			this.itemviewfloorcolor.Name = "itemviewfloorcolor";
+			this.itemviewfloorcolor.Size = new System.Drawing.Size(215, 22);
+			this.itemviewfloorcolor.Tag = "builder_viewmodefloorcolor";
+			this.itemviewfloorcolor.Text = "Floor Colors";
+			this.itemviewfloorcolor.Click += new System.EventHandler(this.InvokeTaggedAction);
+			// 
+			// itemviewceilingcolor
+			// 
+			this.itemviewceilingcolor.Image = global::CodeImp.DoomBuilder.Properties.Resources.ViewColorCeiling;
+			this.itemviewceilingcolor.Name = "itemviewceilingcolor";
+			this.itemviewceilingcolor.Size = new System.Drawing.Size(215, 22);
+			this.itemviewceilingcolor.Tag = "builder_viewmodeceilingcolor";
+			this.itemviewceilingcolor.Text = "Ceiling Colors";
+			this.itemviewceilingcolor.Click += new System.EventHandler(this.InvokeTaggedAction);
+			// 
+			// itemviewthingcolor
+			// 
+			this.itemviewthingcolor.Image = global::CodeImp.DoomBuilder.Properties.Resources.ViewColorThing;
+			this.itemviewthingcolor.Name = "itemviewthingcolor";
+			this.itemviewthingcolor.Size = new System.Drawing.Size(215, 22);
+			this.itemviewthingcolor.Tag = "builder_viewmodethingcolor";
+			this.itemviewthingcolor.Text = "Thing Colors";
+			this.itemviewthingcolor.Click += new System.EventHandler(this.InvokeTaggedAction);
 			// 
 			// seperatorviewviews
 			// 
@@ -1380,6 +1416,9 @@ namespace CodeImp.DoomBuilder.Windows
 			this.buttonviewbrightness,
 			this.buttonviewfloors,
 			this.buttonviewceilings,
+			this.buttonviewfloorcolor,
+			this.buttonviewceilingcolor,
+			this.buttonviewthingcolor,
 			this.separatorgeomergemodes,
 			this.buttonmergegeoclassic,
 			this.buttonmergegeo,
@@ -1912,6 +1951,42 @@ namespace CodeImp.DoomBuilder.Windows
 			this.buttonviewceilings.Tag = "builder_viewmodeceilings";
 			this.buttonviewceilings.Text = "View Ceiling Textures";
 			this.buttonviewceilings.Click += new System.EventHandler(this.InvokeTaggedAction);
+			// 
+			// buttonviewfloorcolor
+			// 
+			this.buttonviewfloorcolor.CheckOnClick = true;
+			this.buttonviewfloorcolor.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+			this.buttonviewfloorcolor.Image = global::CodeImp.DoomBuilder.Properties.Resources.ViewColorFloor;
+			this.buttonviewfloorcolor.ImageTransparentColor = System.Drawing.Color.Magenta;
+			this.buttonviewfloorcolor.Name = "buttonviewfloorcolor";
+			this.buttonviewfloorcolor.Size = new System.Drawing.Size(23, 22);
+			this.buttonviewfloorcolor.Tag = "builder_viewmodefloorcolor";
+			this.buttonviewfloorcolor.Text = "View Floor Colors";
+			this.buttonviewfloorcolor.Click += new System.EventHandler(this.InvokeTaggedAction);
+			// 
+			// buttonviewceilingcolor
+			// 
+			this.buttonviewceilingcolor.CheckOnClick = true;
+			this.buttonviewceilingcolor.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+			this.buttonviewceilingcolor.Image = global::CodeImp.DoomBuilder.Properties.Resources.ViewColorCeiling;
+			this.buttonviewceilingcolor.ImageTransparentColor = System.Drawing.Color.Magenta;
+			this.buttonviewceilingcolor.Name = "buttonviewceilingcolor";
+			this.buttonviewceilingcolor.Size = new System.Drawing.Size(23, 22);
+			this.buttonviewceilingcolor.Tag = "builder_viewmodeceilingcolor";
+			this.buttonviewceilingcolor.Text = "View Ceiling Colors";
+			this.buttonviewceilingcolor.Click += new System.EventHandler(this.InvokeTaggedAction);
+			// 
+			// buttonviewthingcolor
+			// 
+			this.buttonviewthingcolor.CheckOnClick = true;
+			this.buttonviewthingcolor.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+			this.buttonviewthingcolor.Image = global::CodeImp.DoomBuilder.Properties.Resources.ViewColorThing;
+			this.buttonviewthingcolor.ImageTransparentColor = System.Drawing.Color.Magenta;
+			this.buttonviewthingcolor.Name = "buttonviewthingcolor";
+			this.buttonviewthingcolor.Size = new System.Drawing.Size(23, 22);
+			this.buttonviewthingcolor.Tag = "builder_viewmodethingcolor";
+			this.buttonviewthingcolor.Text = "View Thing Colors";
+			this.buttonviewthingcolor.Click += new System.EventHandler(this.InvokeTaggedAction);
 			// 
 			// separatorgeomergemodes
 			// 
@@ -2951,6 +3026,9 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.ToolStripButton buttonviewbrightness;
 		private System.Windows.Forms.ToolStripButton buttonviewfloors;
 		private System.Windows.Forms.ToolStripButton buttonviewceilings;
+		private System.Windows.Forms.ToolStripButton buttonviewfloorcolor;
+		private System.Windows.Forms.ToolStripButton buttonviewceilingcolor;
+		private System.Windows.Forms.ToolStripButton buttonviewthingcolor;
 		private System.Windows.Forms.ToolStripSeparator separatorgeomergemodes;
 		private System.Windows.Forms.ToolStripButton buttonmergegeoclassic;
 		private System.Windows.Forms.ToolStripButton buttonmergegeo;
@@ -2964,6 +3042,9 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.ToolStripMenuItem itemviewbrightness;
 		private System.Windows.Forms.ToolStripMenuItem itemviewfloors;
 		private System.Windows.Forms.ToolStripMenuItem itemviewceilings;
+		private System.Windows.Forms.ToolStripMenuItem itemviewfloorcolor;
+		private System.Windows.Forms.ToolStripMenuItem itemviewceilingcolor;
+		private System.Windows.Forms.ToolStripMenuItem itemviewthingcolor;
 		private System.Windows.Forms.ToolStripSeparator seperatorviewzoom;
 		private System.Windows.Forms.ToolStripMenuItem itemmergegeoclassic;
 		private System.Windows.Forms.ToolStripMenuItem itemmergegeo;

@@ -419,6 +419,28 @@ namespace CodeImp.DoomBuilder.Map
 			{
 				// Brightness color
 				int brightint = General.Map.Renderer2D.CalculateBrightness(brightness);
+
+				// villsa. Doom 64 sectors have no brightness: they are filled with one of their colors.
+				// The texture views are shaded with the color of the floor or ceiling they show.
+				if(General.Map.DOOM64)
+				{
+					switch(General.Map.Renderer2D.ViewMode)
+					{
+						case ViewMode.FloorColor:
+						case ViewMode.FloorTextures:
+							brightint = floorcolor.color.WithAlpha(255).ToInt();
+							break;
+
+						case ViewMode.CeilingColor:
+						case ViewMode.CeilingTextures:
+							brightint = ceilcolor.color.WithAlpha(255).ToInt();
+							break;
+
+						case ViewMode.ThingColor:
+							brightint = thingcolor.color.WithAlpha(255).ToInt();
+							break;
+					}
+				}
 				
 				// Make vertices
 				flatvertices = new FlatVertex[triangles.Vertices.Count];

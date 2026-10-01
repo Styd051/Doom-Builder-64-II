@@ -56,7 +56,7 @@ namespace CodeImp.DoomBuilder.Rendering
 		private const float MINIMUM_SPRITE_RADIUS = 8.0f; //mxd
 		internal const float FIXED_THING_SIZE = 48.0f; //mxd
 
-		internal const int NUM_VIEW_MODES = 4;
+		internal const int NUM_VIEW_MODES = 7; // villsa. 3 more for the Doom 64 colors
 		
 		#endregion
 
@@ -1663,6 +1663,9 @@ namespace CodeImp.DoomBuilder.Rendering
 					switch(viewmode)
 					{
 						case ViewMode.Brightness:
+						case ViewMode.FloorColor: // villsa. The surfaces are made in these colors, see Sector.CreateSurfaces
+						case ViewMode.CeilingColor:
+						case ViewMode.ThingColor:
 							surfaces.RenderSectorBrightness(yviewport);
 							surfaces.RenderSectorSurfaces(graphics);
 							break;

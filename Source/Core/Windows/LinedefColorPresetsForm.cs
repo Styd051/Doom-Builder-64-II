@@ -90,6 +90,9 @@ namespace CodeImp.DoomBuilder.Windows
 			action.AddInfo(infos.ToArray());
 			action.Value = -1;
 
+			// villsa. Doom 64 macros work on lines that have a tag and no action
+			tagonly.Visible = General.Map.DOOM64;
+
 			//activations
 			udmfactivates.Visible = General.Map.UDMF;
 			activation.Visible = !General.Map.UDMF;
@@ -155,6 +158,7 @@ namespace CodeImp.DoomBuilder.Windows
 					if(other == item) continue;
 					if(other.Preset.Action != item.Preset.Action) continue;
 					if(other.Preset.Activation != item.Preset.Activation) continue;
+					if(other.Preset.TagOnly != item.Preset.TagOnly) continue; // villsa
 					if(other.Preset.Flags.Count != item.Preset.Flags.Count) continue;
 					if(other.Preset.RestrictedFlags.Count != item.Preset.RestrictedFlags.Count) continue;
 
@@ -350,6 +354,7 @@ namespace CodeImp.DoomBuilder.Windows
 			action.Value = item.Preset.Action;
 			useaction.Checked = (item.Preset.Action != 0);
 			action.Enabled = (item.Preset.Action != 0);
+			tagonly.Checked = item.Preset.TagOnly; // villsa
 
 			// Update activation
 			if(General.Map.UDMF)
@@ -488,6 +493,18 @@ namespace CodeImp.DoomBuilder.Windows
 			if(preventchanges) return;
 			action.Enabled = useaction.Checked;
 			action_ValueChanges(action, EventArgs.Empty);
+		}
+
+		// villsa. Lines with a tag and no action
+		private void tagonly_CheckedChanged(object sender, EventArgs e)
+		{
+			if(preventchanges || colorpresets.SelectedItem == null) return;
+			PresetItem item = (PresetItem)colorpresets.SelectedItem;
+			item.Preset.TagOnly = tagonly.Checked;
+
+			// Such a line has no action, so a preset cannot ask for both
+			if(tagonly.Checked && useaction.Checked) useaction.Checked = false;
+			ValidatePreset(item);
 		}
 
 		private void action_ValueChanges(object sender, EventArgs e)

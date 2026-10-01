@@ -244,11 +244,17 @@ namespace CodeImp.DoomBuilder.Windows
 			viewmodesbuttons[(int)ViewMode.Brightness] = buttonviewbrightness;
 			viewmodesbuttons[(int)ViewMode.FloorTextures] = buttonviewfloors;
 			viewmodesbuttons[(int)ViewMode.CeilingTextures] = buttonviewceilings;
+			viewmodesbuttons[(int)ViewMode.FloorColor] = buttonviewfloorcolor; // villsa
+			viewmodesbuttons[(int)ViewMode.CeilingColor] = buttonviewceilingcolor; // villsa
+			viewmodesbuttons[(int)ViewMode.ThingColor] = buttonviewthingcolor; // villsa
 			viewmodesitems = new ToolStripMenuItem[Renderer2D.NUM_VIEW_MODES];
 			viewmodesitems[(int)ViewMode.Normal] = itemviewnormal;
 			viewmodesitems[(int)ViewMode.Brightness] = itemviewbrightness;
 			viewmodesitems[(int)ViewMode.FloorTextures] = itemviewfloors;
 			viewmodesitems[(int)ViewMode.CeilingTextures] = itemviewceilings;
+			viewmodesitems[(int)ViewMode.FloorColor] = itemviewfloorcolor; // villsa
+			viewmodesitems[(int)ViewMode.CeilingColor] = itemviewceilingcolor; // villsa
+			viewmodesitems[(int)ViewMode.ThingColor] = itemviewthingcolor; // villsa
 
 			//mxd. Make arrays for geometry merge modes
 			int numgeomodes = Enum.GetValues(typeof(MergeGeometryMode)).Length;
@@ -2073,7 +2079,10 @@ namespace CodeImp.DoomBuilder.Windows
 			buttontogglefixedthingsscale.Visible = General.Settings.ToolbarViewModes && maploaded; //mxd
 			buttontogglefixedthingsscale.Checked = General.Settings.FixedThingsScale; //mxd
 			separatorfullbrightness.Visible = General.Settings.ToolbarViewModes && maploaded; //mxd
-			buttonviewbrightness.Visible = General.Settings.ToolbarViewModes && maploaded;
+			buttonviewbrightness.Visible = General.Settings.ToolbarViewModes && maploaded && !General.Map.DOOM64; // Doom 64 has no brightness levels, but colors
+			buttonviewfloorcolor.Visible = General.Settings.ToolbarViewModes && maploaded && General.Map.DOOM64; // villsa
+			buttonviewceilingcolor.Visible = General.Settings.ToolbarViewModes && maploaded && General.Map.DOOM64; // villsa
+			buttonviewthingcolor.Visible = General.Settings.ToolbarViewModes && maploaded && General.Map.DOOM64; // villsa
 			buttonviewceilings.Visible = General.Settings.ToolbarViewModes && maploaded;
 			buttonviewfloors.Visible = General.Settings.ToolbarViewModes && maploaded;
 			buttonviewnormal.Visible = General.Settings.ToolbarViewModes && maploaded;
@@ -3041,6 +3050,10 @@ namespace CodeImp.DoomBuilder.Windows
 			itemtogglefixedthingsscale.Visible = (General.Map != null); //mxd
 			itemtogglefixedthingsscale.Checked = General.Settings.FixedThingsScale; //mxd
 			itemtogglefog.Checked = General.Settings.GZDrawFog;
+			itemviewbrightness.Visible = (General.Map == null || !General.Map.DOOM64); // villsa. Doom 64 has no brightness levels, but colors
+			itemviewfloorcolor.Visible = (General.Map != null && General.Map.DOOM64); // villsa
+			itemviewceilingcolor.Visible = (General.Map != null && General.Map.DOOM64); // villsa
+			itemviewthingcolor.Visible = (General.Map != null && General.Map.DOOM64); // villsa
 			itemtogglesky.Checked = General.Settings.GZDrawSky;
 			itemtoggleeventlines.Checked = General.Settings.GZShowEventLines;
 			itemtogglevisualverts.Visible = (General.Map != null && General.Map.UDMF);

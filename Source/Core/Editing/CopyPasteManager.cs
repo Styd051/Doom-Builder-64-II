@@ -108,6 +108,9 @@ namespace CodeImp.DoomBuilder.Editing
 					// This links sidedefs that are not linked to a marked sector to a virtual sector
 					MapSet copyset = General.Map.Map.CloneMarked();
 					
+					// villsa. Doom 64 elements take along what UDMF has no name for
+					if(General.Map.DOOM64) Doom64Clipboard.Stash(copyset);
+
 					// Convert flags and activations to UDMF fields, if needed
 					if(!(General.Map.FormatInterface is UniversalMapSetIO)) copyset.TranslateToUDMF(General.Map.FormatInterface.GetType());
 
@@ -208,8 +211,12 @@ namespace CodeImp.DoomBuilder.Editing
 			// The new geometry is not marked, so invert the marks to get it marked
 			General.Map.Map.InvertAllMarks();
 			
+			// villsa. Elements that were copied in a Doom 64 map carry their own data along
+			if(General.Map.DOOM64) Doom64Clipboard.Restore(General.Map.Map);
+			else if(General.Map.UDMF) Doom64Clipboard.Strip(General.Map.Map);
+
 			// Convert UDMF fields back to flags and activations, if needed
-			if(!(General.Map.FormatInterface is UniversalMapSetIO)) General.Map.Map.TranslateFromUDMF();
+			if(!General.Map.DOOM64 && !(General.Map.FormatInterface is UniversalMapSetIO)) General.Map.Map.TranslateFromUDMF();
 
 			// Modify tags and actions if preferred
 			if(options.ChangeTags == PasteOptions.TAGS_REMOVE) Tools.RemoveMarkedTags();
@@ -243,6 +250,9 @@ namespace CodeImp.DoomBuilder.Editing
 						// Copy the marked geometry
 						// This links sidedefs that are not linked to a marked sector to a virtual sector
 						MapSet copyset = General.Map.Map.CloneMarked();
+
+						// villsa. Doom 64 elements take along what UDMF has no name for
+						if(General.Map.DOOM64) Doom64Clipboard.Stash(copyset);
 
 						// Convert flags and activations to UDMF fields, if needed
 						if(!(General.Map.FormatInterface is UniversalMapSetIO)) copyset.TranslateToUDMF(General.Map.FormatInterface.GetType());
@@ -363,8 +373,12 @@ namespace CodeImp.DoomBuilder.Editing
 							
 							if(totalpasted > 0)
 							{
+								// villsa. Elements that were copied in a Doom 64 map carry their own data along
+								if(General.Map.DOOM64) Doom64Clipboard.Restore(General.Map.Map);
+								else if(General.Map.UDMF) Doom64Clipboard.Strip(General.Map.Map);
+
 								// Convert UDMF fields back to flags and activations, if needed
-								if(!(General.Map.FormatInterface is UniversalMapSetIO)) General.Map.Map.TranslateFromUDMF();
+								if(!General.Map.DOOM64 && !(General.Map.FormatInterface is UniversalMapSetIO)) General.Map.Map.TranslateFromUDMF();
 
 								// Modify tags and actions if preferred
 								if(options.ChangeTags == PasteOptions.TAGS_REMOVE) Tools.RemoveMarkedTags();

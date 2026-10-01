@@ -35,6 +35,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		private bool doom = true;
 		private bool hexen = true;
 		private bool udmf = true;
+		private bool doom64; // villsa
+		private bool doom64set;
 		private string description = "Unnamed field";
 		private string fieldname1;
 		private string fieldname2;
@@ -42,6 +44,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		public bool DOOM { get { return doom; } set { doom = value; } }
 		public bool HEXEN { get { return hexen; } set { hexen = value; } }
 		public bool UDMF { get { return udmf; } set { udmf = value; } }
+		public bool DOOM64 { get { return (doom64set ? doom64 : doom); } set { doom64 = value; doom64set = true; } } // villsa. Same as DOOM unless told otherwise
 		public string Description { get { return description; } set { description = value; } }
 		public string Field1 { get { return fieldname1; } set { fieldname1 = value; } }
 		public string Field2 { get { return fieldname2; } set { fieldname2 = value; } }
@@ -52,7 +55,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			{
 				if(General.Map == null) return false;
 				if(!string.IsNullOrEmpty(fieldname1) || !string.IsNullOrEmpty(fieldname2)) return General.Map.UDMF;
-				return (General.Map.DOOM && doom || General.Map.HEXEN && hexen || General.Map.UDMF && udmf);
+				return (General.Map.DOOM && doom || General.Map.HEXEN && hexen || General.Map.UDMF && udmf || General.Map.DOOM64 && DOOM64);
 			}
 		}
 	}
@@ -253,8 +256,24 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		[FieldDescription(Description = "Ceiling portal alpha", Field1 = "portal_ceil_alpha")]
 		public bool CeilingPortalAlpha = true;
 
-		[FieldDescription(Description = "Sector brightness")]
+		[FieldDescription(Description = "Sector brightness", DOOM64 = false)]
 		public bool Brightness = true;
+
+		// villsa. The colored lights of a Doom 64 sector
+		[FieldDescription(Description = "Ceiling color", DOOM = false, HEXEN = false, UDMF = false, DOOM64 = true)]
+		public bool Doom64CeilingColor = true;
+
+		[FieldDescription(Description = "Upper wall color", DOOM = false, HEXEN = false, UDMF = false, DOOM64 = true)]
+		public bool Doom64UpperWallColor = true;
+
+		[FieldDescription(Description = "Thing color", DOOM = false, HEXEN = false, UDMF = false, DOOM64 = true)]
+		public bool Doom64ThingColor = true;
+
+		[FieldDescription(Description = "Lower wall color", DOOM = false, HEXEN = false, UDMF = false, DOOM64 = true)]
+		public bool Doom64LowerWallColor = true;
+
+		[FieldDescription(Description = "Floor color", DOOM = false, HEXEN = false, UDMF = false, DOOM64 = true)]
+		public bool Doom64FloorColor = true;
 
 		[FieldDescription(Description = "Floor brightness", Field1 = "lightfloor", Field2 = "lightfloorabsolute")]
 		public bool FloorBrightness = true;
@@ -292,7 +311,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		[FieldDescription(Description = "Effect")]
 		public bool Special = true;
 		
-		[FieldDescription(Description = "Flags", DOOM = false, HEXEN = false)]
+		[FieldDescription(Description = "Flags", DOOM = false, HEXEN = false, DOOM64 = true)]
 		public bool Flags = true;
 
 		[FieldDescription(Description = "Light color", Field1 = "lightcolor")]
@@ -348,6 +367,11 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		private readonly Vector3D floorslope;
 		private readonly List<int> tags;
 		private readonly Dictionary<string, bool> flags; //mxd
+		private readonly Lights ceilcolor; // villsa
+		private readonly Lights topcolor;
+		private readonly Lights thingcolor;
+		private readonly Lights lowercolor;
+		private readonly Lights floorcolor;
 		
 		public SectorProperties(Sector s) : base(s.Fields, MapElementType.SECTOR)
 		{
@@ -363,6 +387,11 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			floorslope = s.FloorSlope;
 			tags = new List<int>(s.Tags); //mxd
 			flags = s.GetFlags(); //mxd
+			ceilcolor = s.CeilColor; // villsa
+			topcolor = s.TopColor;
+			thingcolor = s.ThingColor;
+			lowercolor = s.LowerColor;
+			floorcolor = s.FloorColor;
 		}
 		
 		//mxd. Applies coped properties
@@ -398,6 +427,16 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					s.ClearFlags(); //mxd
 					foreach(KeyValuePair<string, bool> f in flags) //mxd
 						s.SetFlag(f.Key, f.Value);
+				}
+
+				// villsa. Doom 64 colored lights
+				if(General.Map.DOOM64)
+				{
+					if(settings.Doom64CeilingColor) s.CeilColor = ceilcolor;
+					if(settings.Doom64UpperWallColor) s.TopColor = topcolor;
+					if(settings.Doom64ThingColor) s.ThingColor = thingcolor;
+					if(settings.Doom64LowerWallColor) s.LowerColor = lowercolor;
+					if(settings.Doom64FloorColor) s.FloorColor = floorcolor;
 				}
 			}
 
@@ -542,8 +581,12 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		[FieldDescription(Description = "Action arguments", DOOM = false)]
 		public bool Arguments = true;
 		
-		[FieldDescription(Description = "Activation", DOOM = false, UDMF = false)]
+		[FieldDescription(Description = "Activation", DOOM = false, UDMF = false, DOOM64 = true)]
 		public bool Activation = true;
+
+		// villsa
+		[FieldDescription(Description = "Switch setup", DOOM = false, HEXEN = false, UDMF = false, DOOM64 = true)]
+		public bool Doom64SwitchSetup = true;
 		
 		[FieldDescription(Description = "Tags", HEXEN = false)]
 		public bool Tag = true;
@@ -581,6 +624,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		private readonly int activate;
 		private readonly List<int> tags;
 		private readonly int[] args;
+		private readonly int switchmask; // villsa
 
 		public LinedefProperties(Linedef l) : base(l.Fields, MapElementType.LINEDEF)
 		{
@@ -592,6 +636,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			activate = l.Activate;
 			tags = new List<int>(l.Tags); //mxd
 			args = (int[])(l.Args.Clone());
+			switchmask = l.SwitchMask; // villsa
 		}
 
 		//mxd. Applies coped properties with all settings enabled
@@ -618,6 +663,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 						l.SetFlag(f.Key, f.Value);
 				}
 				if(settings.Activation) l.Activate = activate;
+				if(General.Map.DOOM64 && settings.Doom64SwitchSetup) l.SwitchMask = switchmask; // villsa
 				if(settings.Tag) l.Tags = new List<int>(tags); //mxd
 				if(settings.Action) l.Action = action;
 				if(settings.Arguments)
@@ -680,7 +726,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		[FieldDescription(Description = "Angle")]
 		public bool Angle = true;
 
-		[FieldDescription(Description = "Z-height", DOOM = false)]
+		[FieldDescription(Description = "Z-height", DOOM = false, DOOM64 = true)]
 		public bool ZHeight = true;
 		
 		[FieldDescription(Description = "Pitch", DOOM = false, HEXEN = false)]
@@ -698,7 +744,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		[FieldDescription(Description = "Action arguments", DOOM = false)]
 		public bool Arguments = true;
 		
-		[FieldDescription(Description = "Tag", DOOM = false)]
+		[FieldDescription(Description = "Tag", DOOM = false, DOOM64 = true)]
 		public bool Tag = true;
 		
 		[FieldDescription(Description = "Flags")]
@@ -856,6 +902,12 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 		#region Sector
 
+		// villsa. Doom 64 colored lights are the same when they have the same color and tag
+		private static bool LightsMatch(Lights a, Lights b)
+		{
+			return (a.color.ToInt() == b.color.ToInt()) && (a.tag == b.tag);
+		}
+
 		public static bool PropertiesMatch(SectorPropertiesCopySettings flags, Sector source, Sector target) 
 		{
 			// Built-in properties
@@ -866,6 +918,16 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			if(flags.Brightness && source.Brightness != target.Brightness) return false;
 			if(flags.Tag && !TagsMatch(source.Tags, target.Tags)) return false;
 			if(flags.Flags && !FlagsMatch(source.GetEnabledFlags(), target.GetEnabledFlags())) return false;
+
+			// villsa. Doom 64 colored lights
+			if(General.Map.DOOM64)
+			{
+				if(flags.Doom64CeilingColor && !LightsMatch(source.CeilColor, target.CeilColor)) return false;
+				if(flags.Doom64UpperWallColor && !LightsMatch(source.TopColor, target.TopColor)) return false;
+				if(flags.Doom64ThingColor && !LightsMatch(source.ThingColor, target.ThingColor)) return false;
+				if(flags.Doom64LowerWallColor && !LightsMatch(source.LowerColor, target.LowerColor)) return false;
+				if(flags.Doom64FloorColor && !LightsMatch(source.FloorColor, target.FloorColor)) return false;
+			}
 
 			// Generalized effects require more tender loving care...
 			if(flags.Special && source.Effect != target.Effect)
@@ -900,6 +962,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			// Built-in properties
 			if(linedefflags.Action && source.Action != target.Action) return false;
 			if(linedefflags.Activation && source.Activate != target.Activate) return false;
+			if(General.Map.DOOM64 && linedefflags.Doom64SwitchSetup && source.SwitchMask != target.SwitchMask) return false; // villsa
 			if(linedefflags.Tag && !TagsMatch(source.Tags, target.Tags)) return false;
 			if(linedefflags.Arguments) 
 			{

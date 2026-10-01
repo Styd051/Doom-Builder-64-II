@@ -39,6 +39,7 @@
 			this.useflags = new System.Windows.Forms.CheckBox();
 			this.tabAction = new System.Windows.Forms.TabPage();
 			this.useaction = new System.Windows.Forms.CheckBox();
+			this.tagonly = new System.Windows.Forms.CheckBox();
 			this.tabActivation = new System.Windows.Forms.TabPage();
 			this.activation = new System.Windows.Forms.ComboBox();
 			this.useactivation = new System.Windows.Forms.CheckBox();
@@ -206,6 +207,7 @@
 			// 
 			this.tabAction.Controls.Add(this.action);
 			this.tabAction.Controls.Add(this.useaction);
+			this.tabAction.Controls.Add(this.tagonly);
 			this.tabAction.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(204)));
 			this.tabAction.Location = new System.Drawing.Point(4, 22);
 			this.tabAction.Name = "tabAction";
@@ -225,6 +227,17 @@
 			this.useaction.Text = "Use Action";
 			this.useaction.UseVisualStyleBackColor = true;
 			this.useaction.CheckedChanged += new System.EventHandler(this.useaction_CheckedChanged);
+			// 
+			// tagonly
+			// 
+			this.tagonly.AutoSize = true;
+			this.tagonly.Location = new System.Drawing.Point(6, 66);
+			this.tagonly.Name = "tagonly";
+			this.tagonly.Size = new System.Drawing.Size(180, 17);
+			this.tagonly.TabIndex = 7;
+			this.tagonly.Text = "Lines with a tag and no action";
+			this.tagonly.UseVisualStyleBackColor = true;
+			this.tagonly.CheckedChanged += new System.EventHandler(this.tagonly_CheckedChanged);
 			// 
 			// tabActivation
 			// 
@@ -395,6 +408,7 @@
 		private System.Windows.Forms.TabPage tabAction;
 		private CodeImp.DoomBuilder.Controls.ActionSelectorControl action;
 		private System.Windows.Forms.CheckBox useaction;
+		private System.Windows.Forms.CheckBox tagonly;
 		private System.Windows.Forms.TabPage tabActivation;
 		private System.Windows.Forms.ComboBox activation;
 		private System.Windows.Forms.CheckBox useactivation;

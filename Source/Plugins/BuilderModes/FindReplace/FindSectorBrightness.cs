@@ -25,6 +25,12 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 		#region ================== Methods
 
+		// villsa. Doom 64 sectors have no brightness
+		public override bool DetermineVisiblity()
+		{
+			return !General.Map.DOOM64;
+		}
+
 		// This is called to perform a search (and replace)
 		// Returns a list of items to show in the results list
 		// replacewith is null when not replacing

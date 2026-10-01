@@ -514,6 +514,7 @@
     <Compile Include="IO\HexenMapSetIO.cs" />
     <Compile Include="IO\DoomFlatReader.cs" />
     <Compile Include="IO\DoomMapSetIO.cs" />
+    <Compile Include="IO\Doom64Clipboard.cs" />
     <Compile Include="IO\Doom64MapSetIO.cs" />
     <Compile Include="IO\DoomPictureReader.cs" />
     <Compile Include="IO\FileImageReader.cs" />
@@ -1408,6 +1409,9 @@
     </EmbeddedResource>
     <EmbeddedResource Include="Resources\Lexers.cfg" />
     <None Include="Resources\ViewBrightness.png" />
+    <None Include="Resources\ViewColorFloor.png" />
+    <None Include="Resources\ViewColorCeiling.png" />
+    <None Include="Resources\ViewColorThing.png" />
     <None Include="Resources\ViewTextureCeiling.png" />
     <None Include="Resources\ViewTextureFloor.png" />
     <None Include="Resources\ViewNormal.png" />

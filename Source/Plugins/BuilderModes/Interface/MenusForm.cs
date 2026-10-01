@@ -52,6 +52,17 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			public const string Ceilings = "Ceiling Brightness";
 		}
 
+		// villsa. Doom 64 sectors have colored lights instead of a brightness
+		public struct Doom64GradientModes
+		{
+			public const string All = "All Colors";
+			public const string Ceiling = "Ceiling Color";
+			public const string UpperWall = "Upper Wall Color";
+			public const string Thing = "Thing Color";
+			public const string LowerWall = "Lower Wall Color";
+			public const string Floor = "Floor Color";
+		}
+
 		//mxd
 		internal struct GradientInterpolationModes
 		{
@@ -219,6 +230,21 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			//mxd. Copy-paste properties items
 			foreach(ToolStripItem i in propsmenuitems)
 				i.Visible = showcopyprops;
+		}
+
+		// villsa. This lists the gradient modes that the current map format has
+		public void UpdateGradientModes()
+		{
+			bool wantdoom64 = (General.Map != null) && General.Map.DOOM64;
+			bool havedoom64 = (gradientModeMenu.Items.Count > 0) && ((string)gradientModeMenu.Items[0] == Doom64GradientModes.All);
+			if(wantdoom64 == havedoom64) return;
+
+			gradientModeMenu.Items.Clear();
+			if(wantdoom64)
+				gradientModeMenu.Items.AddRange(new[] { Doom64GradientModes.All, Doom64GradientModes.Ceiling, Doom64GradientModes.UpperWall, Doom64GradientModes.Thing, Doom64GradientModes.LowerWall, Doom64GradientModes.Floor });
+			else
+				gradientModeMenu.Items.AddRange(new[] { BrightnessGradientModes.Sectors, BrightnessGradientModes.Light, BrightnessGradientModes.Fade, BrightnessGradientModes.LightAndFade, BrightnessGradientModes.Ceilings, BrightnessGradientModes.Floors });
+			gradientModeMenu.SelectedIndex = 0;
 		}
 
 		// This invokes an action from control event

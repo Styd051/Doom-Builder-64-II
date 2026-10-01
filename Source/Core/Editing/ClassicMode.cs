@@ -655,6 +655,14 @@ namespace CodeImp.DoomBuilder.Editing
 		internal static void SetViewMode(ViewMode mode)
 		{
 			General.Map.CRenderer2D.SetViewMode(mode);
+
+			// villsa. Doom 64 sectors are filled with the color that the view mode shows
+			if(General.Map.DOOM64)
+			{
+				foreach(Sector s in General.Map.Map.Sectors) s.UpdateNeeded = true;
+				General.Map.Map.Update();
+			}
+
 			General.MainWindow.UpdateInterface();
 			General.MainWindow.RedrawDisplay();
 		}
@@ -991,10 +999,44 @@ namespace CodeImp.DoomBuilder.Editing
 		}
 
 		//mxd
+		// villsa. Doom 64 color views
+		[BeginAction("viewmodefloorcolor", BaseAction = true)]
+		protected virtual void ViewModeFloorColor()
+		{
+			SetDoom64ViewMode(ViewMode.FloorColor);
+		}
+
+		[BeginAction("viewmodeceilingcolor", BaseAction = true)]
+		protected virtual void ViewModeCeilingColor()
+		{
+			SetDoom64ViewMode(ViewMode.CeilingColor);
+		}
+
+		[BeginAction("viewmodethingcolor", BaseAction = true)]
+		protected virtual void ViewModeThingColor()
+		{
+			SetDoom64ViewMode(ViewMode.ThingColor);
+		}
+
+		private static void SetDoom64ViewMode(ViewMode mode)
+		{
+			if(General.Map.DOOM64)
+				SetViewMode(mode);
+			else
+				General.MainWindow.DisplayStatus(StatusType.Warning, "This view mode is for the Doom 64 map format only!");
+		}
+
+		// villsa. The color views are for Doom 64 maps, and those have no brightness levels
+		private static bool IsViewModeAvailable(ViewMode mode)
+		{
+			bool iscolor = (mode == ViewMode.FloorColor) || (mode == ViewMode.CeilingColor) || (mode == ViewMode.ThingColor);
+			return (General.Map.DOOM64 ? (mode != ViewMode.Brightness) : !iscolor);
+		}
+
 		[BeginAction("nextviewmode", BaseAction = true)]
 		protected virtual void NextViewMode()
 		{
-			List<ViewMode> vmodes = new List<ViewMode>(Enum.GetValues(typeof(ViewMode)).Cast<ViewMode>());
+			List<ViewMode> vmodes = new List<ViewMode>(Enum.GetValues(typeof(ViewMode)).Cast<ViewMode>().Where(IsViewModeAvailable));
 			int curmode = vmodes.IndexOf(General.Map.Renderer2D.ViewMode);
 			curmode = (curmode == vmodes.Count - 1 ? 0 : ++curmode);
 
@@ -1005,9 +1047,9 @@ namespace CodeImp.DoomBuilder.Editing
 		[BeginAction("previousviewmode", BaseAction = true)]
 		protected virtual void PreviousViewMode()
 		{
-			List<ViewMode> vmodes = new List<ViewMode>(Enum.GetValues(typeof(ViewMode)).Cast<ViewMode>());
+			List<ViewMode> vmodes = new List<ViewMode>(Enum.GetValues(typeof(ViewMode)).Cast<ViewMode>().Where(IsViewModeAvailable));
 			int curmode = vmodes.IndexOf(General.Map.Renderer2D.ViewMode);
-			curmode = (curmode == 0 ? vmodes.Count - 1 : --curmode);
+			curmode = (curmode <= 0 ? vmodes.Count - 1 : --curmode);
 
 			SetViewMode(vmodes[curmode]);
 		}

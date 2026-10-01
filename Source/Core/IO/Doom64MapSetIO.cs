@@ -219,7 +219,7 @@ namespace CodeImp.DoomBuilder.IO
 
 		// This makes string flags from a bit field. Bits that the game configuration
 		// does not know are added as well, so that they are kept when saving.
-		private static Dictionary<string, bool> MakeStringFlags(uint flags, IEnumerable<string> knownflags)
+		internal static Dictionary<string, bool> MakeStringFlags(uint flags, IEnumerable<string> knownflags)
 		{
 			Dictionary<string, bool> stringflags = new Dictionary<string, bool>(StringComparer.Ordinal);
 			uint known = 0;
@@ -249,7 +249,7 @@ namespace CodeImp.DoomBuilder.IO
 		}
 
 		// This makes a bit field from string flags
-		private static uint MakeFlags(Dictionary<string, bool> stringflags)
+		internal static uint MakeFlags(Dictionary<string, bool> stringflags)
 		{
 			uint flags = 0;
 			foreach(KeyValuePair<string, bool> f in stringflags)

@@ -703,7 +703,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			General.Interface.AddButton(BuilderPlug.Me.MenusForm.MakeDoor); //mxd
 			General.Interface.AddButton(BuilderPlug.Me.MenusForm.SeparatorSectors2); //mxd
 			General.Interface.AddButton(BuilderPlug.Me.MenusForm.MakeGradientBrightness);
-			if(General.Map.UDMF) General.Interface.AddButton(BuilderPlug.Me.MenusForm.GradientModeMenu); //mxd
+			BuilderPlug.Me.MenusForm.UpdateGradientModes(); // villsa
+			if(General.Map.UDMF || General.Map.DOOM64) General.Interface.AddButton(BuilderPlug.Me.MenusForm.GradientModeMenu); //mxd
 			General.Interface.AddButton(BuilderPlug.Me.MenusForm.GradientInterpolationMenu); //mxd
 			General.Interface.AddButton(BuilderPlug.Me.MenusForm.MakeGradientFloors);
 			General.Interface.AddButton(BuilderPlug.Me.MenusForm.MakeGradientCeilings);
@@ -1956,10 +1957,68 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			}
 		}
 
+		// villsa. Doom 64: this makes a gradient of the colored lights over the selected sectors.
+		// The first and last sectors are not modified, and every light keeps its tag.
+		private static void MakeGradientDoom64Colors()
+		{
+			ICollection<Sector> orderedselection = General.Map.Map.GetSelectedSectors(true);
+			if(orderedselection.Count < 3)
+			{
+				General.Interface.DisplayStatus(StatusType.Warning, "Select at least 3 sectors first!");
+				return;
+			}
+
+			General.Interface.DisplayStatus(StatusType.Action, "Created gradient colors over selected sectors.");
+			General.Map.UndoRedo.CreateUndo("Gradient colors");
+
+			Sector start = General.GetByIndex(orderedselection, 0);
+			Sector end = General.GetByIndex(orderedselection, orderedselection.Count - 1);
+			string mode = (string)BuilderPlug.Me.MenusForm.GradientModeMenu.SelectedItem;
+			bool all = (mode == MenusForm.Doom64GradientModes.All);
+			InterpolationTools.Mode interpolationmode = (InterpolationTools.Mode)BuilderPlug.Me.MenusForm.GradientInterpolationMenu.SelectedIndex;
+
+			// Go for all sectors in between first and last
+			int index = 0;
+			foreach(Sector s in orderedselection)
+			{
+				if((index > 0) && (index < orderedselection.Count - 1))
+				{
+					float u = index / (orderedselection.Count - 1.0f);
+					if(all || (mode == MenusForm.Doom64GradientModes.Ceiling)) s.CeilColor = InterpolateLight(start.CeilColor, end.CeilColor, s.CeilColor, u, interpolationmode);
+					if(all || (mode == MenusForm.Doom64GradientModes.UpperWall)) s.TopColor = InterpolateLight(start.TopColor, end.TopColor, s.TopColor, u, interpolationmode);
+					if(all || (mode == MenusForm.Doom64GradientModes.Thing)) s.ThingColor = InterpolateLight(start.ThingColor, end.ThingColor, s.ThingColor, u, interpolationmode);
+					if(all || (mode == MenusForm.Doom64GradientModes.LowerWall)) s.LowerColor = InterpolateLight(start.LowerColor, end.LowerColor, s.LowerColor, u, interpolationmode);
+					if(all || (mode == MenusForm.Doom64GradientModes.Floor)) s.FloorColor = InterpolateLight(start.FloorColor, end.FloorColor, s.FloorColor, u, interpolationmode);
+					s.UpdateNeeded = true;
+				}
+				index++;
+			}
+
+			// Update
+			General.Map.Map.Update();
+			General.Interface.RedrawDisplay();
+			General.Interface.RefreshInfo();
+			General.Map.IsChanged = true;
+		}
+
+		// villsa. This makes the color between two lights. The light keeps the tag it has.
+		private static Lights InterpolateLight(Lights start, Lights end, Lights current, float u, InterpolationTools.Mode interpolationmode)
+		{
+			PixelColor c = InterpolationTools.InterpolateColor(start.color, end.color, u, interpolationmode);
+			return new Lights(c.r, c.g, c.b, current.tag);
+		}
+
 		// Make gradient brightness
 		[BeginAction("gradientbrightness")]
 		public void MakeGradientBrightness()
 		{
+			// villsa. Doom 64 sectors have colored lights instead of a brightness
+			if(General.Map.DOOM64)
+			{
+				MakeGradientDoom64Colors();
+				return;
+			}
+
 			// Need at least 3 selected sectors
 			// The first and last are not modified
 			ICollection<Sector> orderedselection = General.Map.Map.GetSelectedSectors(true);

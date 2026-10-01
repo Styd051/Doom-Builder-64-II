@@ -159,6 +159,12 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					association[0].Set(new Vector2D((l.Start.Position  + l.End.Position)/2), l.Tags, UniversalType.SectorTag);
 				else
 					association[0].Set(new Vector2D(), 0, 0);
+
+				// villsa. In Doom 64 the tag of a line also refers to the things with that tag
+				if((l != null) && General.Map.DOOM64)
+					association[1].Set(new Vector2D((l.Start.Position  + l.End.Position)/2), l.Tags, UniversalType.ThingTag);
+				else
+					association[1].Set(new Vector2D(), 0, 0);
 			}
 			else
 			{

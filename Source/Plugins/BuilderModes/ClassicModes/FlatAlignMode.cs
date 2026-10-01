@@ -662,6 +662,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				case ViewMode.FloorTextures: General.Actions.InvokeAction("builder_viewmodefloors"); break;
 				case ViewMode.CeilingTextures: General.Actions.InvokeAction("builder_viewmodeceilings"); break;
 				case ViewMode.Brightness: General.Actions.InvokeAction("builder_viewmodebrightness"); break;
+				case ViewMode.FloorColor: General.Actions.InvokeAction("builder_viewmodefloorcolor"); break; // villsa
+				case ViewMode.CeilingColor: General.Actions.InvokeAction("builder_viewmodeceilingcolor"); break; // villsa
+				case ViewMode.ThingColor: General.Actions.InvokeAction("builder_viewmodethingcolor"); break; // villsa
 			}
 			
 			base.OnDisengage();
