@@ -776,6 +776,36 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		
 		public virtual void OnPasteTexture() { }
 
+		// villsa. Doom 64: copy the colored lights of the sector
+		public virtual void OnCopyLight()
+		{
+			Sector s = level.sector;
+			BuilderPlug.Me.CopiedLights = new[] { s.CeilColor, s.FloorColor, s.ThingColor, s.TopColor, s.LowerColor };
+			mode.SetActionResult("Copied sector lights.");
+		}
+
+		// villsa. Doom 64: a floor or ceiling takes the ceiling, floor and thing colors
+		public virtual void OnPasteLight()
+		{
+			Lights[] lights = BuilderPlug.Me.CopiedLights;
+			if(lights == null) return;
+
+			mode.CreateUndo("Paste sector lights");
+			mode.SetActionResult("Pasted sector lights.");
+
+			level.sector.CeilColor = lights[0];
+			level.sector.FloorColor = lights[1];
+			level.sector.ThingColor = lights[2];
+
+			if(mode.VisualSectorExists(level.sector))
+			{
+				BaseVisualSector vs = (BaseVisualSector)mode.GetVisualSector(level.sector);
+				vs.UpdateSectorGeometry(false);
+			}
+
+			mode.ShowTargetInfo();
+		}
+
 		// Return texture name
 		public virtual string GetTextureName() { return ""; }
 		

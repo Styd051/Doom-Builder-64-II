@@ -289,6 +289,22 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				}
             }
 
+			if(General.Map.DOOM64)
+			{
+				// villsa. A thing has the thing color of its sector, wherever it is in that sector
+				if(Thing.Sector != null)
+				{
+					sectorcolor = PixelColor.FromInt(Thing.Sector.ThingColor.GetColor()).WithAlpha(alpha).ToInt();
+					fogfactor = 0f;
+				}
+
+				// villsa. Cameras and triggers are shown at full brightness
+				if((Thing.Type == 0) || (Thing.Type == 89)) sectorcolor = new PixelColor(alpha, 255, 255, 255).ToInt();
+
+				// styd: things with the Nightmare flag are shown in green
+				if(Thing.IsFlagSet("4096")) sectorcolor = new PixelColor(alpha, 64, 255, 0).ToInt();
+            }
+
             //mxd. Create verts for all sprite angles
             WorldVertex[][] allverts = new WorldVertex[info.SpriteFrame.Length][];
 			Vector2D[] alloffsets = new Vector2D[info.SpriteFrame.Length];
@@ -651,6 +667,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		public void OnSelectTexture() { }
 		public void OnCopyTexture() { }
 		public void OnPasteTexture() { }
+		public void OnCopyLight() { } // villsa
+		public void OnPasteLight() { } // villsa
 		public void OnCopyTextureOffsets() { }
 		public void OnPasteTextureOffsets() { }
 		public void OnTextureAlign(bool alignx, bool aligny) { }

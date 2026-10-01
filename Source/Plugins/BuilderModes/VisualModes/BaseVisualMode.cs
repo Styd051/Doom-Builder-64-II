@@ -2876,6 +2876,43 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			PostAction();
 		}
 
+		// villsa. Doom 64 sector lights
+		[BeginAction("lightcopy")]
+		public void LightCopy()
+		{
+			if(!General.Map.DOOM64)
+			{
+				General.Interface.DisplayStatus(StatusType.Warning, "Sector lights can only be copied in the Doom 64 map format!");
+				return;
+			}
+
+			PreActionNoChange();
+			GetTargetEventReceiver(true).OnCopyLight();
+			PostAction();
+		}
+
+		// villsa. Doom 64 sector lights
+		[BeginAction("lightpaste")]
+		public void LightPaste()
+		{
+			if(!General.Map.DOOM64)
+			{
+				General.Interface.DisplayStatus(StatusType.Warning, "Sector lights can only be pasted in the Doom 64 map format!");
+				return;
+			}
+
+			if(BuilderPlug.Me.CopiedLights == null)
+			{
+				General.Interface.DisplayStatus(StatusType.Warning, "Copy the lights of a sector first!");
+				return;
+			}
+
+			PreAction(UndoGroup.None);
+			List<IVisualEventReceiver> objs = GetSelectedObjects(true, true, false, false);
+			foreach(IVisualEventReceiver i in objs) i.OnPasteLight();
+			PostAction();
+		}
+
 		//mxd
 		[BeginAction("visualautoalign")]
 		public void TextureAutoAlign() 
@@ -3055,6 +3092,15 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			BuilderPlug.Me.UseGravity = !BuilderPlug.Me.UseGravity;
 			string onoff = BuilderPlug.Me.UseGravity ? "ON" : "OFF";
 			General.Interface.DisplayStatus(StatusType.Action, "Gravity is now " + onoff + ".");
+		}
+
+		// villsa. Without textures, to see the lighting of the sectors only
+		[BeginAction("togglelightonly")]
+		public void ToggleLightOnly()
+		{
+			renderer.ShowLightOnly = !renderer.ShowLightOnly;
+			string onoff = renderer.ShowLightOnly ? "ON" : "OFF";
+			General.Interface.DisplayStatus(StatusType.Action, "Lighting only is now " + onoff + ".");
 		}
 
 		[BeginAction("resettexture")]

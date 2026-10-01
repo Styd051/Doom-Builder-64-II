@@ -117,6 +117,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		private SectorProperties copiedsectorprops;
 		private SidedefProperties copiedsidedefprops;
 		private LinedefProperties copiedlinedefprops;
+		private Lights[] copiedlights; // villsa. Doom 64: ceiling, floor, thing, upper wall and lower wall colors
 		private ThingProperties copiedthingprops;
 		private bool viewselectionnumbers;
 		private bool viewselectioneffects; //mxd
@@ -168,6 +169,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		public Point CopiedOffsets { get { return copiedoffsets; } set { copiedoffsets = value; } }
 		public VertexProperties CopiedVertexProps { get { return copiedvertexprops; } set { copiedvertexprops = value; } }
 		public SectorProperties CopiedSectorProps { get { return copiedsectorprops; } set { copiedsectorprops = value; } }
+		public Lights[] CopiedLights { get { return copiedlights; } set { copiedlights = value; } } // villsa
 		public SidedefProperties CopiedSidedefProps { get { return copiedsidedefprops; } set { copiedsidedefprops = value; } }
 		public LinedefProperties CopiedLinedefProps { get { return copiedlinedefprops; } set { copiedlinedefprops = value; } }
 		public ThingProperties CopiedThingProps { get { return copiedthingprops; } set { copiedthingprops = value; } }

@@ -613,7 +613,7 @@ namespace CodeImp.DoomBuilder.Geometry
 				newsector.SetCeilTexture(General.Map.Options.DefaultCeilingTexture);
 				newsector.FloorHeight = General.Settings.DefaultFloorHeight;
 				newsector.CeilHeight = General.Settings.DefaultCeilingHeight;
-				newsector.Brightness = General.Settings.DefaultBrightness;
+				newsector.Brightness = (General.Map.DOOM64 ? 255 : General.Settings.DefaultBrightness); // Doom 64 has no sector brightness
 			}
 
 			//mxd. Apply overrides?

@@ -305,8 +305,11 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			lightfloorabsolute = sector.Fields.GetValue("lightfloorabsolute", false);
 			lightceiling = sector.Fields.GetValue("lightceiling", 0);
 			lightceilingabsolute = sector.Fields.GetValue("lightceilingabsolute", false);
-            if (!lightfloorabsolute) lightfloor = sector.Brightness + lightfloor;
-            if (!lightceilingabsolute) lightceiling = sector.Brightness + lightceiling;
+
+			// villsa. Doom 64 sectors have no brightness, their five colors are all there is
+			int brightness = (General.Map.DOOM64 ? 255 : sector.Brightness);
+            if (!lightfloorabsolute) lightfloor = brightness + lightfloor;
+            if (!lightceilingabsolute) lightceiling = brightness + lightceiling;
 
             // Determine colors & light levels
             // [ZZ] Doom64 lighting
@@ -318,16 +321,26 @@ namespace CodeImp.DoomBuilder.BuilderModes
             ColorWallTop = PixelColor.FromInt(sector.Fields.GetValue("color_walltop", PixelColor.INT_WHITE));
             ColorWallBottom = PixelColor.FromInt(sector.Fields.GetValue("color_wallbottom", PixelColor.INT_WHITE));
 
+			// villsa. The real thing: the colored lights of a Doom 64 sector
+			if(General.Map.DOOM64)
+			{
+				ColorCeiling = PixelColor.FromInt(sector.CeilColor.GetColor());
+				ColorFloor = PixelColor.FromInt(sector.FloorColor.GetColor());
+				ColorSprites = PixelColor.FromInt(sector.ThingColor.GetColor());
+				ColorWallTop = PixelColor.FromInt(sector.TopColor.GetColor());
+				ColorWallBottom = PixelColor.FromInt(sector.LowerColor.GetColor());
+			}
+
             PixelColor floorbrightness = PixelColor.FromInt(mode.CalculateBrightness(lightfloor));
             PixelColor ceilingbrightness = PixelColor.FromInt(mode.CalculateBrightness(lightceiling));
             PixelColor lightcolor = PixelColor.FromInt(color);
             PixelColor floorcolor = PixelColor.Modulate(ColorFloor, PixelColor.Modulate(lightcolor, floorbrightness));
             PixelColor ceilingcolor = PixelColor.Modulate(ColorCeiling, PixelColor.Modulate(lightcolor, ceilingbrightness));
             floor.color = floorcolor.WithAlpha(255).ToInt();
-            floor.brightnessbelow = sector.Brightness;
+            floor.brightnessbelow = brightness;
             floor.colorbelow = lightcolor.WithAlpha(255);
             ceiling.color = ceilingcolor.WithAlpha(255).ToInt();
-            ceiling.brightnessbelow = sector.Brightness;
+            ceiling.brightnessbelow = brightness;
             ceiling.colorbelow = lightcolor.WithAlpha(255);
 
             //mxd. Store a copy of initial settings
@@ -335,8 +348,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			ceiling.CopyProperties(ceilingbase);
 
 			//mxd. We need sector brightness here, unaffected by custom ceiling brightness...
-			ceilingbase.brightnessbelow = sector.Brightness;
-			ceilingbase.color = PixelColor.FromInt(mode.CalculateBrightness(sector.Brightness)).WithAlpha(255).ToInt();
+			ceilingbase.brightnessbelow = brightness;
+			ceilingbase.color = PixelColor.FromInt(mode.CalculateBrightness(brightness)).WithAlpha(255).ToInt();
 
 			//mxd
 			glowingflateffect.Update();

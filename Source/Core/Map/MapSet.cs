@@ -2430,7 +2430,7 @@ namespace CodeImp.DoomBuilder.Map
 				s.SetCeilTexture(General.Map.Options.DefaultCeilingTexture);
 				s.FloorHeight = General.Settings.DefaultFloorHeight;
 				s.CeilHeight = General.Settings.DefaultCeilingHeight;
-				s.Brightness = General.Settings.DefaultBrightness;
+				s.Brightness = (General.Map.DOOM64 ? 255 : General.Settings.DefaultBrightness); // Doom 64 has no sector brightness
 			}
 
 			// Update line textures

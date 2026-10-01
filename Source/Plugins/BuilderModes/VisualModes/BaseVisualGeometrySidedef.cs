@@ -277,6 +277,13 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				}
 			}
 
+			// villsa. Doom 64 walls are colored by the lights of the sector
+			if(General.Map.DOOM64)
+			{
+				ApplyDoom64Colors(verts);
+				return verts;
+			}
+
 			//mxd. Interpolate vertex colors?
 			for(int i = 0; i < verts.Count; i++)
 			{
@@ -285,6 +292,48 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			}
 			
 			return verts;
+		}
+
+		// villsa. Doom 64: this returns the colors at the top and at the bottom of this wall part,
+		// and the heights where these colors are (the geometry itself can be cropped).
+		// Without the "Use Multi Colors" flag a wall has the thing color of its sector.
+		protected virtual void GetDoom64Colors(out int topcolor, out int bottomcolor, out float topz, out float bottomz)
+		{
+			topz = Sidedef.Sector.CeilHeight;
+			bottomz = Sidedef.Sector.FloorHeight;
+
+			if(Sidedef.Line.IsFlagSet(Lights.FLAG_USE_MULTI_COLORS))
+			{
+				topcolor = Sidedef.Sector.TopColor.GetColor();
+				bottomcolor = Sidedef.Sector.LowerColor.GetColor();
+			}
+			else
+			{
+				topcolor = Sidedef.Sector.ThingColor.GetColor();
+				bottomcolor = topcolor;
+			}
+		}
+
+		// villsa. Doom 64: this colors the vertices of this wall part from its top to its bottom
+		private void ApplyDoom64Colors(List<WorldVertex> verts)
+		{
+			if(verts.Count == 0) return;
+
+			int topcolor, bottomcolor;
+			float topz, bottomz;
+			GetDoom64Colors(out topcolor, out bottomcolor, out topz, out bottomz);
+
+			float height = topz - bottomz;
+			PixelColor top = PixelColor.FromInt(topcolor);
+			PixelColor bottom = PixelColor.FromInt(bottomcolor);
+			for(int i = 0; i < verts.Count; i++)
+			{
+				WorldVertex v = verts[i];
+				if((topcolor == bottomcolor) || (height < 0.001f) || (v.z >= topz - 0.01f)) v.c = topcolor;
+				else if(v.z <= bottomz + 0.01f) v.c = bottomcolor;
+				else v.c = InterpolationTools.InterpolateColor(top, bottom, (topz - v.z) / height).WithAlpha(255).ToInt();
+				verts[i] = v;
+			}
 		}
 
 		//mxd
@@ -1289,6 +1338,30 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			mode.SetActionResult("Copied texture \"" + texturename + "\".");
 		}
 		
+		// villsa. Doom 64: copy the colored lights of the sector
+		public virtual void OnCopyLight()
+		{
+			Sector s = Sidedef.Sector;
+			BuilderPlug.Me.CopiedLights = new[] { s.CeilColor, s.FloorColor, s.ThingColor, s.TopColor, s.LowerColor };
+			mode.SetActionResult("Copied sector lights.");
+		}
+
+		// villsa. Doom 64: a wall takes the upper and lower wall colors
+		public virtual void OnPasteLight()
+		{
+			Lights[] lights = BuilderPlug.Me.CopiedLights;
+			if(lights == null) return;
+
+			mode.CreateUndo("Paste sector lights");
+			mode.SetActionResult("Pasted sector lights.");
+
+			Sidedef.Sector.TopColor = lights[3];
+			Sidedef.Sector.LowerColor = lights[4];
+
+			Sector.UpdateSectorGeometry(false);
+			mode.ShowTargetInfo();
+		}
+
 		// Copy texture offsets
 		public virtual void OnCopyTextureOffsets()
 		{

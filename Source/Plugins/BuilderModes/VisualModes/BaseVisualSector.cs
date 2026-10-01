@@ -313,6 +313,14 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				// VisualSidedef already exists?
 				VisualSidedefParts parts = oldsides.ContainsKey(sd) ? oldsides[sd] : new VisualSidedefParts();
 				
+				// styd: Doom 64 switch. This goes first, so that it is picked before the wall behind it.
+				VisualSwitchDecal vsw = null;
+				if(VisualSwitchDecal.IsNeeded(sd))
+				{
+					vsw = parts.switchdecal ?? new VisualSwitchDecal(mode, this, sd);
+					if(vsw.Setup()) base.AddGeometry(vsw);
+				}
+				
 				// Doublesided or singlesided?
 				if(sd.Other != null && sd.Line.IsFlagSet(General.Map.Config.DoubleSidedFlag))
 				{
@@ -365,7 +373,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					}
 					
 					// Store
-					sides.Add(sd, new VisualSidedefParts(vu, vl, vm, vb, middles, middlebacks));
+					sides.Add(sd, new VisualSidedefParts(vu, vl, vm, vb, middles, middlebacks, vsw));
 				}
 				else
 				{
@@ -374,7 +382,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					if(vm.Setup()) base.AddGeometry(vm);
 					
 					// Store
-					sides.Add(sd, new VisualSidedefParts(vm));
+					sides.Add(sd, new VisualSidedefParts(vm, vsw));
 				}
 			}
 			

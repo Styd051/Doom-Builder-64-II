@@ -42,6 +42,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		void OnSelectTexture();
 		void OnCopyTexture();
 		void OnPasteTexture();
+		void OnCopyLight(); // villsa
+		void OnPasteLight(); // villsa
 		void OnCopyTextureOffsets();
 		void OnPasteTextureOffsets();
 		void OnCopyProperties();

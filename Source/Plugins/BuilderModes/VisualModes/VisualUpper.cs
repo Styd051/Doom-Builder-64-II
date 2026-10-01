@@ -154,8 +154,12 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			{
 				// When lower unpegged is set, the lower texture is bound to the bottom
 				tp.tlt.y = tsz.y - ((float)Sidedef.Sector.CeilHeight - Sidedef.Other.Sector.CeilHeight);
+
+				// villsa. Doom 64: when mirrored vertically, shift by the texture height
+				if(General.Map.DOOM64 && Sidedef.Line.IsFlagSet("2147483648")) tp.tlt.y += tsz.y;
 			}
 			tp.trb.x = tp.tlt.x + (float)Math.Round(Sidedef.Line.Length); //mxd. (G)ZDoom snaps texture coordinates to integral linedef length
+			if(General.Map.DOOM64) tp.trb.x = tp.tlt.x + Sidedef.Line.Length; // Doom 64 does not
 			tp.trb.y = tp.tlt.y + (Sidedef.Sector.CeilHeight - (Sidedef.Other.Sector.CeilHeight + ceilbias));
 			
 			// Apply texture offset
@@ -228,6 +232,19 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		#endregion
 
 		#region ================== Methods
+
+		// villsa. Doom 64: the color at the bottom of an upper part depends on the color pegging flags
+		protected override void GetDoom64Colors(out int topcolor, out int bottomcolor, out float topz, out float bottomz)
+		{
+			base.GetDoom64Colors(out topcolor, out bottomcolor, out topz, out bottomz);
+			bottomz = Sidedef.Other.Sector.CeilHeight;
+
+			if(Sidedef.Line.IsFlagSet(Lights.FLAG_USE_MULTI_COLORS))
+			{
+				topcolor = Sidedef.Sector.TopColor.GetTopColor(Sidedef);
+				bottomcolor = Sidedef.Sector.LowerColor.UnpegUpperLight(Sidedef);
+			}
+		}
 
 		// Return texture name
 		public override string GetTextureName()

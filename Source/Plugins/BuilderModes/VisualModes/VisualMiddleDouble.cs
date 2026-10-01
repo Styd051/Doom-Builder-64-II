@@ -73,6 +73,14 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				base.SetVertices(null);
 				return false;
 			}
+
+			// styd: in Doom 64 the middle texture of a double sided line is only drawn with the
+			// "Render Mid-Texture" flag, exactly like ML_DRAWMASKED in R_WallPrep of the original engine
+			if(General.Map.DOOM64 && !Sidedef.Line.IsFlagSet("512"))
+			{
+				base.SetVertices(null);
+				return false;
+			}
 			
 			Vector2D vl, vr;
 
@@ -158,7 +166,11 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				tp.tlt.y = tsz.y - (geotop - geobottom);
 			
 			if(zoffset > 0) tp.tlt.y -= zoffset; //mxd
+
+			// villsa. In Doom 64 the middle texture is repeated and always bound to the bottom
+			if(General.Map.DOOM64) tp.tlt.y = geobottom - Sidedef.Sector.CeilHeight;
 			tp.trb.x = tp.tlt.x + (float)Math.Round(Sidedef.Line.Length); //mxd. (G)ZDoom snaps texture coordinates to integral linedef length
+			if(General.Map.DOOM64) tp.trb.x = tp.tlt.x + Sidedef.Line.Length; // Doom 64 does not
 			tp.trb.y = tp.tlt.y + (Sidedef.Sector.CeilHeight - (Sidedef.Sector.FloorHeight + floorbias));
 
 			// Apply texture offset
@@ -208,7 +220,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			else if (General.Map.HEXEN)
 				repeatmidtex = Sidedef.Line.Action == 121 && (Sidedef.Line.Args[1] & 16) == 16;
 			else
-				repeatmidtex = false;
+				repeatmidtex = General.Map.DOOM64; // villsa. Always repeated in Doom 64
 
 			if(!repeatmidtex) 
 			{
@@ -273,6 +285,14 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 		#region ================== Methods
 
+		// villsa. Doom 64: the colors are at the top and bottom of the opening between the two sectors
+		protected override void GetDoom64Colors(out int topcolor, out int bottomcolor, out float topz, out float bottomz)
+		{
+			base.GetDoom64Colors(out topcolor, out bottomcolor, out topz, out bottomz);
+			topz = Math.Min(Sidedef.Sector.CeilHeight, Sidedef.Other.Sector.CeilHeight);
+			bottomz = Math.Max(Sidedef.Sector.FloorHeight, Sidedef.Other.Sector.FloorHeight);
+		}
+
 		// This performs a fast test in object picking
 		public override bool PickFastReject(Vector3D from, Vector3D to, Vector3D dir)
 		{
@@ -315,6 +335,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
                 {
                     bool pegbottom = Sidedef.Line.IsFlagSet(General.Map.Config.LowerUnpeggedFlag);
                     float zoffset = (pegbottom ? Sidedef.Sector.FloorHeight : Sidedef.Sector.CeilHeight);
+                    if(General.Map.DOOM64) zoffset = Math.Max(Sidedef.Sector.FloorHeight, Sidedef.Other.Sector.FloorHeight); // villsa. Bound to the bottom
                     oy = (int)Math.Floor(((pickintersect.z - zoffset) * UniFields.GetFloat(Sidedef.Fields, "scaley_mid", 1.0f) / texscale.y
                         - ((Sidedef.OffsetY - UniFields.GetFloat(Sidedef.Fields, "offsety_mid")) / imgscale.y))
                         % image.Height);

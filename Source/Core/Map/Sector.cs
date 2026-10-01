@@ -938,7 +938,7 @@ namespace CodeImp.DoomBuilder.Map
 			else
 			{
 				fogcolor = new Color4();
-				fogmode = (brightness < 248 ? SectorFogMode.CLASSIC : SectorFogMode.NONE);
+				fogmode = ((brightness < 248 && !General.Map.DOOM64) ? SectorFogMode.CLASSIC : SectorFogMode.NONE); // Doom 64 sectors have no brightness
 			}
 		}
 

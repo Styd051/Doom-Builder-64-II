@@ -47,11 +47,11 @@ namespace CodeImp.DoomBuilder.IO
 		internal const int ACTION_MASK = 511;
 
 		// Linedef flag bits that are kept in Linedef.SwitchMask instead of the flags
-		internal const int SWITCH_TEXTURE_UPPER = 0x2000;
-		internal const int SWITCH_TEXTURE_LOWER = 0x4000;
-		internal const int SWITCH_DISPLAY_UPPER = 0x8000;
-		internal const int SWITCH_CHECK_FLOOR_HEIGHT = 0x10000; // styd
-		internal const int SWITCH_MASK = SWITCH_TEXTURE_UPPER | SWITCH_TEXTURE_LOWER | SWITCH_DISPLAY_UPPER | SWITCH_CHECK_FLOOR_HEIGHT;
+		internal const int SWITCH_TEXTURE_UPPER = Linedef.SWITCH_TEXTURE_UPPER;
+		internal const int SWITCH_TEXTURE_LOWER = Linedef.SWITCH_TEXTURE_LOWER;
+		internal const int SWITCH_DISPLAY_UPPER = Linedef.SWITCH_DISPLAY_UPPER;
+		internal const int SWITCH_CHECK_FLOOR_HEIGHT = Linedef.SWITCH_CHECK_FLOOR_HEIGHT;
+		internal const int SWITCH_MASK = Linedef.SWITCH_MASK;
 
 		// The texture that stands for "no texture"
 		private const string NO_TEXTURE_LUMP = "?";

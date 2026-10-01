@@ -81,6 +81,13 @@ namespace CodeImp.DoomBuilder.Rendering
 		private bool showselection;
 		private bool showhighlight;
 		
+		// villsa. This shows the lighting only: geometry is drawn without its textures
+		private bool showlightonly;
+
+		// villsa. Doom 64 linedefs can mirror their textures. This is the addressing set on the device.
+		private bool mirroru;
+		private bool mirrorv;
+		
 		//mxd. Solid geometry to be rendered. Must be sorted by sector.
 		private Dictionary<ImageData, List<VisualGeometry>> solidgeo;
 
@@ -133,6 +140,7 @@ namespace CodeImp.DoomBuilder.Rendering
 		public bool DrawThingCages { get { return renderthingcages; } set { renderthingcages = value; } }
 		public bool ShowSelection { get { return showselection; } set { showselection = value; } }
 		public bool ShowHighlight { get { return showhighlight; } set { showhighlight = value; } }
+		public bool ShowLightOnly { get { return showlightonly; } set { showlightonly = value; } } // villsa
 		
 		#endregion
 
@@ -807,8 +815,8 @@ namespace CodeImp.DoomBuilder.Rendering
 				if((curtexture.Texture == null) || curtexture.Texture.Disposed)
 					curtexture.CreateTexture();
 
-				// Apply texture
-				graphics.Shaders.World3D.Texture1 = curtexture.Texture;
+				// Apply texture (villsa: or none, to show the lighting only)
+				graphics.Shaders.World3D.Texture1 = (showlightonly ? General.Map.Data.WhiteTexture.Texture : curtexture.Texture);
 				
 				//mxd. Sort geometry by sector index
 				group.Value.Sort((g1, g2) => g1.Sector.Sector.FixedIndex - g2.Sector.Sector.FixedIndex);
@@ -878,6 +886,9 @@ namespace CodeImp.DoomBuilder.Rendering
                         // [ZZ] include desaturation factor
                         graphics.Shaders.World3D.Desaturation = sector.Sector.Desaturation;
 
+						// villsa. Doom 64 linedefs can mirror their textures
+						if(General.Map.DOOM64) SetTextureMirror(g.Sidedef);
+
 						// Apply changes
 						graphics.Shaders.World3D.ApplySettings();
 						
@@ -886,6 +897,8 @@ namespace CodeImp.DoomBuilder.Rendering
 					}
 				}
 			}
+
+			SetTextureMirror(null); // villsa
 
 			// Get things for this pass
 			if(thingspass.Count > 0)
@@ -1016,6 +1029,27 @@ namespace CodeImp.DoomBuilder.Rendering
 			graphics.Shaders.World3D.EndPass();
 		}
 
+		// villsa. This sets the texture addressing for a Doom 64 sidedef: the linedef flags
+		// "UV Wrap H Mirror" and "UV Wrap V Mirror" mirror the texture on every other repeat.
+		// Call with null to go back to normal wrapping.
+		private void SetTextureMirror(Sidedef sd)
+		{
+			bool wantu = ((sd != null) && sd.Line.IsFlagSet("1073741824"));
+			bool wantv = ((sd != null) && sd.Line.IsFlagSet("2147483648"));
+
+			if(wantu != mirroru)
+			{
+				graphics.Device.SetSamplerState(0, SamplerState.AddressU, (wantu ? TextureAddress.Mirror : TextureAddress.Wrap));
+				mirroru = wantu;
+			}
+
+			if(wantv != mirrorv)
+			{
+				graphics.Device.SetSamplerState(0, SamplerState.AddressV, (wantv ? TextureAddress.Mirror : TextureAddress.Wrap));
+				mirrorv = wantv;
+			}
+		}
+
 		//mxd
 		private void RenderTranslucentPass(List<VisualGeometry> geopass, List<VisualThing> thingspass)
 		{
@@ -1100,8 +1134,8 @@ namespace CodeImp.DoomBuilder.Rendering
 					if((curtexture.Texture == null) || curtexture.Texture.Disposed)
 						curtexture.CreateTexture();
 
-					// Apply texture
-					graphics.Shaders.World3D.Texture1 = curtexture.Texture;
+					// Apply texture (villsa: or none, to show the lighting only)
+					graphics.Shaders.World3D.Texture1 = (showlightonly ? General.Map.Data.WhiteTexture.Texture : curtexture.Texture);
 					curtexturename = g.Texture.LongName;
 				}
 
@@ -1165,6 +1199,9 @@ namespace CodeImp.DoomBuilder.Rendering
                     graphics.Shaders.World3D.LightColor = sector.Sector.FogColor;
                     graphics.Shaders.World3D.HighlightColor = CalculateHighlightColor((g == highlighted) && showhighlight, (g.Selected && showselection));
 
+                    // villsa. Doom 64 linedefs can mirror their textures
+                    if(General.Map.DOOM64) SetTextureMirror(g.Sidedef);
+
                     // Apply changes
                     graphics.Shaders.World3D.ApplySettings();
 
@@ -1173,6 +1210,8 @@ namespace CodeImp.DoomBuilder.Rendering
                 }
                 else graphics.Shaders.World3D.Desaturation = 0f;
             }
+
+			SetTextureMirror(null); // villsa
 
 			// Get things for this pass
 			if(thingspass.Count > 0)

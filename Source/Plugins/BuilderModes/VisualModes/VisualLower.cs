@@ -151,7 +151,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			float floorbias = (Sidedef.Other.Sector.FloorHeight == Sidedef.Sector.FloorHeight) ? 1.0f : 0.0f;
 			if(Sidedef.Line.IsFlagSet(General.Map.Config.LowerUnpeggedFlag))
 			{
-				if(Sidedef.Sector.CeilTexture == General.Map.Config.SkyFlatName && Sidedef.Other.Sector.CeilTexture == General.Map.Config.SkyFlatName) 
+				if(!General.Map.DOOM64 && Sidedef.Sector.CeilTexture == General.Map.Config.SkyFlatName && Sidedef.Other.Sector.CeilTexture == General.Map.Config.SkyFlatName)
 				{
 					// mxd. Replicate Doom texture offset glitch when front and back sector's ceilings are sky
 					tp.tlt.y = (float)Sidedef.Other.Sector.CeilHeight - Sidedef.Other.Sector.FloorHeight;
@@ -163,6 +163,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				}
 			}
 			tp.trb.x = tp.tlt.x + (float)Math.Round(Sidedef.Line.Length); //mxd. (G)ZDoom snaps texture coordinates to integral linedef length
+			if(General.Map.DOOM64) tp.trb.x = tp.tlt.x + Sidedef.Line.Length; // Doom 64 does not
 			tp.trb.y = tp.tlt.y + (Sidedef.Other.Sector.FloorHeight - (Sidedef.Sector.FloorHeight + floorbias));
 			
 			// Apply texture offset
@@ -231,6 +232,19 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		#endregion
 
 		#region ================== Methods
+
+		// villsa. Doom 64: the color at the top of a lower part depends on the color pegging flags
+		protected override void GetDoom64Colors(out int topcolor, out int bottomcolor, out float topz, out float bottomz)
+		{
+			base.GetDoom64Colors(out topcolor, out bottomcolor, out topz, out bottomz);
+			topz = Sidedef.Other.Sector.FloorHeight;
+
+			if(Sidedef.Line.IsFlagSet(Lights.FLAG_USE_MULTI_COLORS))
+			{
+				topcolor = Sidedef.Sector.TopColor.UnpegLowerLight(Sidedef);
+				bottomcolor = Sidedef.Sector.LowerColor.GetLowerColor(Sidedef);
+			}
+		}
 
 		// Return texture name
 		public override string GetTextureName()

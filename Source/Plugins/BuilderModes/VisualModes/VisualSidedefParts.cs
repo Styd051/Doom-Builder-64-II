@@ -32,10 +32,12 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		public readonly List<VisualMiddle3D> middle3d;
 		public readonly List<VisualMiddleBack> middleback; //mxd
 		public readonly VisualFogBoundary fogboundary; //mxd
+		public readonly VisualSwitchDecal switchdecal; // styd. Doom 64 switch
 		
 		// Constructor
-		public VisualSidedefParts(VisualUpper u, VisualLower l, VisualMiddleDouble m, VisualFogBoundary f, List<VisualMiddle3D> e, List<VisualMiddleBack> eb)
+		public VisualSidedefParts(VisualUpper u, VisualLower l, VisualMiddleDouble m, VisualFogBoundary f, List<VisualMiddle3D> e, List<VisualMiddleBack> eb, VisualSwitchDecal sw)
 		{
+			this.switchdecal = sw; // styd
 			this.upper = u;
 			this.lower = l;
 			this.middledouble = m;
@@ -46,8 +48,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		}
 		
 		// Constructor
-		public VisualSidedefParts(VisualMiddleSingle m)
+		public VisualSidedefParts(VisualMiddleSingle m, VisualSwitchDecal sw)
 		{
+			this.switchdecal = sw; // styd
 			this.upper = null;
 			this.lower = null;
 			this.middledouble = null;
@@ -65,6 +68,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			if(middlesingle != null) middlesingle.Setup();
 			if(fogboundary != null) fogboundary.Setup(); //mxd
 			if(upper != null) upper.Setup();
+			if(switchdecal != null) switchdecal.Setup(); // styd
 			if(middle3d != null)
 			{
 				foreach(VisualMiddle3D m in middle3d) m.Setup();
@@ -82,6 +86,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			if(middledouble != null) middledouble.Selected = false;
 			if(middlesingle != null) middlesingle.Selected = false;
 			if(upper != null) upper.Selected = false;
+			if(switchdecal != null) switchdecal.Selected = false; // styd
 			if(middle3d != null) 
 			{
 				foreach(VisualMiddle3D m in middle3d) m.Selected = false;

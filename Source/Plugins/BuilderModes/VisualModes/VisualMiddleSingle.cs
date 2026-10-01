@@ -139,8 +139,17 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			{
 				// When lower unpegged is set, the middle texture is bound to the bottom
 				tp.tlt.y = tsz.y - (Sidedef.Sector.CeilHeight - Sidedef.Sector.FloorHeight);
+
+				// villsa. Doom 64: when mirrored vertically, shift by the texture height
+				if(General.Map.DOOM64 && Sidedef.Line.IsFlagSet("2147483648")) tp.tlt.y += tsz.y;
+			}
+			else if(General.Map.DOOM64 && Sidedef.Line.IsFlagSet(General.Map.Config.UpperUnpeggedFlag))
+			{
+				// villsa. Doom 64: when upper unpegged is set, the middle texture is aligned to height 0
+				tp.tlt.y = -Sidedef.Sector.CeilHeight;
 			}
 			tp.trb.x = tp.tlt.x + (float)Math.Round(Sidedef.Line.Length); //mxd. (G)ZDoom snaps texture coordinates to integral linedef length
+			if(General.Map.DOOM64) tp.trb.x = tp.tlt.x + Sidedef.Line.Length; // Doom 64 does not
 			tp.trb.y = tp.tlt.y + (Sidedef.Sector.CeilHeight - (Sidedef.Sector.FloorHeight + floorbias));
 			
 			// Apply texture offset

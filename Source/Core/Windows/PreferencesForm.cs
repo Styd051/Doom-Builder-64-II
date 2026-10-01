@@ -297,6 +297,10 @@ namespace CodeImp.DoomBuilder.Windows
 			// Check if we need to reload the resources
 			reloadresources |= (General.Settings.ImageBrightness != imagebrightness.Value);
 
+			// villsa. The geometry in visual mode is colored with the Doom 64 light intensity
+			reloadresources |= ((General.Settings.LightIntensity != lightintensity.Value) && (General.Map != null)
+				&& General.Map.DOOM64 && (General.Editing.Mode is CodeImp.DoomBuilder.VisualModes.VisualMode));
+
 			// Apply interface
 			General.Settings.ImageBrightness = imagebrightness.Value;
 			General.Settings.LightIntensity = lightintensity.Value; // villsa

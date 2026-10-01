@@ -34,6 +34,14 @@ namespace CodeImp.DoomBuilder.Map
 
 		public const float SIDE_POINT_DISTANCE = 0.01f;
 		public const int NUM_ARGS = 5;
+
+		// villsa. Doom 64 switch setup bits (see SwitchMask)
+		public const int SWITCH_TEXTURE_UPPER = 0x2000;
+		public const int SWITCH_TEXTURE_LOWER = 0x4000;
+		public const int SWITCH_DISPLAY_UPPER = 0x8000;
+		public const int SWITCH_CHECK_FLOOR_HEIGHT = 0x10000; // styd
+		public const int SWITCH_TEXTURE_MASK = SWITCH_TEXTURE_UPPER | SWITCH_TEXTURE_LOWER;
+		public const int SWITCH_MASK = SWITCH_TEXTURE_MASK | SWITCH_DISPLAY_UPPER | SWITCH_CHECK_FLOOR_HEIGHT;
 		
 		#endregion
 
