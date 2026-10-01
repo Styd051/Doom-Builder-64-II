@@ -89,8 +89,8 @@ namespace CodeImp.DoomBuilder.IO
 		public override int MaxThings { get { return int.MaxValue; } }
 		public override int MinTextureOffset { get { return short.MinValue; } }
 		public override int MaxTextureOffset { get { return short.MaxValue; } }
-		public override int VertexDecimals { get { return 0; } }
-		public override string DecimalsFormat { get { return "0"; } }
+		public override int VertexDecimals { get { return 6; } } // Enough to keep every 16.16 fixed point value found in the game
+		public override string DecimalsFormat { get { return "0.######"; } }
 		public override bool HasLinedefTag { get { return true; } }
 		public override bool HasThingTag { get { return true; } }
 		public override bool HasThingAction { get { return false; } }
@@ -447,8 +447,8 @@ namespace CodeImp.DoomBuilder.IO
 			for(int i = 0; i < num; i++)
 			{
 				// Read properties from stream (16.16 fixed point)
-				int x = reader.ReadInt32() / 65536;
-				int y = reader.ReadInt32() / 65536;
+				float x = reader.ReadInt32() / 65536f;
+				float y = reader.ReadInt32() / 65536f;
 
 				// Create new item
 				Vertex v = map.CreateVertex(new Vector2D(x, y));
@@ -714,9 +714,9 @@ namespace CodeImp.DoomBuilder.IO
 			foreach(Thing t in map.Things)
 			{
 				// Write properties to stream
-				writer.Write((Int16)t.Position.x);
-				writer.Write((Int16)t.Position.y);
-				writer.Write((Int16)t.Position.z);
+				writer.Write((Int16)Math.Round(t.Position.x));
+				writer.Write((Int16)Math.Round(t.Position.y));
+				writer.Write((Int16)Math.Round(t.Position.z));
 				writer.Write((Int16)t.AngleDoom);
 				writer.Write((UInt16)t.Type);
 				writer.Write((UInt16)MakeFlags(t.Flags));
@@ -737,8 +737,8 @@ namespace CodeImp.DoomBuilder.IO
 			foreach(Vertex v in map.Vertices)
 			{
 				// Write properties to stream (16.16 fixed point)
-				writer.Write((int)Math.Round(v.Position.x) * 65536);
-				writer.Write((int)Math.Round(v.Position.y) * 65536);
+				writer.Write((int)Math.Round(v.Position.x * 65536.0));
+				writer.Write((int)Math.Round(v.Position.y * 65536.0));
 			}
 
 			WriteLump("VERTEXES", mem, position, maplumps);

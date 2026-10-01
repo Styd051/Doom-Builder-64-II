@@ -680,10 +680,11 @@ namespace CodeImp.DoomBuilder.Map
 		// This snaps the vertex to the map format accuracy
 		public void SnapToAccuracy(bool usepreciseposition)
 		{
-			// Round the coordinates
-			Vector3D newpos = new Vector3D((float)Math.Round(pos.x, (usepreciseposition ? General.Map.FormatInterface.VertexDecimals : 0)),
-										   (float)Math.Round(pos.y, (usepreciseposition ? General.Map.FormatInterface.VertexDecimals : 0)),
-										   (float)Math.Round(pos.z, (usepreciseposition ? General.Map.FormatInterface.VertexDecimals : 0)));
+			// Round the coordinates. Doom 64 vertices have decimals, but its things don't.
+			int decimals = ((usepreciseposition && !General.Map.DOOM64) ? General.Map.FormatInterface.VertexDecimals : 0);
+			Vector3D newpos = new Vector3D((float)Math.Round(pos.x, decimals),
+										   (float)Math.Round(pos.y, decimals),
+										   (float)Math.Round(pos.z, decimals));
 			this.Move(newpos);
 		}
 		

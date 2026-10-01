@@ -97,8 +97,8 @@ namespace CodeImp.DoomBuilder.Windows
 			zlabel.Visible = General.Map.FormatInterface.HasThingHeight;
 			cbAbsoluteHeight.Visible = General.Map.FormatInterface.HasThingHeight; //mxd
 
-			//mxd. Decimals allowed?
-			if(General.Map.FormatInterface.VertexDecimals > 0) 
+			//mxd. Decimals allowed? (not for Doom 64 things)
+			if(General.Map.FormatInterface.VertexDecimals > 0 && !General.Map.DOOM64) 
 			{
 				posX.AllowDecimal = true;
 				posY.AllowDecimal = true;

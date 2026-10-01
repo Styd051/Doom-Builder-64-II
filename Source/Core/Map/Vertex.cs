@@ -289,6 +289,15 @@ namespace CodeImp.DoomBuilder.Map
 		// This snaps the vertex to the map format accuracy
 		public void SnapToAccuracy(bool usepreciseposition)
 		{
+			// Doom 64 vertices are 16.16 fixed point numbers. Snap to exactly that, because rounding
+			// to a number of decimals is not exact here: Direct3D puts the processor in single precision
+			// mode, and then Math.Round(-1865, 6) returns -1864.9999 (the value times a million does not fit).
+			if(usepreciseposition && General.Map.DOOM64)
+			{
+				this.Move(new Vector2D((float)(Math.Round(pos.x * 65536.0) / 65536.0), (float)(Math.Round(pos.y * 65536.0) / 65536.0)));
+				return;
+			}
+
 			// Round the coordinates
 			Vector2D newpos = new Vector2D((float)Math.Round(pos.x, (usepreciseposition ? General.Map.FormatInterface.VertexDecimals : 0)),
 										   (float)Math.Round(pos.y, (usepreciseposition ? General.Map.FormatInterface.VertexDecimals : 0)));
