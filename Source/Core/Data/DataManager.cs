@@ -3492,6 +3492,31 @@ namespace CodeImp.DoomBuilder.Data
 			skybox = MakeDoom64SkyBox(faces);
 		}
 
+		// styd. This gives the fog of a Doom 64 map. The game takes it from the sky of the map,
+		// and has a black fog when the map has no sky.
+		internal void GetDoom64Fog(out PixelColor color, out int fognear)
+		{
+			color = new PixelColor(255, 0, 0, 0);
+			fognear = Doom64Sky.DEFAULT_FOG_NEAR;
+
+			Doom64SkyDef sky;
+			if((doom64skies != null) && !string.IsNullOrEmpty(doom64skyname) && doom64skies.TryGetValue(doom64skyname, out sky))
+			{
+				color = sky.FogColor;
+				fognear = sky.FogFactor;
+			}
+
+			// The light intensity of the preferences is for this color as it is for the colors of the sectors
+			if(General.Settings.LightIntensity != 0)
+			{
+				Lights light = new Lights(color.r, color.g, color.b, 0);
+				light.SetIntensity(General.Settings.LightIntensity / 10.0f);
+				color = light.color;
+			}
+
+			color = color.WithAlpha(255);
+		}
+
 		// styd. This loads a picture of a Doom 64 sky. These are lumps outside of the textures.
 		private Bitmap GetDoom64SkyPicture(Doom64SkyDef sky, string name)
 		{

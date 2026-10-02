@@ -106,6 +106,10 @@ namespace CodeImp.DoomBuilder.Rendering
 		private bool wallocclusion;
 		private bool fogenabled;
 
+		// styd. Doom 64: the fog of the sky of the map is on everything, in this color
+		private bool doom64fog;
+		private Color4 doom64fogcolor;
+
 		//mxd. Solid things to be rendered (currently(?) there won't be any). Must be sorted by sector.
 		private Dictionary<ImageData, List<VisualThing>> solidthings;
 
@@ -349,6 +353,7 @@ namespace CodeImp.DoomBuilder.Rendering
 				fogenabled = false; // styd
 				graphics.Device.SetRenderState(RenderState.FogDensity, 1.0f);
 				graphics.Device.SetRenderState(RenderState.FogColor, General.Colors.Background.ToInt());
+				SetupDoom64Fog(); // styd
 				graphics.Device.SetRenderState(RenderState.FogStart, General.Settings.ViewDistance * FOG_RANGE);
 				graphics.Device.SetRenderState(RenderState.FogEnd, General.Settings.ViewDistance);
 				graphics.Device.SetRenderState(RenderState.FogTableMode, FogMode.Linear);
@@ -397,6 +402,30 @@ namespace CodeImp.DoomBuilder.Rendering
 			}
 		}
 		
+		// styd. This sets the fog of a Doom 64 map up: the fog of its sky is on all its geometry and
+		// things (R_RenderPlayerView in the game). The fog rendering of the preferences switches it.
+		private void SetupDoom64Fog()
+		{
+			doom64fog = General.Map.DOOM64 && General.Settings.GZDrawFog && !fullbrightness;
+			if(!doom64fog)
+			{
+				graphics.Shaders.World3D.Doom64Fog = new Vector4(0f, 0f, 0f, 0f);
+				return;
+			}
+
+			PixelColor color;
+			int fognear;
+			General.Map.Data.GetDoom64Fog(out color, out fognear);
+			float range = Math.Max(1000 - fognear, 1);
+
+			doom64fogcolor = color.ToColorValue();
+			graphics.Shaders.World3D.Doom64Fog = new Vector4((Doom64Sky.FOG_DEPTH_FAR - fognear) / range, Doom64Sky.FOG_DEPTH_SCALE / range, 1f, 0f);
+			graphics.Shaders.World3D.Doom64View = new Vector4(cameravector.x, cameravector.y, cameravector.z, 0f);
+
+			// At the end of the view distance the geometry goes into the fog, not into the background
+			graphics.Device.SetRenderState(RenderState.FogColor, color.ToInt());
+		}
+
 		// This begins rendering world geometry
 		public void StartGeometry()
 		{
@@ -886,7 +915,7 @@ namespace CodeImp.DoomBuilder.Rendering
 						int wantedshaderpass = (((g == highlighted) && showhighlight) || (g.Selected && showselection)) ? highshaderpass : shaderpass;
 
 						//mxd. Render fog?
-						if(General.Settings.GZDrawFog && !fullbrightness && sector.Sector.FogMode != SectorFogMode.NONE)
+						if(General.Settings.GZDrawFog && !fullbrightness && (doom64fog || sector.Sector.FogMode != SectorFogMode.NONE)) // styd
 							wantedshaderpass += 8;
 
 						// Switch shader pass?
@@ -908,7 +937,7 @@ namespace CodeImp.DoomBuilder.Rendering
 						if(wantedshaderpass > 7)
 						{
 							graphics.Shaders.World3D.CameraPosition = new Vector4(cameraposition.x, cameraposition.y, cameraposition.z, g.FogFactor);
-							graphics.Shaders.World3D.LightColor = sector.Sector.FogColor;
+							graphics.Shaders.World3D.LightColor = (doom64fog ? doom64fogcolor : sector.Sector.FogColor); // styd
 						}
                         
 						// Set the colors to use
@@ -977,14 +1006,14 @@ namespace CodeImp.DoomBuilder.Rendering
 							int wantedshaderpass = (((t == highlighted) && showhighlight) || (t.Selected && showselection)) ? highshaderpass : shaderpass;
 
 							//mxd. If fog is enagled, switch to shader, which calculates it
-							if(General.Settings.GZDrawFog && !fullbrightness && t.Thing.Sector != null && t.Thing.Sector.FogMode != SectorFogMode.NONE)
+							if(General.Settings.GZDrawFog && !fullbrightness && t.Thing.Sector != null && (doom64fog || t.Thing.Sector.FogMode != SectorFogMode.NONE)) // styd
 								wantedshaderpass += 8;
 
-							//mxd. Create the matrix for positioning 
+							//mxd. Create the matrix for positioning
 							world = CreateThingPositionMatrix(t);
 
 							//mxd. If current thing is light - set it's color to light color
-							if(t.LightType != null && t.LightType.LightInternal && !fullbrightness) 
+							if(t.LightType != null && t.LightType.LightInternal && !fullbrightness)
 							{
 								wantedshaderpass += 4; // Render using one of passes, which uses World3D.VertexColor
 								vertexcolor = t.LightColor;
@@ -1021,7 +1050,7 @@ namespace CodeImp.DoomBuilder.Rendering
 							}
 
 							// Set the colors to use
-							if(t.Thing.Sector != null) graphics.Shaders.World3D.LightColor = t.Thing.Sector.FogColor;
+							if(t.Thing.Sector != null) graphics.Shaders.World3D.LightColor = (doom64fog ? doom64fogcolor : t.Thing.Sector.FogColor); // styd
 							graphics.Shaders.World3D.VertexColor = vertexcolor;
 							graphics.Shaders.World3D.HighlightColor = CalculateHighlightColor((t == highlighted) && showhighlight, (t.Selected && showselection));
 
@@ -1198,7 +1227,7 @@ namespace CodeImp.DoomBuilder.Rendering
                     int wantedshaderpass = (((g == highlighted) && showhighlight) || (g.Selected && showselection)) ? highshaderpass : shaderpass;
 
                     //mxd. Render fog?
-                    if (General.Settings.GZDrawFog && !fullbrightness && sector.Sector.FogMode != SectorFogMode.NONE)
+                    if (General.Settings.GZDrawFog && !fullbrightness && (doom64fog || sector.Sector.FogMode != SectorFogMode.NONE)) // styd
                         wantedshaderpass += 8;
 
                     // Switch shader pass?
@@ -1227,7 +1256,7 @@ namespace CodeImp.DoomBuilder.Rendering
                     graphics.Shaders.World3D.Desaturation = sector.Sector.Desaturation;
 
                     // Set the colors to use
-                    graphics.Shaders.World3D.LightColor = sector.Sector.FogColor;
+                    graphics.Shaders.World3D.LightColor = (doom64fog ? doom64fogcolor : sector.Sector.FogColor); // styd
                     graphics.Shaders.World3D.HighlightColor = CalculateHighlightColor((g == highlighted) && showhighlight, (g.Selected && showselection));
 
                     // villsa. Doom 64 linedefs can mirror their textures
@@ -1322,10 +1351,10 @@ namespace CodeImp.DoomBuilder.Rendering
 						int wantedshaderpass = (((t == highlighted) && showhighlight) || (t.Selected && showselection)) ? highshaderpass : shaderpass;
 
 						//mxd. if fog is enagled, switch to shader, which calculates it
-						if(General.Settings.GZDrawFog && !fullbrightness && t.Thing.Sector != null && t.Thing.Sector.FogMode != SectorFogMode.NONE)
+						if(General.Settings.GZDrawFog && !fullbrightness && t.Thing.Sector != null && (doom64fog || t.Thing.Sector.FogMode != SectorFogMode.NONE)) // styd
 							wantedshaderpass += 8;
 
-						//mxd. Create the matrix for positioning 
+						//mxd. Create the matrix for positioning
 						world = CreateThingPositionMatrix(t);
 
 						//mxd. If current thing is light - set it's color to light color
@@ -1370,7 +1399,7 @@ namespace CodeImp.DoomBuilder.Rendering
 						}
 
 						// Set the colors to use
-						graphics.Shaders.World3D.LightColor = t.Thing.Sector.FogColor;
+						graphics.Shaders.World3D.LightColor = (doom64fog ? doom64fogcolor : t.Thing.Sector.FogColor); // styd
 						graphics.Shaders.World3D.VertexColor = vertexcolor;
 						graphics.Shaders.World3D.HighlightColor = CalculateHighlightColor((t == highlighted) && showhighlight, (t.Selected && showselection));
 
@@ -1722,7 +1751,7 @@ namespace CodeImp.DoomBuilder.Rendering
 				int wantedshaderpass = ((((t == highlighted) && showhighlight) || (t.Selected && showselection)) ? highshaderpass : shaderpass);
 
 				// If fog is enagled, switch to shader, which calculates it
-				if (General.Settings.GZDrawFog && !fullbrightness && t.Thing.Sector != null && t.Thing.Sector.FogMode != SectorFogMode.NONE)
+				if (General.Settings.GZDrawFog && !fullbrightness && t.Thing.Sector != null && (doom64fog || t.Thing.Sector.FogMode != SectorFogMode.NONE)) // styd
 					wantedshaderpass += 8;
 
 				// Switch shader pass?
@@ -1752,7 +1781,7 @@ namespace CodeImp.DoomBuilder.Rendering
 					graphics.Shaders.World3D.World = world;
                     // this is not right...
                     graphics.Shaders.World3D.ModelNormal = General.Map.Data.ModeldefEntries[t.Thing.Type].TransformRotation * modelrotation;
-                    if (t.Thing.Sector != null) graphics.Shaders.World3D.LightColor = t.Thing.Sector.FogColor;
+                    if (t.Thing.Sector != null) graphics.Shaders.World3D.LightColor = (doom64fog ? doom64fogcolor : t.Thing.Sector.FogColor); // styd
 					graphics.Shaders.World3D.CameraPosition = new Vector4(cameraposition.x, cameraposition.y, cameraposition.z, t.FogFactor);
 				}
 

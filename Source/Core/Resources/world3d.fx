@@ -67,6 +67,12 @@ float spotLight; // use lightOrientation
 //fog
 const float4 campos;  //w is set to fade factor (distance, at wich fog color completely overrides pixel color)
 
+// styd. Fog of Doom 64. The part of fog in a color is (x - y / depth of the pixel in the view);
+// z is 1 when this fog is used instead of the one above, 0 otherwise.
+float4 doom64fog;
+// styd. Direction of the view, to get the depth of a pixel
+float4 doom64view;
+
 //sky
 static const float4 skynormal = float4(0.0f, 1.0f, 0.0f, 0.0f);
 
@@ -213,6 +219,10 @@ float4 getFogColor(LitPixelData pd, float4 color)
 {
 	float fogdist = max(16.0f, distance(pd.pos_w, campos.xyz));
 	float fogfactor = exp2(campos.w * fogdist);
+
+	// styd. Doom 64 makes its fog from the depth in the view
+	float depth = max(8.0f, dot(pd.pos_w - campos.xyz, doom64view.xyz));
+	fogfactor = lerp(fogfactor, 1.0f - saturate(doom64fog.x - doom64fog.y / depth), doom64fog.z);
 
 	color.rgb = lerp(lightColor.rgb, color.rgb, fogfactor);
 	return color;

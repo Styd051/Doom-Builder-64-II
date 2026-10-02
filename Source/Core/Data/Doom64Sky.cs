@@ -24,7 +24,7 @@ namespace CodeImp.DoomBuilder.Data
 		public PixelColor BaseColor = new PixelColor(255, 0, 0, 0);	// Color of the clouds or of the void
 		public PixelColor HighColor = new PixelColor(255, 0, 0, 0);	// Color at the top of the sky
 		public PixelColor LowColor = new PixelColor(255, 0, 0, 0);	// Color at the horizon
-		public int FogFactor;
+		public int FogFactor = Doom64Sky.DEFAULT_FOG_NEAR;	// Depth where the fog begins, on a scale where the far plane is 1000
 		public bool Cloud;
 		public bool Thunder;
 		public bool Fire;
@@ -49,6 +49,17 @@ namespace CodeImp.DoomBuilder.Data
 		// Name of the wall texture that the game does not draw: it is its second texture, and the game
 		// has that number built in. The sky shows where a wall has this texture.
 		public const string BLANK_TEXTURE = "BLANK";
+
+		// The fog of the game, see R_SetupSky and R_RenderPlayerView. Without a sky the fog is black
+		// and begins at 985. The game measures the depth with its projection, from 0 at its near
+		// plane to 1000 at its far plane: guFrustum(-8, 8, -6, 6, 8, 3808) in R_Init. At a depth d
+		// in map units that is FOG_DEPTH_FAR - FOG_DEPTH_SCALE / d, and the part of fog in a color is
+		// (that - fognear) / (1000 - fognear).
+		public const int DEFAULT_FOG_NEAR = 985;
+		public const float FOG_NEAR_PLANE = 8f;
+		public const float FOG_FAR_PLANE = 3808f;
+		public const float FOG_DEPTH_FAR = 1000f * FOG_FAR_PLANE / (FOG_FAR_PLANE - FOG_NEAR_PLANE);
+		public const float FOG_DEPTH_SCALE = 1000f * FOG_FAR_PLANE * FOG_NEAR_PLANE / (FOG_FAR_PLANE - FOG_NEAR_PLANE);
 
 		// The game draws a sky on a screen of 320x240 that shows 90 degrees: a pixel is 1/160 of the
 		// tangent of an angle, and the horizon is on row 120. A sky picture is 256 pixels wide for a

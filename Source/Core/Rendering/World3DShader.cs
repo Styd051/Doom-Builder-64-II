@@ -49,6 +49,8 @@ namespace CodeImp.DoomBuilder.Rendering
 		private readonly EffectHandle world;
         private readonly EffectHandle modelnormal;
         private readonly EffectHandle camPosHandle; //used for fog rendering
+		private readonly EffectHandle doom64fogHandle; // styd
+		private readonly EffectHandle doom64viewHandle; // styd
 
         // [ZZ]
         private readonly EffectHandle stencilColorHandle;
@@ -219,6 +221,35 @@ namespace CodeImp.DoomBuilder.Rendering
 			}
 		}
 
+		// styd. The fog of Doom 64 and the direction of the view that it needs
+		private Vector4 doom64fog;
+		public Vector4 Doom64Fog
+		{
+			set
+			{
+				if(doom64fog != value)
+				{
+					effect.SetValue(doom64fogHandle, value);
+					doom64fog = value;
+					settingschanged = true;
+				}
+			}
+		}
+
+		private Vector4 doom64view;
+		public Vector4 Doom64View
+		{
+			set
+			{
+				if(doom64view != value)
+				{
+					effect.SetValue(doom64viewHandle, value);
+					doom64view = value;
+					settingschanged = true;
+				}
+			}
+		}
+
 		private Matrix mworld;
 		public Matrix World
 		{
@@ -295,6 +326,8 @@ namespace CodeImp.DoomBuilder.Rendering
                 spotLightHandle = effect.GetParameter(null, "spotLight");
                 //fog
                 camPosHandle = effect.GetParameter(null, "campos");
+				doom64fogHandle = effect.GetParameter(null, "doom64fog"); // styd
+				doom64viewHandle = effect.GetParameter(null, "doom64view"); // styd
 
                 // [ZZ]
                 stencilColorHandle = effect.GetParameter(null, "stencilColor");
@@ -342,6 +375,8 @@ namespace CodeImp.DoomBuilder.Rendering
                 if(lightOrientationHandle != null) lightOrientationHandle.Dispose();
                 if(lightPositionAndRadiusHandle != null) lightPositionAndRadiusHandle.Dispose();
 				if(camPosHandle != null) camPosHandle.Dispose();
+				if(doom64fogHandle != null) doom64fogHandle.Dispose(); // styd
+				if(doom64viewHandle != null) doom64viewHandle.Dispose(); // styd
                 if(stencilColorHandle != null) stencilColorHandle.Dispose();
 				if(world != null) world.Dispose();
                 if(modelnormal != null) modelnormal.Dispose();
