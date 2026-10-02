@@ -51,6 +51,12 @@ namespace CodeImp.DoomBuilder.Rendering
         private readonly EffectHandle camPosHandle; //used for fog rendering
 		private readonly EffectHandle doom64fogHandle; // styd
 		private readonly EffectHandle doom64viewHandle; // styd
+		private readonly EffectHandle doom64skyHandle; // styd
+		private readonly EffectHandle doom64skypicHandle; // styd
+		private readonly EffectHandle doom64skymodeHandle; // styd
+		private readonly EffectHandle doom64skytopHandle; // styd
+		private readonly EffectHandle doom64skybottomHandle; // styd
+		private readonly EffectHandle doom64skybaseHandle; // styd
 
         // [ZZ]
         private readonly EffectHandle stencilColorHandle;
@@ -250,6 +256,58 @@ namespace CodeImp.DoomBuilder.Rendering
 			}
 		}
 
+		// styd. The sky of Doom 64: where the view is on the screen of the game, the picture of
+		// a layer, how the layer is drawn and its colors (see world3d.fx)
+		private Vector4 doom64sky;
+		public Vector4 Doom64Sky
+		{
+			set
+			{
+				if(doom64sky != value)
+				{
+					effect.SetValue(doom64skyHandle, value);
+					doom64sky = value;
+					settingschanged = true;
+				}
+			}
+		}
+
+		private Vector4 doom64skypic;
+		public Vector4 Doom64SkyPicture
+		{
+			set
+			{
+				if(doom64skypic != value)
+				{
+					effect.SetValue(doom64skypicHandle, value);
+					doom64skypic = value;
+					settingschanged = true;
+				}
+			}
+		}
+
+		private Vector4 doom64skymode;
+		public Vector4 Doom64SkyMode
+		{
+			set
+			{
+				if(doom64skymode != value)
+				{
+					effect.SetValue(doom64skymodeHandle, value);
+					doom64skymode = value;
+					settingschanged = true;
+				}
+			}
+		}
+
+		public void SetDoom64SkyColors(Color4 top, Color4 bottom, Color4 basecolor)
+		{
+			effect.SetValue(doom64skytopHandle, top);
+			effect.SetValue(doom64skybottomHandle, bottom);
+			effect.SetValue(doom64skybaseHandle, basecolor);
+			settingschanged = true;
+		}
+
 		private Matrix mworld;
 		public Matrix World
 		{
@@ -328,6 +386,12 @@ namespace CodeImp.DoomBuilder.Rendering
                 camPosHandle = effect.GetParameter(null, "campos");
 				doom64fogHandle = effect.GetParameter(null, "doom64fog"); // styd
 				doom64viewHandle = effect.GetParameter(null, "doom64view"); // styd
+				doom64skyHandle = effect.GetParameter(null, "doom64sky"); // styd
+				doom64skypicHandle = effect.GetParameter(null, "doom64skypic"); // styd
+				doom64skymodeHandle = effect.GetParameter(null, "doom64skymode"); // styd
+				doom64skytopHandle = effect.GetParameter(null, "doom64skytop"); // styd
+				doom64skybottomHandle = effect.GetParameter(null, "doom64skybottom"); // styd
+				doom64skybaseHandle = effect.GetParameter(null, "doom64skybase"); // styd
 
                 // [ZZ]
                 stencilColorHandle = effect.GetParameter(null, "stencilColor");
@@ -377,6 +441,12 @@ namespace CodeImp.DoomBuilder.Rendering
 				if(camPosHandle != null) camPosHandle.Dispose();
 				if(doom64fogHandle != null) doom64fogHandle.Dispose(); // styd
 				if(doom64viewHandle != null) doom64viewHandle.Dispose(); // styd
+				if(doom64skyHandle != null) doom64skyHandle.Dispose(); // styd
+				if(doom64skypicHandle != null) doom64skypicHandle.Dispose(); // styd
+				if(doom64skymodeHandle != null) doom64skymodeHandle.Dispose(); // styd
+				if(doom64skytopHandle != null) doom64skytopHandle.Dispose(); // styd
+				if(doom64skybottomHandle != null) doom64skybottomHandle.Dispose(); // styd
+				if(doom64skybaseHandle != null) doom64skybaseHandle.Dispose(); // styd
                 if(stencilColorHandle != null) stencilColorHandle.Dispose();
 				if(world != null) world.Dispose();
                 if(modelnormal != null) modelnormal.Dispose();

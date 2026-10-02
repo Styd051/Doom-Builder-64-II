@@ -73,6 +73,21 @@ float4 doom64fog;
 // styd. Direction of the view, to get the depth of a pixel
 float4 doom64view;
 
+// styd. Sky of Doom 64, drawn flat on the screen as the game draws it. In doom64sky, x and y are
+// the screen pixels of the game in one unit of the view, from its middle; z is how many of these
+// pixels the middle of the view is above the horizon; w is how far the layer has scrolled.
+float4 doom64sky;
+// A picture of the sky: x is its width and z its height in screen pixels of the game, y is the
+// screen row of the game at its top, w is half a row of its texture.
+float4 doom64skypic;
+// x is 1 for the layer at the back, which is black where it has no picture and goes on above its
+// top; y is 1 when it goes on mirrored, 0 when its top row goes on.
+float4 doom64skymode;
+// The colors at the top and at the bottom of a layer, and the color of the clouds
+float4 doom64skytop;
+float4 doom64skybottom;
+float4 doom64skybase;
+
 //sky
 static const float4 skynormal = float4(0.0f, 1.0f, 0.0f, 0.0f);
 
@@ -105,6 +120,24 @@ samplerCUBE skysamp = sampler_state
 	MipFilter = mipfiltersettings;
 	MipMapLodBias = 0.0f;
 	MaxAnisotropy = maxanisotropysetting;
+};
+
+// styd. Samplers of the sky of Doom 64: the game shows the pixels of its sky pictures as they
+// are, and filters its clouds and its fire
+sampler2D doom64skypicsamp = sampler_state
+{
+	Texture = <texture1>;
+	MagFilter = Point;
+	MinFilter = Point;
+	MipFilter = None;
+};
+
+sampler2D doom64skysmoothsamp = sampler_state
+{
+	Texture = <texture1>;
+	MagFilter = Linear;
+	MinFilter = Linear;
+	MipFilter = None;
 };
 
 // Vertex shader
@@ -329,6 +362,82 @@ float4 ps_skybox(SkyPixelData pd) : COLOR
 	return float4(highlightcolor.rgb * highlightcolor.a + (ncolor.rgb - 0.4f * highlightcolor.a), 1.0f);
 }
 
+// styd. Pixel input data for the sky of Doom 64
+struct Doom64SkyPixelData
+{
+	float4 pos		: POSITION;
+	float4 scr		: TEXCOORD0;
+};
+
+// styd. Vertex shader of the sky of Doom 64: the pixel shader needs the place on the screen
+Doom64SkyPixelData vs_doom64sky(SkyVertexData vd)
+{
+	Doom64SkyPixelData pd;
+	pd.pos = mul(float4(vd.pos, 1.0f), worldviewproj);
+	pd.scr = pd.pos;
+	return pd;
+}
+
+// styd. A color of the sky of Doom 64, with the highlight
+float4 doom64skycolor(float3 color, float alpha)
+{
+	return float4(highlightcolor.rgb * highlightcolor.a + (color - 0.4f * highlightcolor.a), alpha);
+}
+
+// styd. A picture of the sky of Doom 64. The game draws it flat on its screen, one pixel of the
+// picture on one pixel of its screen of 320x240, and scrolls it with the angle of the view
+// (R_RenderSkyPic). Its fire is drawn the same way on the upper half of the screen, in a color
+// that goes from its top to its bottom (R_RenderFireSky).
+float4 doom64skypicture(Doom64SkyPixelData pd, sampler2D samp)
+{
+	float2 p = pd.scr.xy / pd.scr.w;
+	float column = p.x * doom64sky.x + doom64sky.w;
+	float row = 120.0f - p.y * doom64sky.y - doom64sky.z;
+	float v = (row - doom64skypic.y) / doom64skypic.z;
+
+	// Above its top the picture is mirrored or its top row goes on
+	float mirrored = 1.0f - abs(frac(v * 0.5f) * 2.0f - 1.0f);
+	float tv = clamp(lerp(saturate(v), mirrored, doom64skymode.y), doom64skypic.w, 1.0f - doom64skypic.w);
+	float4 texel = tex2D(samp, float2(column / doom64skypic.x, tv));
+	float3 color = texel.rgb * lerp(doom64skytop.rgb, doom64skybottom.rgb, saturate(v));
+
+	// Nothing is drawn below the picture. The layer at the back goes on above its top and is
+	// black where it has no picture; the other layers only cover what their picture covers.
+	float notbelow = step(v, 1.0f);
+	float alpha = texel.a * lerp(notbelow * step(0.0f, v), notbelow, doom64skymode.x);
+	return doom64skycolor(color * lerp(1.0f, alpha, doom64skymode.x), lerp(alpha, 1.0f, doom64skymode.x));
+}
+
+float4 ps_doom64skypicture(Doom64SkyPixelData pd) : COLOR
+{
+	return doom64skypicture(pd, doom64skypicsamp);
+}
+
+float4 ps_doom64skysmoothpicture(Doom64SkyPixelData pd) : COLOR
+{
+	return doom64skypicture(pd, doom64skysmoothsamp);
+}
+
+// styd. The clouds of the sky of Doom 64. The game draws them on a plane that leans over the
+// view: it is 160 units away at the top of the screen, 120 pixels above the horizon, and 300 units
+// away at the horizon, where it is 600 units wide. The texture goes one and a half times over
+// its width and twice over its depth. Its color is the color of the clouds times the texture,
+// plus a color that goes from the top of the screen to the horizon (R_RenderClouds).
+float4 ps_doom64skyclouds(Doom64SkyPixelData pd) : COLOR
+{
+	float2 p = pd.scr.xy / pd.scr.w;
+	float x = p.x * doom64sky.x;
+	float y = p.y * doom64sky.y + doom64sky.z;
+	float up = max(y, 0.0f);
+	float v = (120.0f - up) / (120.0f + 0.875f * up);
+	float u = 0.5f + (1.0f + 0.875f * v) * x / 600.0f;
+	float cloud = tex2D(doom64skysmoothsamp, float2(u * 1.5f + doom64sky.w, v * 2.0f)).r;
+	float3 color = doom64skybase.rgb * cloud + lerp(doom64skytop.rgb, doom64skybottom.rgb, saturate(1.0f - y / 120.0f));
+
+	// Nothing is drawn below the horizon
+	return doom64skycolor(color * step(0.0f, y), 1.0f);
+}
+
 // Technique for shader model 2.0
 technique SM20 
 {
@@ -440,5 +549,24 @@ technique SM20
 		VertexShader = compile vs_2_0 vs_lightpass();
 		PixelShader  = compile ps_2_0 ps_lightpass();
 		AlphaBlendEnable = true;
+	}
+
+	// styd. Sky of Doom 64: a picture, a picture that is filtered, the clouds
+	pass p18
+	{
+		VertexShader = compile vs_2_0 vs_doom64sky();
+		PixelShader  = compile ps_2_0 ps_doom64skypicture();
+	}
+
+	pass p19
+	{
+		VertexShader = compile vs_2_0 vs_doom64sky();
+		PixelShader  = compile ps_2_0 ps_doom64skysmoothpicture();
+	}
+
+	pass p20
+	{
+		VertexShader = compile vs_2_0 vs_doom64sky();
+		PixelShader  = compile ps_2_0 ps_doom64skyclouds();
 	}
 }

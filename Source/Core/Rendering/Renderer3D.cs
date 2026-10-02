@@ -48,6 +48,11 @@ namespace CodeImp.DoomBuilder.Rendering
 		private const float DOOM64_SCREEN_HEIGHT = 3f;
 		private const float DOOM64_MAX_FOV = 175f * Angle2D.PI / 180f;
 
+		// styd. Shader passes of the sky of Doom 64: a picture, a picture that is filtered, the clouds
+		private const int SHADERPASS_DOOM64_SKY_PICTURE = 18;
+		private const int SHADERPASS_DOOM64_SKY_SMOOTH = 19;
+		private const int SHADERPASS_DOOM64_SKY_CLOUDS = 20;
+
 		#endregion
 
 		#region ================== Variables
@@ -1950,6 +1955,13 @@ namespace CodeImp.DoomBuilder.Rendering
 		//mxd
 		private void RenderSky(IEnumerable<VisualGeometry> geo)
 		{
+			// styd. The sky of Doom 64 is not a box around the map
+			if(General.Map.DOOM64)
+			{
+				RenderDoom64Sky(geo);
+				return;
+			}
+
 			VisualSector sector = null;
 			
 			// Set render settings
@@ -1996,6 +2008,78 @@ namespace CodeImp.DoomBuilder.Rendering
 			}
 
 			graphics.Shaders.World3D.EndPass();
+		}
+
+		// styd. This draws the sky of a Doom 64 map where the given geometry is. The game draws its
+		// sky flat on its screen before anything else (R_RenderSKY): a picture of the sky is not
+		// a place in the map, it only scrolls as the view turns. The layers of the sky are drawn
+		// that way here, one over the other. The game cannot look up or down; here the horizon of
+		// the sky stays on the horizon of the map.
+		private void RenderDoom64Sky(IEnumerable<VisualGeometry> geo)
+		{
+			List<Doom64SkyLayer> layers = General.Map.Data.Doom64SkyLayers;
+			if(layers == null) return;
+
+			// How far the view looks up and how far it has turned
+			float level = (float)Math.Sqrt(cameravector.x * cameravector.x + cameravector.y * cameravector.y);
+			float pitch = cameravector.z / Math.Max(level, 0.0001f);
+			float turn = (float)Math.Atan2(cameravector.y, cameravector.x) / (Angle2D.PI * 2f);
+
+			// Screen pixels of the game in one unit of the view
+			float scalex = Doom64Sky.SCREEN_FOCAL / projection.M11;
+			float scaley = Doom64Sky.SCREEN_FOCAL / projection.M22;
+
+			foreach(Doom64SkyLayer l in layers)
+			{
+				int pass = (l.Clouds ? SHADERPASS_DOOM64_SKY_CLOUDS : (l.Smooth ? SHADERPASS_DOOM64_SKY_SMOOTH : SHADERPASS_DOOM64_SKY_PICTURE));
+
+				// A picture scrolls by its width in a quarter turn and the middle of the screen of
+				// the game is its column 160; the clouds scroll three times in a full turn
+				float scroll = (l.Clouds ? -turn * Doom64Sky.CLOUD_TURN : Doom64Sky.SCREEN_FOCAL - turn * 4f * Doom64Sky.PIC_WIDTH);
+
+				// A layer in front only covers what its picture covers
+				graphics.Device.SetRenderState(RenderState.AlphaTestEnable, !l.Back);
+
+				graphics.Shaders.World3D.BeginPass(pass);
+				graphics.Shaders.World3D.Texture1 = l.Texture;
+				graphics.Shaders.World3D.Doom64Sky = new Vector4(scalex, scaley, pitch * Doom64Sky.SCREEN_FOCAL, scroll);
+				graphics.Shaders.World3D.Doom64SkyPicture = new Vector4(l.Width, l.Top, l.Height, l.HalfRow);
+				graphics.Shaders.World3D.Doom64SkyMode = new Vector4((l.Back ? 1f : 0f), (l.Mirrored ? 1f : 0f), 0f, 0f);
+				graphics.Shaders.World3D.SetDoom64SkyColors(l.TopColor, l.BottomColor, l.BaseColor);
+
+				VisualSector sector = null;
+				foreach(VisualGeometry g in geo)
+				{
+					// Changing sector?
+					if(!object.ReferenceEquals(g.Sector, sector))
+					{
+						// Update the sector if needed
+						if(g.Sector.NeedsUpdateGeo) g.Sector.Update();
+
+						// Only do this sector when a vertexbuffer is created
+						if(g.Sector.GeometryBuffer != null && g.Sector.Sector.Map != null)
+						{
+							sector = g.Sector;
+							graphics.Device.SetStreamSource(0, sector.GeometryBuffer, 0, WorldVertex.Stride);
+						}
+						else
+						{
+							sector = null;
+						}
+					}
+
+					if(sector != null)
+					{
+						graphics.Shaders.World3D.HighlightColor = CalculateHighlightColor((g == highlighted) && showhighlight, (g.Selected && showselection));
+						graphics.Shaders.World3D.ApplySettings();
+						graphics.Device.DrawPrimitives(PrimitiveType.TriangleList, g.VertexOffset, g.Triangles);
+					}
+				}
+
+				graphics.Shaders.World3D.EndPass();
+			}
+
+			graphics.Device.SetRenderState(RenderState.AlphaTestEnable, false);
 		}
 
         // [ZZ] this is copied from GZDoom

@@ -131,7 +131,8 @@ namespace CodeImp.DoomBuilder.Data
 
 		// styd. The skies of Doom 64
 		private Dictionary<string, Doom64SkyDef> doom64skies; // The skies of the SKYDEFS lumps, by the name of their flat
-		private string doom64skyname; // The sky that the skybox shows, or null when it must be made
+		private string doom64skyname; // The sky that the layers show, or null when they must be made
+		private List<Doom64SkyLayer> doom64skylayers; // What the visual mode draws for the sky, from the back to the front
 
 		//mxd. Comment icons
 		private ImageData[] commenttextures;
@@ -197,6 +198,7 @@ namespace CodeImp.DoomBuilder.Data
 		internal ImageData FolderUpTexture { get { return folderuptexture; } } //mxd
 		public ImageData[] CommentTextures { get { return commenttextures; } } //mxd
 		internal CubeTexture SkyBox { get { return skybox; } } //mxd
+		internal List<Doom64SkyLayer> Doom64SkyLayers { get { return doom64skylayers; } } // styd
 		public List<ThingCategory> ThingCategories { get { return thingcategories; } }
 		public ICollection<ThingTypeInfo> ThingTypes { get { return thingtypes.Values; } }
 		public DecorateParser Decorate { get { return decorate; } }
@@ -322,6 +324,8 @@ namespace CodeImp.DoomBuilder.Data
 					skybox.Dispose();
 					skybox = null;
 				}
+				Doom64Sky.DisposeLayers(doom64skylayers); // styd
+				doom64skylayers = null;
 				
 				// Done
 				isdisposed = true;
@@ -3333,9 +3337,11 @@ namespace CodeImp.DoomBuilder.Data
 			if(skybox != null) skybox.Dispose(); skybox = null;
 
 			// styd. The sky of a Doom 64 map comes from SKYDEFS and from the sky ceilings of the map.
-			// Its texture is made when the map is drawn (see UpdateDoom64Sky).
+			// Its layers are made when the map is drawn (see UpdateDoom64Sky).
 			if(General.Map.DOOM64)
 			{
+				Doom64Sky.DisposeLayers(doom64skylayers);
+				doom64skylayers = null;
 				doom64skyname = null;
 				return;
 			}
@@ -3465,7 +3471,7 @@ namespace CodeImp.DoomBuilder.Data
 			}
 		}
 
-		// styd. This makes the skybox of a Doom 64 map again when its sky has changed.
+		// styd. This makes the layers of the sky of a Doom 64 map again when its sky has changed.
 		// As in the game, the sky of a map is the sky of its last sector with a sky ceiling.
 		internal void UpdateDoom64Sky()
 		{
@@ -3487,12 +3493,8 @@ namespace CodeImp.DoomBuilder.Data
 			Bitmap backpic = GetDoom64SkyPicture(sky, sky.BackPic);
 			Bitmap fire = (sky.Fire ? GetDoom64SkyPicture(sky, Doom64Sky.FIRE_PIC) : null);
 
-			// One color needs no detail
-			int size = (sky.Void ? 16 : Doom64Sky.FACE_SIZE);
-			Bitmap[] faces = Doom64Sky.MakeFaces(size, Doom64Sky.MakeSampler(sky, pic, backpic, fire, size));
-
-			if(skybox != null) skybox.Dispose();
-			skybox = MakeDoom64SkyBox(faces);
+			Doom64Sky.DisposeLayers(doom64skylayers);
+			doom64skylayers = Doom64Sky.MakeLayers(General.Map.Graphics.Device, sky, pic, backpic, fire);
 		}
 
 		// styd. This gives the fog of a Doom 64 map. The game takes it from the sky of the map,
@@ -3528,19 +3530,6 @@ namespace CodeImp.DoomBuilder.Data
 			if(picture == null)
 				General.ErrorLogger.Add(ErrorType.Warning, "Unable to load the picture \"" + name + "\" of the sky \"" + sky.Flat + "\".");
 			return picture;
-		}
-
-		// styd. This makes a CubeTexture from 6 images, in the order of the faces of a cube texture
-		private static CubeTexture MakeDoom64SkyBox(Bitmap[] faces)
-		{
-			CubeTexture cubemap = new CubeTexture(General.Map.Graphics.Device, faces[0].Width, 1, Usage.None, Format.A8R8G8B8, Pool.Managed);
-			for(int i = 0; i < faces.Length; i++)
-			{
-				DrawCubemapFace(cubemap, (CubeMapFace)i, faces[i]);
-				faces[i].Dispose();
-			}
-
-			return cubemap;
 		}
 
 		//INFO: 1. Looks like GZDoom tries to tile a sky texture into a 1024 pixel width texture.

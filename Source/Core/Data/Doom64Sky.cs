@@ -6,8 +6,10 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Globalization;
-using System.Runtime.InteropServices;
+using System.IO;
 using CodeImp.DoomBuilder.Rendering;
+using SlimDX;
+using SlimDX.Direct3D9;
 
 #endregion
 
@@ -32,16 +34,28 @@ namespace CodeImp.DoomBuilder.Data
 		public bool FadeInBackground;	// The back picture only shows when a line special asks for it
 	}
 
-	// styd. This returns the color of a sky in a direction of the map (z is up)
-	internal delegate int Doom64SkySampler(float x, float y, float z);
+	// styd. One layer of a Doom 64 sky, as the visual mode draws it: a picture flat on the screen
+	// of the game, or the clouds of the game. The layers are drawn one over the other.
+	internal sealed class Doom64SkyLayer
+	{
+		public Texture Texture;
+		public bool Clouds;			// The clouds of the game; a picture otherwise
+		public bool Smooth;			// The picture is filtered, as the fire of the game is
+		public bool Back;			// The layer at the back: it is black where it has no picture
+		public bool Mirrored;		// Above its top the picture goes on mirrored; otherwise its top row does
+		public float Width;			// Width of the picture, in screen pixels of the game
+		public float Height;		// Height of the picture, in screen rows of the game
+		public float Top;			// Screen row of the game at the top of the picture
+		public float HalfRow = 0.5f;	// Half a row of the texture, in the height of the texture
+		public Color4 TopColor;		// Color at the top of the layer
+		public Color4 BottomColor;	// Color at the bottom of the layer
+		public Color4 BaseColor;	// Color of the clouds
+	}
 
-	// styd. This reads the skies of Doom 64 and makes the images of a sky box from them
+	// styd. This reads the skies of Doom 64 and makes the layers that the visual mode draws
 	internal static class Doom64Sky
 	{
 		#region ================== Constants
-
-		// Size of a face of the sky box
-		public const int FACE_SIZE = 512;
 
 		// Name of the lump with the fire texture. The game has this name built in.
 		public const string FIRE_PIC = "FIRE";
@@ -61,17 +75,19 @@ namespace CodeImp.DoomBuilder.Data
 		public const float FOG_DEPTH_FAR = 1000f * FOG_FAR_PLANE / (FOG_FAR_PLANE - FOG_NEAR_PLANE);
 		public const float FOG_DEPTH_SCALE = 1000f * FOG_FAR_PLANE * FOG_NEAR_PLANE / (FOG_FAR_PLANE - FOG_NEAR_PLANE);
 
-		// The game draws a sky on a screen of 320x240 that shows 90 degrees: a pixel is 1/160 of the
-		// tangent of an angle, and the horizon is on row 120. A sky picture is 256 pixels wide for a
-		// quarter turn. See R_RenderSkyPic, R_RenderClouds and R_RenderFireSky in the game.
-		private const float SCREEN_FOCAL = 160f;
-		private const float SCREEN_HORIZON = 120f;
-		private const float SCREEN_TOP = 0.75f;		// Tangent of the angle at the top of the screen
-		private const float PIC_WIDTH = 256f;
+		// The game draws its sky flat on a screen of 320x240 that shows 90 degrees: a screen pixel is
+		// 1/160 of the tangent of an angle and the horizon is on row 120. A sky picture is 256 pixels
+		// wide and scrolls by its width for a quarter turn; the fire is 64 pixels wide and stands on
+		// the upper half of the screen. See R_RenderSkyPic, R_RenderClouds and R_RenderFireSky.
+		public const float SCREEN_FOCAL = 160f;
+		public const float SCREEN_HORIZON = 120f;
+		public const float PIC_WIDTH = 256f;
+		public const float CLOUD_TURN = 3f;			// Times the cloud texture scrolls by in a full turn
 		private const float PIC_BOTTOM = 128f;		// Screen row under a sky picture
 		private const float BACKPIC_BOTTOM = 170f;	// Screen row under a back picture
-		private const float FIRE_TILES = 16f;		// Times the fire texture goes around
-		private const float CLOUD_TILE = 5.2f;		// Size of the cloud texture, in heights of the cloud layer
+		private const float SECOND_PIC_BOTTOM = 240f;	// Screen row under the second sky picture of the sky that fades a picture in
+		private const float FIRE_WIDTH = 64f;
+		private const float EVERYWHERE = 1000000f;	// Rows of a layer of one color
 
 		#endregion
 
@@ -218,331 +234,159 @@ namespace CodeImp.DoomBuilder.Data
 
 		#endregion
 
-		#region ================== Sky box
+		#region ================== Layers
 
-		// This makes the six faces of a sky box, in the order of the faces of a cube texture.
-		// The sampler gives the color of the sky in a direction of the map.
-		public static Bitmap[] MakeFaces(int size, Doom64SkySampler sampler)
+		// This makes the layers of a sky, from the back to the front. The pictures may be null
+		// when the sky has none or when they could not be loaded. The clouds do not move, there is
+		// no lightning and the fire does not burn.
+		public static List<Doom64SkyLayer> MakeLayers(Device device, Doom64SkyDef sky, Bitmap pic, Bitmap backpic, Bitmap fire)
 		{
-			Bitmap[] faces = new Bitmap[6];
-			int[] pixels = new int[size * size];
+			List<Doom64SkyLayer> layers = new List<Doom64SkyLayer>();
+			Color4 white = new Color4(1f, 1f, 1f, 1f);
+			Color4 black = new Color4(1f, 0f, 0f, 0f);
 
-			for(int face = 0; face < 6; face++)
+			// The back of the sky: one color (R_RenderVoidSky), the clouds over the colors of
+			// the sky (R_RenderClouds), a picture down to row 128 (R_RenderSpaceSky), or nothing
+			if(sky.Void)
 			{
-				for(int row = 0; row < size; row++)
-				{
-					float t = (row + 0.5f) / size * 2f - 1f;
-					for(int col = 0; col < size; col++)
-					{
-						float s = (col + 0.5f) / size * 2f - 1f;
-						float x, y, z;
-
-						// Direction of this pixel in the cube texture
-						switch(face)
-						{
-							case 0: x = 1f; y = -t; z = -s; break;		// Positive X
-							case 1: x = -1f; y = -t; z = s; break;		// Negative X
-							case 2: x = s; y = 1f; z = t; break;		// Positive Y
-							case 3: x = s; y = -1f; z = -t; break;		// Negative Y
-							case 4: x = s; y = -t; z = 1f; break;		// Positive Z
-							default: x = -s; y = -t; z = -1f; break;	// Negative Z
-						}
-
-						// The sky shader mirrors the Y axis of the map
-						pixels[row * size + col] = sampler(x, -y, z);
-					}
-				}
-
-				Bitmap bmp = new Bitmap(size, size, PixelFormat.Format32bppArgb);
-				BitmapData data = bmp.LockBits(new Rectangle(0, 0, size, size), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
-				Marshal.Copy(pixels, 0, data.Scan0, pixels.Length);
-				bmp.UnlockBits(data);
-				faces[face] = bmp;
+				layers.Add(OneColor(device, sky.BaseColor.ToColorValue()));
+			}
+			else if(sky.Cloud)
+			{
+				Doom64SkyLayer l = new Doom64SkyLayer();
+				l.Texture = (pic != null ? MakeTexture(device, pic) : MakeTexture(device, 0));
+				l.Clouds = true;
+				l.Back = true;
+				l.TopColor = sky.HighColor.ToColorValue();
+				l.BottomColor = sky.LowColor.ToColorValue();
+				l.BaseColor = sky.BaseColor.ToColorValue();
+				layers.Add(l);
+			}
+			else if(pic != null)
+			{
+				Doom64SkyLayer l = Picture(device, pic, PIC_BOTTOM);
+				l.Back = true;
+				l.Mirrored = true;
+				layers.Add(l);
+			}
+			else if((fire == null) || !sky.Fire)
+			{
+				layers.Add(OneColor(device, black));
 			}
 
-			return faces;
+			// The fire burns on the upper half of the screen, in the high color at its top and the
+			// low color at its foot (R_RenderFireSky)
+			if((fire != null) && sky.Fire)
+			{
+				Doom64SkyLayer l = new Doom64SkyLayer();
+				l.Texture = MakeTexture(device, fire);
+				lock(fire) { l.HalfRow = 0.5f / fire.Height; }
+				l.Smooth = true;
+				l.Back = (layers.Count == 0);
+				l.Width = FIRE_WIDTH;
+				l.Height = SCREEN_HORIZON;
+				l.TopColor = sky.HighColor.ToColorValue();
+				l.BottomColor = sky.LowColor.ToColorValue();
+				layers.Add(l);
+			}
+
+			if(sky.FadeInBackground)
+			{
+				// The back picture only shows when a line special asks for it. Until then the game
+				// fills its screen with a second sky picture (R_RenderEvilSky).
+				if((pic != null) && !sky.Cloud && !sky.Void) layers.Add(Picture(device, pic, SECOND_PIC_BOTTOM));
+			}
+			else if(backpic != null)
+			{
+				// A back picture stands in front of the sky, down to row 170. The sky shows through
+				// its transparent pixels.
+				layers.Add(Picture(device, backpic, BACKPIC_BOTTOM));
+			}
+
+			foreach(Doom64SkyLayer l in layers)
+			{
+				l.TopColor.Alpha = 1f;
+				l.BottomColor.Alpha = 1f;
+				l.BaseColor.Alpha = 1f;
+			}
+
+			return layers;
 		}
 
-		// This makes the sampler of a sky. The pictures may be null when the sky has none
-		// or when they could not be loaded.
-		public static Doom64SkySampler MakeSampler(Doom64SkyDef sky, Bitmap pic, Bitmap backpic, Bitmap fire, int facesize)
+		// A picture that stands on a screen row of the game. It is as wide as a sky picture of
+		// the game whatever its own size.
+		private static Doom64SkyLayer Picture(Device device, Bitmap picture, float bottom)
 		{
-			return new Painter(sky, pic, backpic, fire, facesize).Sample;
+			Doom64SkyLayer l = new Doom64SkyLayer();
+			l.Texture = MakeTexture(device, picture);
+			l.Width = PIC_WIDTH;
+			lock(picture)
+			{
+				l.Height = picture.Height * PIC_WIDTH / picture.Width;
+				l.HalfRow = 0.5f / picture.Height;
+			}
+			l.Top = bottom - l.Height;
+			l.TopColor = new Color4(1f, 1f, 1f, 1f);
+			l.BottomColor = l.TopColor;
+			return l;
 		}
 
-		#endregion
-
-		#region ================== Painter
-
-		// The pixels of a picture
-		private sealed class Picture
+		// A layer of one color over the whole sky
+		private static Doom64SkyLayer OneColor(Device device, Color4 color)
 		{
-			public readonly int Width;
-			public readonly int Height;
-			private readonly int[] pixels;
+			Doom64SkyLayer l = new Doom64SkyLayer();
+			l.Texture = MakeTexture(device, 255);
+			l.Back = true;
+			l.Width = PIC_WIDTH;
+			l.Height = EVERYWHERE * 2f;
+			l.Top = -EVERYWHERE;
+			l.TopColor = color;
+			l.BottomColor = color;
+			return l;
+		}
 
-			public Picture(Bitmap source)
+		// This makes a texture from a picture
+		private static Texture MakeTexture(Device device, Bitmap picture)
+		{
+			lock(picture)
 			{
-				lock(source)
+				// A copy in a known pixel format
+				using(Bitmap copy = new Bitmap(picture))
 				{
-					// A copy in a known pixel format
-					using(Bitmap copy = new Bitmap(source))
+					Texture texture = new Texture(device, copy.Width, copy.Height, 1, Usage.None, Format.A8R8G8B8, Pool.Managed);
+					DataRectangle rect = texture.LockRectangle(0, LockFlags.None);
+					BitmapData data = copy.LockBits(new Rectangle(0, 0, copy.Width, copy.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+					for(int y = 0; y < copy.Height; y++)
 					{
-						Width = copy.Width;
-						Height = copy.Height;
-						pixels = new int[Width * Height];
-						BitmapData data = copy.LockBits(new Rectangle(0, 0, Width, Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
-						Marshal.Copy(data.Scan0, pixels, 0, pixels.Length);
-						copy.UnlockBits(data);
+						rect.Data.Seek((long)y * rect.Pitch, SeekOrigin.Begin);
+						rect.Data.WriteRange(new IntPtr(data.Scan0.ToInt64() + (long)y * data.Stride), copy.Width * 4);
 					}
+					copy.UnlockBits(data);
+					texture.UnlockRectangle(0);
+					return texture;
 				}
-			}
-
-			// This gives a pixel. The picture repeats horizontally, the rows are clamped.
-			private int Pixel(int x, int y)
-			{
-				x %= Width;
-				if(x < 0) x += Width;
-				if(y < 0) y = 0; else if(y >= Height) y = Height - 1;
-				return pixels[y * Width + x];
-			}
-
-			// This gives the filtered color at a position, with the colors weighted by their alpha.
-			// With tiled set, the picture also repeats vertically.
-			public void Sample(float x, float y, bool tiled, out float r, out float g, out float b, out float a)
-			{
-				x -= 0.5f;
-				y -= 0.5f;
-				int x0 = (int)Math.Floor(x);
-				int y0 = (int)Math.Floor(y);
-				float fx = x - x0;
-				float fy = y - y0;
-				int y1 = y0 + 1;
-
-				if(tiled)
-				{
-					y0 %= Height; if(y0 < 0) y0 += Height;
-					y1 %= Height; if(y1 < 0) y1 += Height;
-				}
-
-				r = g = b = a = 0f;
-				Add(Pixel(x0, y0), (1f - fx) * (1f - fy), ref r, ref g, ref b, ref a);
-				Add(Pixel(x0 + 1, y0), fx * (1f - fy), ref r, ref g, ref b, ref a);
-				Add(Pixel(x0, y1), (1f - fx) * fy, ref r, ref g, ref b, ref a);
-				Add(Pixel(x0 + 1, y1), fx * fy, ref r, ref g, ref b, ref a);
-
-				if(a > 0f) { r /= a; g /= a; b /= a; }
-			}
-
-			private static void Add(int pixel, float weight, ref float r, ref float g, ref float b, ref float a)
-			{
-				float alpha = ((pixel >> 24) & 0xFF) / 255f * weight;
-				r += ((pixel >> 16) & 0xFF) * alpha;
-				g += ((pixel >> 8) & 0xFF) * alpha;
-				b += (pixel & 0xFF) * alpha;
-				a += alpha;
-			}
-
-			// This gives the average color of some rows
-			public void Average(int firstrow, int rows, out float r, out float g, out float b)
-			{
-				r = g = b = 0f;
-				int count = 0;
-				for(int y = Math.Max(firstrow, 0); (y < firstrow + rows) && (y < Height); y++)
-				{
-					for(int x = 0; x < Width; x++)
-					{
-						int pixel = pixels[y * Width + x];
-						r += (pixel >> 16) & 0xFF;
-						g += (pixel >> 8) & 0xFF;
-						b += pixel & 0xFF;
-						count++;
-					}
-				}
-
-				if(count > 0) { r /= count; g /= count; b /= count; }
 			}
 		}
 
-		// This paints a sky the way the game does, as far as a picture that never changes can:
-		// the clouds do not move, there is no lightning and the fire does not burn.
-		private sealed class Painter
+		// This makes a texture of one pixel of a gray
+		private static Texture MakeTexture(Device device, int gray)
 		{
-			private const int EDGE_ROWS = 8;	// Rows of a picture that give the color beyond it
-
-			private readonly Doom64SkyDef sky;
-			private readonly Picture pic;
-			private readonly Picture backpic;
-			private readonly Picture fire;
-			private readonly float cloudmean;		// Average brightness of the cloud texture
-			private readonly float cloudfootprint;	// How fast the cloud texture gets too fine for the sky box
-			private readonly float topr, topg, topb;			// Color above the sky picture
-			private readonly float bottomr, bottomg, bottomb;	// Color below the sky picture
-			private readonly float groundr, groundg, groundb;	// Color below the back picture
-
-			public Painter(Doom64SkyDef sky, Bitmap pic, Bitmap backpic, Bitmap fire, int facesize)
+			using(Bitmap pixel = new Bitmap(1, 1, PixelFormat.Format32bppArgb))
 			{
-				this.sky = sky;
-				if(pic != null) this.pic = new Picture(pic);
-				if((backpic != null) && !sky.FadeInBackground)
-				{
-					this.backpic = new Picture(backpic);
-					this.backpic.Average(this.backpic.Height - EDGE_ROWS, EDGE_ROWS, out groundr, out groundg, out groundb);
-				}
-				if((fire != null) && sky.Fire) this.fire = new Picture(fire);
-
-				if(this.pic != null)
-				{
-					float r, g, b;
-					this.pic.Average(0, this.pic.Height, out r, out g, out b);
-					cloudmean = r / 255f;
-					cloudfootprint = (this.pic.Width / CLOUD_TILE) * ((float)Math.PI / 2f) / facesize;
-					this.pic.Average(0, EDGE_ROWS, out topr, out topg, out topb);
-					this.pic.Average(this.pic.Height - EDGE_ROWS, EDGE_ROWS, out bottomr, out bottomg, out bottomb);
-				}
+				pixel.SetPixel(0, 0, Color.FromArgb(255, gray, gray, gray));
+				return MakeTexture(device, pixel);
 			}
+		}
 
-			public int Sample(float x, float y, float z)
+		// This disposes the textures of the layers of a sky
+		public static void DisposeLayers(List<Doom64SkyLayer> layers)
+		{
+			if(layers == null) return;
+			foreach(Doom64SkyLayer l in layers)
 			{
-				float flat = (float)Math.Sqrt(x * x + y * y);
-				float length = (float)Math.Sqrt(x * x + y * y + z * z);
-
-				// Tangent of the angle above the horizon, and the screen row of the game that shows it
-				float tangent = z / Math.Max(flat, 0.0001f);
-				float screenrow = SCREEN_HORIZON - SCREEN_FOCAL * tangent;
-
-				// Position around the horizon, in pixels of a sky picture. A picture goes clockwise.
-				float around = -(float)Math.Atan2(y, x) / ((float)Math.PI / 2f) * PIC_WIDTH;
-
-				float r = 0f, g = 0f, b = 0f;
-
-				if(sky.Void)
-				{
-					r = sky.BaseColor.r; g = sky.BaseColor.g; b = sky.BaseColor.b;
-				}
-				else if(sky.Cloud)
-				{
-					Clouds(x, y, z, length, tangent, ref r, ref g, ref b);
-				}
-				else if(pic != null)
-				{
-					SkyPicture(around, screenrow, ref r, ref g, ref b);
-				}
-
-				if(fire != null) Fire(around, tangent, ref r, ref g, ref b);
-				if(backpic != null) BackPicture(around, screenrow, ref r, ref g, ref b);
-
-				return (255 << 24) | (ToByte(r) << 16) | (ToByte(g) << 8) | ToByte(b);
+				if(l.Texture != null) l.Texture.Dispose();
+				l.Texture = null;
 			}
-
-			// A sky picture stands on the horizon. Beyond its edges, where the game never looks, it is
-			// mirrored and fades to the color of its edge.
-			private void SkyPicture(float around, float screenrow, ref float r, ref float g, ref float b)
-			{
-				float scale = pic.Width / PIC_WIDTH;
-				float row = (screenrow - (PIC_BOTTOM - pic.Height)) * scale;
-				float column = (around + SCREEN_FOCAL) * scale;
-				float a;
-
-				if(row < 0f)
-				{
-					pic.Sample(column, Math.Min(-row, pic.Height), false, out r, out g, out b, out a);
-					float fade = Smooth(0f, pic.Height, -row);
-					r += (topr - r) * fade; g += (topg - g) * fade; b += (topb - b) * fade;
-				}
-				else if(row > pic.Height)
-				{
-					float over = row - pic.Height;
-					pic.Sample(column, Math.Max(pic.Height - over, 0f), false, out r, out g, out b, out a);
-					float fade = Smooth(0f, pic.Height, over);
-					r += (bottomr - r) * fade; g += (bottomg - g) * fade; b += (bottomb - b) * fade;
-				}
-				else
-				{
-					pic.Sample(column, row, false, out r, out g, out b, out a);
-				}
-			}
-
-			// The clouds are a layer above the map, lit by the base color, over a sky that goes from
-			// the low color at the horizon to the high color at the top of the screen of the game.
-			private void Clouds(float x, float y, float z, float length, float tangent, ref float r, ref float g, ref float b)
-			{
-				float high = Clamp(tangent / SCREEN_TOP);
-				r = sky.LowColor.r + (sky.HighColor.r - sky.LowColor.r) * high;
-				g = sky.LowColor.g + (sky.HighColor.g - sky.LowColor.g) * high;
-				b = sky.LowColor.b + (sky.HighColor.b - sky.LowColor.b) * high;
-				if(pic == null) return;
-
-				float brightness = cloudmean;
-				if(z > 0f)
-				{
-					// Far away the texture is finer than the sky box can show: it blends into its average
-					float sine = z / length;
-					float detail = Clamp(sine * sine / cloudfootprint);
-					if(detail > 0f)
-					{
-						float cr, cg, cb, ca;
-						float scale = pic.Width / CLOUD_TILE / z;
-						pic.Sample(x * scale, y * scale, true, out cr, out cg, out cb, out ca);
-						brightness += (cr / 255f - cloudmean) * detail;
-					}
-				}
-
-				r += sky.BaseColor.r * brightness;
-				g += sky.BaseColor.g * brightness;
-				b += sky.BaseColor.b * brightness;
-			}
-
-			// The fire burns from the horizon to the top of the screen of the game, in the low color
-			// at its foot and the high color at its top
-			private void Fire(float around, float tangent, ref float r, ref float g, ref float b)
-			{
-				float row = (SCREEN_TOP - tangent) / SCREEN_TOP * fire.Height;
-				float column = around / (4f * PIC_WIDTH) * FIRE_TILES * fire.Width;
-				float fr, fg, fb, fa;
-				fire.Sample(column, Math.Max(row, 0f), false, out fr, out fg, out fb, out fa);
-
-				float brightness = fr / 255f;
-				if(row < 0f) brightness *= 1f - Smooth(0f, EDGE_ROWS, -row);
-				if(tangent < 0f) brightness *= 1f - Smooth(0f, 0.2f, -tangent);
-
-				float low = Clamp(row / fire.Height);
-				r += (sky.HighColor.r + (sky.LowColor.r - sky.HighColor.r) * low) * brightness;
-				g += (sky.HighColor.g + (sky.LowColor.g - sky.HighColor.g) * low) * brightness;
-				b += (sky.HighColor.b + (sky.LowColor.b - sky.HighColor.b) * low) * brightness;
-			}
-
-			// A back picture stands in front of the sky. The sky shows through its transparent pixels.
-			// Below it, where the game never looks, is the color of its foot.
-			private void BackPicture(float around, float screenrow, ref float r, ref float g, ref float b)
-			{
-				float scale = backpic.Width / PIC_WIDTH;
-				float row = (screenrow - (BACKPIC_BOTTOM - backpic.Height)) * scale;
-				if(row <= 0f) return;
-
-				float pr, pg, pb, pa;
-				backpic.Sample((around + SCREEN_FOCAL) * scale, Math.Max(row, 0.5f), false, out pr, out pg, out pb, out pa);
-				pa *= Clamp(row);
-
-				if(row > backpic.Height)
-				{
-					float fade = Smooth(0f, EDGE_ROWS, row - backpic.Height);
-					pr += (groundr - pr) * fade; pg += (groundg - pg) * fade; pb += (groundb - pb) * fade;
-					pa += (1f - pa) * fade;
-				}
-
-				r += (pr - r) * pa; g += (pg - g) * pa; b += (pb - b) * pa;
-			}
-
-			private static float Clamp(float v) { return (v < 0f ? 0f : (v > 1f ? 1f : v)); }
-
-			private static float Smooth(float from, float to, float v)
-			{
-				float t = Clamp((v - from) / (to - from));
-				return t * t * (3f - 2f * t);
-			}
-
-			private static int ToByte(float v) { return (v <= 0f ? 0 : (v >= 255f ? 255 : (int)(v + 0.5f))); }
 		}
 
 		#endregion
