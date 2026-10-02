@@ -88,6 +88,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			// Load sector data
 			SectorData sd = mode.GetSectorData(Sidedef.Sector);
 			
+			// styd. Doom 64 does not draw a wall with the blank texture: the sky shows there
+			renderassky = General.Map.Data.IsSkyTexture(Sidedef.MiddleTexture);
+
 			// Texture given?
 			if(Sidedef.LongMiddleTexture != MapSet.EmptyLongName)
 			{

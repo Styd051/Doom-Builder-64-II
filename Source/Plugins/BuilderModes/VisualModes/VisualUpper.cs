@@ -225,10 +225,12 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		internal void UpdateSkyRenderFlag()
 		{
 			// styd. Doom 64 does not draw an upper part below the sky ceiling of the other sector,
-			// whatever the ceiling of this sector is: the sky shows there
+			// whatever the ceiling of this sector is, nor an upper part with the blank texture:
+			// the sky shows there
 			if(General.Map.DOOM64)
 			{
-				renderassky = (Sidedef.Other != null && Sidedef.Other.Sector != null
+				renderassky = General.Map.Data.IsSkyTexture(Sidedef.HighTexture)
+					|| (Sidedef.Other != null && Sidedef.Other.Sector != null
 					&& General.Map.Data.IsSkyFlat(Sidedef.Other.Sector.CeilTexture));
 				return;
 			}

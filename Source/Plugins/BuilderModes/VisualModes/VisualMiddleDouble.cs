@@ -75,8 +75,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			}
 
 			// styd: in Doom 64 the middle texture of a double sided line is only drawn with the
-			// "Render Mid-Texture" flag, exactly like ML_DRAWMASKED in R_WallPrep of the original engine
-			if(General.Map.DOOM64 && !Sidedef.Line.IsFlagSet("512"))
+			// "Render Mid-Texture" flag, exactly like ML_DRAWMASKED in R_WallPrep of the original engine.
+			// The blank texture is never drawn: the sectors behind show through
+			if(General.Map.DOOM64 && (!Sidedef.Line.IsFlagSet("512") || General.Map.Data.IsSkyTexture(Sidedef.MiddleTexture)))
 			{
 				base.SetVertices(null);
 				return false;

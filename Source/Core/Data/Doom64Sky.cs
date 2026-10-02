@@ -46,6 +46,10 @@ namespace CodeImp.DoomBuilder.Data
 		// Name of the lump with the fire texture. The game has this name built in.
 		public const string FIRE_PIC = "FIRE";
 
+		// Name of the wall texture that the game does not draw: it is its second texture, and the game
+		// has that number built in. The sky shows where a wall has this texture.
+		public const string BLANK_TEXTURE = "BLANK";
+
 		// The game draws a sky on a screen of 320x240 that shows 90 degrees: a pixel is 1/160 of the
 		// tangent of an angle, and the horizon is on row 120. A sky picture is 256 pixels wide for a
 		// quarter turn. See R_RenderSkyPic, R_RenderClouds and R_RenderFireSky in the game.

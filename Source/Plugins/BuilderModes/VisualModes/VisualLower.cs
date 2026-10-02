@@ -103,6 +103,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
             Vector2D toffset = new Vector2D(Sidedef.Fields.GetValue("offsetx_bottom", 0.0f),
 											Sidedef.Fields.GetValue("offsety_bottom", 0.0f));
 			
+			// styd. Doom 64 does not draw a lower part with the blank texture: the sky shows there
+			renderassky = General.Map.Data.IsSkyTexture(Sidedef.LowTexture);
+
 			// Texture given?
 			if(Sidedef.LongLowTexture != MapSet.EmptyLongName)
 			{

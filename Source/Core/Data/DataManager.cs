@@ -3429,6 +3429,14 @@ namespace CodeImp.DoomBuilder.Data
 			return (flatname == General.Map.Config.SkyFlatName);
 		}
 
+		// styd. This tells if a wall texture stands for the sky. Doom 64 does not draw a wall
+		// with its blank texture, so that the sky shows there.
+		public bool IsSkyTexture(string texturename)
+		{
+			return General.Map.DOOM64 && (doom64skies != null) && (doom64skies.Count > 0)
+				&& string.Equals(texturename, Doom64Sky.BLANK_TEXTURE, StringComparison.OrdinalIgnoreCase);
+		}
+
 		// styd. This loads the sky definitions of Doom 64 from the SKYDEFS lumps.
 		// A resource that is loaded later replaces the skies of the same name.
 		private void LoadDoom64Skies()
