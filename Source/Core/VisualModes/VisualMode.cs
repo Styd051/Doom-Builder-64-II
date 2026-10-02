@@ -823,8 +823,32 @@ namespace CodeImp.DoomBuilder.VisualModes
 			
 			// Now we do an accurate intersection test for all resulting geometry
 			// We keep only the closest hit!
+			// styd. In Doom 64 the sky is drawn behind the map and shows what is behind it,
+			// so the closest hit on such a sky is kept apart
+			bool skybehind = General.Map.DOOM64 && General.Settings.GZDrawSky;
+			bool wallocclusion = skybehind && General.Map.VisualCamera.IsInsideSector;
+			IVisualPickable skypicked = null;
+			float skyu = result.u_ray;
 			foreach(IVisualPickable p in potentialpicks)
 			{
+				VisualGeometry pg = (General.Map.DOOM64 ? (p as VisualGeometry) : null);
+				if(pg != null)
+				{
+					// What is not drawn cannot be aimed at
+					if((pg.GeometryType == VisualGeometryType.WALL_OCCLUSION) && !wallocclusion) continue;
+
+					if(skybehind && pg.RenderAsSkyBackground)
+					{
+						float su = skyu;
+						if(p.PickAccurate(from, to, direction, ref su) && (su > 0.0f) && (su < skyu))
+						{
+							skyu = su;
+							skypicked = p;
+						}
+						continue;
+					}
+				}
+
 				float u = result.u_ray;
 				if(p.PickAccurate(from, to, direction, ref u))
 				{
@@ -837,6 +861,23 @@ namespace CodeImp.DoomBuilder.VisualModes
 				}
 			}
 			
+			// styd. The sky is aimed at when there is nothing behind it, or something that looks like the
+			// sky itself. The part that only hides what is behind a wall is never aimed at.
+			if(General.Map.DOOM64)
+			{
+				VisualGeometry behind = (result.picked as VisualGeometry);
+				if((skypicked != null) && ((result.picked == null) || ((behind != null) && behind.RenderAsSky && (skyu < result.u_ray))))
+				{
+					result.picked = skypicked;
+					result.u_ray = skyu;
+				}
+				else if((behind != null) && (behind.GeometryType == VisualGeometryType.WALL_OCCLUSION))
+				{
+					result.picked = null;
+					result.u_ray = 1.0f;
+				}
+			}
+
 			// Setup final result
 			result.hitpos = from + to * result.u_ray;
 

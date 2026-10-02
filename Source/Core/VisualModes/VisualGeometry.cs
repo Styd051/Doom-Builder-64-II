@@ -93,6 +93,10 @@ namespace CodeImp.DoomBuilder.VisualModes
 		public float FogFactor { get { return fogfactor; } set { fogfactor = value; } }
 		public bool RenderAsSky { get { return renderassky; } }
 
+		// styd. In Doom 64 the sky is drawn behind the map: geometry that is drawn as sky shows what is
+		// behind it. Only a wall without another side hides what is behind it, as it does in the game.
+		public bool RenderAsSkyBackground { get { return renderassky && General.Map.DOOM64 && (geometrytype != VisualGeometryType.WALL_MIDDLE) && (geometrytype != VisualGeometryType.WALL_OCCLUSION); } }
+
 		/// <summary>
 		/// Render pass in which this geometry must be rendered. Default is Solid.
 		/// </summary>
@@ -293,5 +297,6 @@ namespace CodeImp.DoomBuilder.VisualModes
 		WALL_LOWER,
 		FOG_BOUNDARY,
 		UNKNOWN,
+		WALL_OCCLUSION, // styd. Doom 64: what a wall without another side hides above and below it
 	}
 }

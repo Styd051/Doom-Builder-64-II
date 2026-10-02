@@ -500,6 +500,7 @@
     <Compile Include="VisualModes\VisualMiddleSingle.cs" />
     <Compile Include="VisualModes\VisualSidedefParts.cs" />
     <Compile Include="VisualModes\VisualSwitchDecal.cs" />
+    <Compile Include="VisualModes\VisualWallOcclusion.cs" />
     <Compile Include="VisualModes\VisualUpper.cs" />
     <Compile Include="VisualModes\WallPolygon.cs" />
   </ItemGroup>

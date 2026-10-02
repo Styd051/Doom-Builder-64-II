@@ -380,9 +380,17 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					// Create middle part
 					VisualMiddleSingle vm = parts.middlesingle ?? new VisualMiddleSingle(mode, this, sd);
 					if(vm.Setup()) base.AddGeometry(vm);
-					
+
+					// styd: Doom 64. What this wall hides above and below it
+					VisualWallOcclusion vo = null;
+					if(VisualWallOcclusion.IsNeeded(sd))
+					{
+						vo = parts.occlusion ?? new VisualWallOcclusion(mode, this, sd);
+						if(vo.Setup()) base.AddGeometry(vo);
+					}
+
 					// Store
-					sides.Add(sd, new VisualSidedefParts(vm, vsw));
+					sides.Add(sd, new VisualSidedefParts(vm, vsw, vo));
 				}
 			}
 			

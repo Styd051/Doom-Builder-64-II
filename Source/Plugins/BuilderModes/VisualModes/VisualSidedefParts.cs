@@ -33,11 +33,13 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		public readonly List<VisualMiddleBack> middleback; //mxd
 		public readonly VisualFogBoundary fogboundary; //mxd
 		public readonly VisualSwitchDecal switchdecal; // styd. Doom 64 switch
+		public readonly VisualWallOcclusion occlusion; // styd. Doom 64: what a wall without another side hides
 		
 		// Constructor
 		public VisualSidedefParts(VisualUpper u, VisualLower l, VisualMiddleDouble m, VisualFogBoundary f, List<VisualMiddle3D> e, List<VisualMiddleBack> eb, VisualSwitchDecal sw)
 		{
 			this.switchdecal = sw; // styd
+			this.occlusion = null; // styd
 			this.upper = u;
 			this.lower = l;
 			this.middledouble = m;
@@ -48,9 +50,10 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		}
 		
 		// Constructor
-		public VisualSidedefParts(VisualMiddleSingle m, VisualSwitchDecal sw)
+		public VisualSidedefParts(VisualMiddleSingle m, VisualSwitchDecal sw, VisualWallOcclusion o)
 		{
 			this.switchdecal = sw; // styd
+			this.occlusion = o; // styd
 			this.upper = null;
 			this.lower = null;
 			this.middledouble = null;
@@ -69,6 +72,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			if(fogboundary != null) fogboundary.Setup(); //mxd
 			if(upper != null) upper.Setup();
 			if(switchdecal != null) switchdecal.Setup(); // styd
+			if(occlusion != null) occlusion.Setup(); // styd
 			if(middle3d != null)
 			{
 				foreach(VisualMiddle3D m in middle3d) m.Setup();

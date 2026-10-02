@@ -100,6 +100,12 @@ namespace CodeImp.DoomBuilder.Rendering
 		//mxd. Geometry to be rendered as skybox.
 		private List<VisualGeometry> skygeo;
 
+		// styd. Doom 64: geometry to be rendered as the sky behind the map, which hides nothing,
+		// and whether the walls without another side hide what is above and below them
+		private List<VisualGeometry> skybackgeo;
+		private bool wallocclusion;
+		private bool fogenabled;
+
 		//mxd. Solid things to be rendered (currently(?) there won't be any). Must be sorted by sector.
 		private Dictionary<ImageData, List<VisualThing>> solidthings;
 
@@ -340,6 +346,7 @@ namespace CodeImp.DoomBuilder.Rendering
 				graphics.Device.SetRenderState(RenderState.SourceBlend, Blend.SourceAlpha);
 				graphics.Device.SetRenderState(RenderState.DestinationBlend, Blend.InverseSourceAlpha);
 				graphics.Device.SetRenderState(RenderState.FogEnable, false);
+				fogenabled = false; // styd
 				graphics.Device.SetRenderState(RenderState.FogDensity, 1.0f);
 				graphics.Device.SetRenderState(RenderState.FogColor, General.Colors.Background.ToInt());
 				graphics.Device.SetRenderState(RenderState.FogStart, General.Settings.ViewDistance * FOG_RANGE);
@@ -398,6 +405,8 @@ namespace CodeImp.DoomBuilder.Rendering
 			maskedgeo = new Dictionary<ImageData, List<VisualGeometry>>(); //mxd
 			translucentgeo = new List<VisualGeometry>(); //mxd
 			skygeo = new List<VisualGeometry>(); //mxd
+			skybackgeo = new List<VisualGeometry>(); // styd
+			wallocclusion = General.Settings.GZDrawSky && General.Map.VisualCamera.IsInsideSector; // styd
 
 			solidthings = new Dictionary<ImageData, List<VisualThing>>(); //mxd
 			maskedthings = new Dictionary<ImageData, List<VisualThing>>(); //mxd
@@ -425,6 +434,22 @@ namespace CodeImp.DoomBuilder.Rendering
 			graphics.Device.SetRenderState(RenderState.TextureFactor, -1);
 			graphics.Shaders.World3D.Begin();
 
+			// styd. The sky of Doom 64 is the same however far its geometry is: the fog of the view
+			// distance is not for it
+			bool skywithoutfog = General.Map.DOOM64 && fogenabled;
+			if(skywithoutfog) graphics.Device.SetRenderState(RenderState.FogEnable, false);
+
+			// styd. The sky of Doom 64 is behind everything else: it leaves the depth as it is,
+			// so that all that is drawn after it shows, however far it is
+			if(skybackgeo.Count > 0)
+			{
+				world = Matrix.Identity;
+				ApplyMatrices3D();
+				graphics.Device.SetRenderState(RenderState.ZWriteEnable, false);
+				RenderSky(skybackgeo);
+				graphics.Device.SetRenderState(RenderState.ZWriteEnable, true);
+			}
+
 			//mxd. SKY PASS
 			if(skygeo.Count > 0)
 			{
@@ -432,6 +457,8 @@ namespace CodeImp.DoomBuilder.Rendering
 				ApplyMatrices3D();
 				RenderSky(skygeo);
 			}
+
+			if(skywithoutfog) graphics.Device.SetRenderState(RenderState.FogEnable, true); // styd
 
 			// SOLID PASS
 			world = Matrix.Identity;
@@ -548,6 +575,7 @@ namespace CodeImp.DoomBuilder.Rendering
 			maskedgeo = null;
 			translucentgeo = null;
 			skygeo = null;
+			skybackgeo = null; // styd
 
 			solidthings = null;
 			maskedthings = null;
@@ -2004,9 +2032,14 @@ namespace CodeImp.DoomBuilder.Rendering
 			// Must have a texture and vertices
 			if(g.Texture != null && g.Triangles > 0)
 			{
+				// styd. Doom 64: the part that goes on above and below a wall without another side only
+				// hides what is behind it, and only for a camera that is where a player could be
+				if((g.GeometryType == VisualGeometryType.WALL_OCCLUSION) && !wallocclusion) return;
+
 				if(g.RenderAsSky && General.Settings.GZDrawSky)
 				{
-					skygeo.Add(g);
+					if(g.RenderAsSkyBackground) skybackgeo.Add(g); // styd
+					else skygeo.Add(g);
 				}
 				else
 				{
@@ -2174,6 +2207,7 @@ namespace CodeImp.DoomBuilder.Rendering
 		public void SetFogMode(bool usefog)
 		{
 			graphics.Device.SetRenderState(RenderState.FogEnable, usefog);
+			fogenabled = usefog; // styd
 		}
 
 		// This siwtches crosshair busy icon on and off

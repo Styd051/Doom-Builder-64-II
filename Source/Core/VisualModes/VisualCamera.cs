@@ -42,6 +42,9 @@ namespace CodeImp.DoomBuilder.VisualModes
 		public Sector Sector { get { return sector; } internal set { sector = value; UpdateGravity(); } } //mxd
 		public Vector3D MoveMultiplier { get { return movemultiplier; } set { movemultiplier = value; } }
 		public float Gravity { get { return gravity; } } //mxd
+
+		// styd. This tells if the camera is where a player could be: in a sector, between its floor and its ceiling
+		public bool IsInsideSector { get { return (sector != null) && (position.z > sector.FloorHeight) && (position.z < sector.CeilHeight); } }
 		
 		#endregion
 
