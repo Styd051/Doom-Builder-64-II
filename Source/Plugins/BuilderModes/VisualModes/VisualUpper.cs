@@ -179,11 +179,14 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			tp.vrt = new Vector3D(tp.vrb.x, tp.vrb.y, tp.vlt.z);
 			
 			// Create initial polygon, which is just a quad between floor and ceiling
+			// styd. Doom 64 draws an upper part from the ceiling of its sector to the ceiling of the other
+			// sector, also where that is below the floor of its own sector (R_WallPrep, r_phase3.c)
+			bool d64 = General.Map.DOOM64;
 			WallPolygon poly = new WallPolygon();
-			poly.Add(new Vector3D(vl.x, vl.y, sd.Floor.plane.GetZ(vl)));
+			poly.Add(new Vector3D(vl.x, vl.y, d64 ? osd.Ceiling.plane.GetZ(vl) : sd.Floor.plane.GetZ(vl)));
 			poly.Add(new Vector3D(vl.x, vl.y, vlzc));
 			poly.Add(new Vector3D(vr.x, vr.y, vrzc));
-			poly.Add(new Vector3D(vr.x, vr.y, sd.Floor.plane.GetZ(vr)));
+			poly.Add(new Vector3D(vr.x, vr.y, d64 ? osd.Ceiling.plane.GetZ(vr) : sd.Floor.plane.GetZ(vr)));
 			
 			// Determine initial color
 			int lightlevel = lightabsolute ? lightvalue : sd.Ceiling.brightnessbelow + lightvalue;
@@ -206,7 +209,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				// Keep top and bottom planes for intersection testing
 				Vector2D linecenter = Sidedef.Line.GetCenterPoint(); //mxd. Our sector's floor can be higher than the other sector's ceiling!
 				top = sd.Ceiling.plane;
-				bottom = (osd.Ceiling.plane.GetZ(linecenter) > sd.Floor.plane.GetZ(linecenter) ? osd.Ceiling.plane : sd.Floor.plane);
+				bottom = ((d64 || osd.Ceiling.plane.GetZ(linecenter) > sd.Floor.plane.GetZ(linecenter)) ? osd.Ceiling.plane : sd.Floor.plane);
 				
 				// Process the polygon and create vertices
 				List<WorldVertex> verts = CreatePolygonVertices(polygons, tp, sd, lightvalue, lightabsolute);

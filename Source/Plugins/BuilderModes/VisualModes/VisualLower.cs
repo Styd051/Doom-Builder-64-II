@@ -186,10 +186,14 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			tp.vrt = new Vector3D(tp.vrb.x, tp.vrb.y, tp.vlt.z);
 			
 			// Create initial polygon, which is just a quad between floor and ceiling
+			// styd. Doom 64 draws a lower part from the floor of its sector to the floor of the other
+			// sector, also where that is above the ceiling of its own sector (R_WallPrep, r_phase3.c).
+			// This is how a tower that is higher than the sky around it is made.
+			bool d64 = General.Map.DOOM64;
 			WallPolygon poly = new WallPolygon();
 			poly.Add(new Vector3D(vl.x, vl.y, vlzf));
-			poly.Add(new Vector3D(vl.x, vl.y, sd.Ceiling.plane.GetZ(vl)));
-			poly.Add(new Vector3D(vr.x, vr.y, sd.Ceiling.plane.GetZ(vr)));
+			poly.Add(new Vector3D(vl.x, vl.y, d64 ? ovlzf : sd.Ceiling.plane.GetZ(vl)));
+			poly.Add(new Vector3D(vr.x, vr.y, d64 ? ovrzf : sd.Ceiling.plane.GetZ(vr)));
 			poly.Add(new Vector3D(vr.x, vr.y, vrzf));
 			
 			// Determine initial color
@@ -205,7 +209,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			CropPoly(ref poly, osd.Floor.plane, false);
 
 			//INFO: Makes sence only when ceiling plane is lower than floor plane. Also ZDoom clips ceiling instead here.
-			if(ovlzf > osd.Ceiling.plane.GetZ(vl) || ovrzf > osd.Ceiling.plane.GetZ(vr))
+			if(!d64 && (ovlzf > osd.Ceiling.plane.GetZ(vl) || ovrzf > osd.Ceiling.plane.GetZ(vr)))
 				CropPoly(ref poly, osd.Ceiling.plane, true);
 
 			// Cut out pieces that overlap 3D floors in this sector
@@ -216,7 +220,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			{
 				// Keep top and bottom planes for intersection testing
 				Vector2D linecenter = Sidedef.Line.GetCenterPoint(); //mxd. Our sector's ceiling can be lower than the other sector's floor!
-				top = (osd.Floor.plane.GetZ(linecenter) < sd.Ceiling.plane.GetZ(linecenter) ? osd.Floor.plane : sd.Ceiling.plane);
+				top = ((d64 || osd.Floor.plane.GetZ(linecenter) < sd.Ceiling.plane.GetZ(linecenter)) ? osd.Floor.plane : sd.Ceiling.plane);
 				bottom = sd.Floor.plane;
 				
 				// Process the polygon and create vertices
