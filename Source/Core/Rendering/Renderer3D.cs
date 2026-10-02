@@ -2034,8 +2034,12 @@ namespace CodeImp.DoomBuilder.Rendering
 				int pass = (l.Clouds ? SHADERPASS_DOOM64_SKY_CLOUDS : (l.Smooth ? SHADERPASS_DOOM64_SKY_SMOOTH : SHADERPASS_DOOM64_SKY_PICTURE));
 
 				// A picture scrolls by its width in a quarter turn and the middle of the screen of
-				// the game is its column 160; the clouds scroll three times in a full turn
-				float scroll = (l.Clouds ? -turn * Doom64Sky.CLOUD_TURN : Doom64Sky.SCREEN_FOCAL - turn * 4f * Doom64Sky.PIC_WIDTH);
+				// the game is its column 160; the clouds scroll three times in a full turn, and drift
+				float scroll = (l.Clouds ? l.ScrollS - turn * Doom64Sky.CLOUD_TURN : Doom64Sky.SCREEN_FOCAL - turn * 4f * Doom64Sky.PIC_WIDTH);
+
+				// Lightning makes the colors of the clouds brighter
+				Color4 top = new Color4(1f, l.TopColor.Red + l.Flash, l.TopColor.Green + l.Flash, l.TopColor.Blue + l.Flash);
+				Color4 bottom = new Color4(1f, l.BottomColor.Red + l.Flash, l.BottomColor.Green + l.Flash, l.BottomColor.Blue + l.Flash);
 
 				// A layer in front only covers what its picture covers
 				graphics.Device.SetRenderState(RenderState.AlphaTestEnable, !l.Back);
@@ -2044,8 +2048,8 @@ namespace CodeImp.DoomBuilder.Rendering
 				graphics.Shaders.World3D.Texture1 = l.Texture;
 				graphics.Shaders.World3D.Doom64Sky = new Vector4(scalex, scaley, pitch * Doom64Sky.SCREEN_FOCAL, scroll);
 				graphics.Shaders.World3D.Doom64SkyPicture = new Vector4(l.Width, l.Top, l.Height, l.HalfRow);
-				graphics.Shaders.World3D.Doom64SkyMode = new Vector4((l.Back ? 1f : 0f), (l.Mirrored ? 1f : 0f), 0f, 0f);
-				graphics.Shaders.World3D.SetDoom64SkyColors(l.TopColor, l.BottomColor, l.BaseColor);
+				graphics.Shaders.World3D.Doom64SkyMode = new Vector4((l.Back ? 1f : 0f), (l.Mirrored ? 1f : 0f), l.ScrollT, 0f);
+				graphics.Shaders.World3D.SetDoom64SkyColors(top, bottom, l.BaseColor);
 
 				VisualSector sector = null;
 				foreach(VisualGeometry g in geo)

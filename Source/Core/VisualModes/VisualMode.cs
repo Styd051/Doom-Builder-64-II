@@ -1168,6 +1168,9 @@ namespace CodeImp.DoomBuilder.VisualModes
 			
 			// Apply new camera matrices
 			renderer.PositionAndLookAt(General.Map.VisualCamera.Position, General.Map.VisualCamera.Target);
+
+			// styd. The sky of Doom 64 moves with the time, and its clouds with the direction of the view
+			if(General.Map.DOOM64) General.Map.Data.AnimateDoom64Sky(deltatime, (float)Math.Atan2(camvec.y, camvec.x));
 			
 			// Visibility culling
 			DoCulling();

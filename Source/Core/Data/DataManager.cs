@@ -133,6 +133,7 @@ namespace CodeImp.DoomBuilder.Data
 		private Dictionary<string, Doom64SkyDef> doom64skies; // The skies of the SKYDEFS lumps, by the name of their flat
 		private string doom64skyname; // The sky that the layers show, or null when they must be made
 		private List<Doom64SkyLayer> doom64skylayers; // What the visual mode draws for the sky, from the back to the front
+		private Doom64SkyAnimation doom64skyanimation; // What moves in these layers
 
 		//mxd. Comment icons
 		private ImageData[] commenttextures;
@@ -326,6 +327,7 @@ namespace CodeImp.DoomBuilder.Data
 				}
 				Doom64Sky.DisposeLayers(doom64skylayers); // styd
 				doom64skylayers = null;
+				doom64skyanimation = null;
 				
 				// Done
 				isdisposed = true;
@@ -3343,6 +3345,7 @@ namespace CodeImp.DoomBuilder.Data
 				Doom64Sky.DisposeLayers(doom64skylayers);
 				doom64skylayers = null;
 				doom64skyname = null;
+				doom64skyanimation = null;
 				return;
 			}
 
@@ -3495,6 +3498,20 @@ namespace CodeImp.DoomBuilder.Data
 
 			Doom64Sky.DisposeLayers(doom64skylayers);
 			doom64skylayers = Doom64Sky.MakeLayers(General.Map.Graphics.Device, sky, pic, backpic, fire);
+			doom64skyanimation = new Doom64SkyAnimation(doom64skylayers);
+		}
+
+		// styd. This lets the time of the sky of a Doom 64 map go by, when the sky is set to move.
+		// The angle is the direction of the view in the map. A sky that is set not to move is put
+		// back as it was.
+		internal void AnimateDoom64Sky(long milliseconds, float angle)
+		{
+			if(doom64skyanimation == null) return;
+
+			if(General.Settings.Doom64AnimateSky && General.Settings.GZDrawSky)
+				doom64skyanimation.Advance(milliseconds, angle);
+			else if(doom64skyanimation.Moved && !General.Settings.Doom64AnimateSky)
+				doom64skyanimation.Reset();
 		}
 
 		// styd. This gives the fog of a Doom 64 map. The game takes it from the sky of the map,

@@ -1323,6 +1323,7 @@
     <None Include="Resources\ScriptError.png" />
     <None Include="Resources\ScriptConstant.png" />
     <None Include="Resources\Sky.png" />
+    <None Include="Resources\SkyAnimated.png" />
     <None Include="Resources\Update.png" />
     <None Include="Resources\Reload.png" />
     <None Include="Resources\Preferences.png" />

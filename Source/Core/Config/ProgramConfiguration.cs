@@ -119,6 +119,7 @@ namespace CodeImp.DoomBuilder.Config
 		private LightRenderMode gzDrawLightsMode;
 		private bool gzDrawFog;
 		private bool gzDrawSky;
+		private bool doom64AnimateSky; // styd
 		private bool gzToolbarGZDoom;
 		private bool gzSynchCameras;
 		private bool gzShowEventLines;
@@ -240,6 +241,7 @@ namespace CodeImp.DoomBuilder.Config
 		public LightRenderMode GZDrawLightsMode { get { return gzDrawLightsMode; } internal set { gzDrawLightsMode = value; } }
 		public bool GZDrawFog { get { return gzDrawFog; } internal set { gzDrawFog = value; } }
 		public bool GZDrawSky { get { return gzDrawSky; } internal set { gzDrawSky = value; } }
+		public bool Doom64AnimateSky { get { return doom64AnimateSky; } internal set { doom64AnimateSky = value; } } // styd
 		public bool GZToolbarGZDoom { get { return gzToolbarGZDoom; } internal set { gzToolbarGZDoom = value; } }
 		public bool GZSynchCameras { get { return gzSynchCameras; } internal set { gzSynchCameras = value; } }
 		public bool GZShowEventLines { get { return gzShowEventLines; } internal set { gzShowEventLines = value; } }
@@ -371,6 +373,7 @@ namespace CodeImp.DoomBuilder.Config
 				gzDrawLightsMode = (LightRenderMode)cfg.ReadSetting("gzdrawlights", (int)LightRenderMode.ALL);
 				gzDrawFog = cfg.ReadSetting("gzdrawfog", false);
 				gzDrawSky = cfg.ReadSetting("gzdrawsky", true);
+				doom64AnimateSky = cfg.ReadSetting("doom64animatesky", false); // styd
 				gzToolbarGZDoom = cfg.ReadSetting("gztoolbargzdoom", true);
 				gzSynchCameras = cfg.ReadSetting("gzsynchcameras", true);
 				gzShowEventLines = cfg.ReadSetting("gzshoweventlines", true);
@@ -483,6 +486,7 @@ namespace CodeImp.DoomBuilder.Config
 			cfg.WriteSetting("gzdrawlights", (int)gzDrawLightsMode);
 			cfg.WriteSetting("gzdrawfog", gzDrawFog);
 			cfg.WriteSetting("gzdrawsky", gzDrawSky);
+			cfg.WriteSetting("doom64animatesky", doom64AnimateSky); // styd
 			cfg.WriteSetting("gzsynchcameras", gzSynchCameras);
 			cfg.WriteSetting("gzshoweventlines", gzShowEventLines);
 			cfg.WriteSetting("gzoldhighlightmode", gzOldHighlightMode);

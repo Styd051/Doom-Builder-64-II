@@ -81,7 +81,8 @@ float4 doom64sky;
 // screen row of the game at its top, w is half a row of its texture.
 float4 doom64skypic;
 // x is 1 for the layer at the back, which is black where it has no picture and goes on above its
-// top; y is 1 when it goes on mirrored, 0 when its top row goes on.
+// top; y is 1 when it goes on mirrored, 0 when its top row goes on; z is how far the clouds have
+// scrolled in depth.
 float4 doom64skymode;
 // The colors at the top and at the bottom of a layer, and the color of the clouds
 float4 doom64skytop;
@@ -431,7 +432,7 @@ float4 ps_doom64skyclouds(Doom64SkyPixelData pd) : COLOR
 	float up = max(y, 0.0f);
 	float v = (120.0f - up) / (120.0f + 0.875f * up);
 	float u = 0.5f + (1.0f + 0.875f * v) * x / 600.0f;
-	float cloud = tex2D(doom64skysmoothsamp, float2(u * 1.5f + doom64sky.w, v * 2.0f)).r;
+	float cloud = tex2D(doom64skysmoothsamp, float2(u * 1.5f + doom64sky.w, v * 2.0f + doom64skymode.z)).r;
 	float3 color = doom64skybase.rgb * cloud + lerp(doom64skytop.rgb, doom64skybottom.rgb, saturate(1.0f - y / 120.0f));
 
 	// Nothing is drawn below the horizon

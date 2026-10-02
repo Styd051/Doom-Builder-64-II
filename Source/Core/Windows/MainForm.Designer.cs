@@ -193,6 +193,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemallmdl = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemtogglefog = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemtogglesky = new System.Windows.Forms.ToolStripMenuItem();
+			this.itemtoggleskyanimation = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemtoggleeventlines = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemtogglevisualverts = new System.Windows.Forms.ToolStripMenuItem();
 			this.buttonfullbrightness = new System.Windows.Forms.ToolStripButton();
@@ -229,6 +230,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.modelsshowall = new System.Windows.Forms.ToolStripMenuItem();
 			this.buttontogglefog = new System.Windows.Forms.ToolStripButton();
 			this.buttontogglesky = new System.Windows.Forms.ToolStripButton();
+			this.buttontoggleskyanimation = new System.Windows.Forms.ToolStripButton();
 			this.buttontoggleeventlines = new System.Windows.Forms.ToolStripButton();
 			this.buttontogglevisualvertices = new System.Windows.Forms.ToolStripButton();
 			this.separatorgzmodes = new System.Windows.Forms.ToolStripSeparator();
@@ -806,6 +808,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemmodelmodes,
 			this.itemtogglefog,
 			this.itemtogglesky,
+			this.itemtoggleskyanimation,
 			this.itemtoggleeventlines,
 			this.itemtogglevisualverts,
 			this.separatorhelpers,
@@ -1424,6 +1427,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.modelrendermode,
 			this.buttontogglefog,
 			this.buttontogglesky,
+			this.buttontoggleskyanimation,
 			this.buttontoggleeventlines,
 			this.buttontogglevisualvertices,
 			this.separatorgzmodes,
@@ -1825,6 +1829,16 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemtogglesky.Tag = "builder_gztogglesky";
 			this.itemtogglesky.Text = "Render sky (Visual mode)";
 			this.itemtogglesky.Click += new System.EventHandler(this.InvokeTaggedAction);
+			//
+			// itemtoggleskyanimation
+			//
+			this.itemtoggleskyanimation.CheckOnClick = true;
+			this.itemtoggleskyanimation.Image = global::CodeImp.DoomBuilder.Properties.Resources.SkyAnimated;
+			this.itemtoggleskyanimation.Name = "itemtoggleskyanimation";
+			this.itemtoggleskyanimation.Size = new System.Drawing.Size(273, 22);
+			this.itemtoggleskyanimation.Tag = "builder_doom64toggleskyanimation";
+			this.itemtoggleskyanimation.Text = "Animate sky (Visual mode)";
+			this.itemtoggleskyanimation.Click += new System.EventHandler(this.InvokeTaggedAction);
 			// 
 			// itemeventlines
 			// 
@@ -2234,6 +2248,18 @@ namespace CodeImp.DoomBuilder.Windows
 			this.buttontogglesky.Tag = "builder_gztogglesky";
 			this.buttontogglesky.Text = "Render Sky (Visual mode)";
 			this.buttontogglesky.Click += new System.EventHandler(this.InvokeTaggedAction);
+			//
+			// buttontoggleskyanimation
+			//
+			this.buttontoggleskyanimation.CheckOnClick = true;
+			this.buttontoggleskyanimation.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+			this.buttontoggleskyanimation.Image = global::CodeImp.DoomBuilder.Properties.Resources.SkyAnimated;
+			this.buttontoggleskyanimation.ImageTransparentColor = System.Drawing.Color.Magenta;
+			this.buttontoggleskyanimation.Name = "buttontoggleskyanimation";
+			this.buttontoggleskyanimation.Size = new System.Drawing.Size(23, 20);
+			this.buttontoggleskyanimation.Tag = "builder_doom64toggleskyanimation";
+			this.buttontoggleskyanimation.Text = "Animate Sky (Visual mode)";
+			this.buttontoggleskyanimation.Click += new System.EventHandler(this.InvokeTaggedAction);
 			// 
 			// buttontoggleeventlines
 			// 
@@ -3083,6 +3109,7 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.ToolStripSeparator seperatorgeometry;
 		private System.Windows.Forms.ToolStripButton buttontogglefog;
 		private System.Windows.Forms.ToolStripButton buttontogglesky;
+		private System.Windows.Forms.ToolStripButton buttontoggleskyanimation;
 		private System.Windows.Forms.ToolStripStatusLabel warnsLabel;
 		private System.Windows.Forms.ToolStripMenuItem itemReloadModedef;
 		private System.Windows.Forms.ToolStripMenuItem itemReloadGldefs;
@@ -3142,6 +3169,7 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.ToolStripMenuItem itemallmdl;
 		private System.Windows.Forms.ToolStripMenuItem itemtogglefog;
 		private System.Windows.Forms.ToolStripMenuItem itemtogglesky;
+		private System.Windows.Forms.ToolStripMenuItem itemtoggleskyanimation;
 		private System.Windows.Forms.ToolStripMenuItem itemtoggleeventlines;
 		private System.Windows.Forms.ToolStripMenuItem itemtogglevisualverts;
 		private ToolStripMenuItem itemimport;

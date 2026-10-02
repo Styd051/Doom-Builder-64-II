@@ -2104,6 +2104,7 @@ namespace CodeImp.DoomBuilder.Windows
 			dynamiclightmode.Visible = General.Settings.GZToolbarGZDoom && maploaded;
 			buttontogglefog.Visible = General.Settings.GZToolbarGZDoom && maploaded;
 			buttontogglesky.Visible = General.Settings.GZToolbarGZDoom && maploaded;
+			buttontoggleskyanimation.Visible = General.Settings.GZToolbarGZDoom && maploaded && General.Map.DOOM64; // styd
 			buttontoggleeventlines.Visible = General.Settings.GZToolbarGZDoom && maploaded;
 			buttontogglevisualvertices.Visible = General.Settings.GZToolbarGZDoom && maploaded && General.Map.UDMF;
 			separatorgzmodes.Visible = General.Settings.GZToolbarGZDoom && maploaded;
@@ -2264,6 +2265,8 @@ namespace CodeImp.DoomBuilder.Windows
 				
 				buttontogglefog.Checked = General.Settings.GZDrawFog;
 				buttontogglesky.Checked = General.Settings.GZDrawSky;
+				buttontoggleskyanimation.Visible = General.Map.DOOM64; // styd
+				buttontoggleskyanimation.Checked = General.Settings.Doom64AnimateSky; // styd
 				buttontoggleeventlines.Checked = General.Settings.GZShowEventLines;
 				buttontogglevisualvertices.Visible = General.Map.UDMF;
 				buttontogglevisualvertices.Checked = General.Settings.GZShowVisualVertices;
@@ -3055,6 +3058,8 @@ namespace CodeImp.DoomBuilder.Windows
 			itemviewceilingcolor.Visible = (General.Map != null && General.Map.DOOM64); // villsa
 			itemviewthingcolor.Visible = (General.Map != null && General.Map.DOOM64); // villsa
 			itemtogglesky.Checked = General.Settings.GZDrawSky;
+			itemtoggleskyanimation.Visible = (General.Map != null && General.Map.DOOM64); // styd
+			itemtoggleskyanimation.Checked = General.Settings.Doom64AnimateSky; // styd
 			itemtoggleeventlines.Checked = General.Settings.GZShowEventLines;
 			itemtogglevisualverts.Visible = (General.Map != null && General.Map.UDMF);
 			itemtogglevisualverts.Checked = General.Settings.GZShowVisualVertices;
@@ -3125,6 +3130,20 @@ namespace CodeImp.DoomBuilder.Windows
 			buttontogglesky.Checked = General.Settings.GZDrawSky;
 
 			General.MainWindow.DisplayStatus(StatusType.Action, "Sky rendering is " + (General.Settings.GZDrawSky ? "ENABLED" : "DISABLED"));
+			General.MainWindow.RedrawDisplay();
+			General.MainWindow.UpdateGZDoomPanel();
+		}
+
+		// styd. The sky of Doom 64 moves in visual mode, or stays as it is
+		[BeginAction("doom64toggleskyanimation")]
+		internal void ToggleSkyAnimation()
+		{
+			General.Settings.Doom64AnimateSky = !General.Settings.Doom64AnimateSky;
+
+			itemtoggleskyanimation.Checked = General.Settings.Doom64AnimateSky;
+			buttontoggleskyanimation.Checked = General.Settings.Doom64AnimateSky;
+
+			General.MainWindow.DisplayStatus(StatusType.Action, "Sky animation is " + (General.Settings.Doom64AnimateSky ? "ENABLED" : "DISABLED"));
 			General.MainWindow.RedrawDisplay();
 			General.MainWindow.UpdateGZDoomPanel();
 		}
