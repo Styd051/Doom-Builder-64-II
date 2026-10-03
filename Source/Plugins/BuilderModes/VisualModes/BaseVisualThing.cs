@@ -301,8 +301,21 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				// villsa. Cameras and triggers are shown at full brightness
 				if((Thing.Type == 0) || (Thing.Type == 89)) sectorcolor = new PixelColor(alpha, 255, 255, 255).ToInt();
 
-				// styd: things with the Nightmare flag are shown in green
-				if(Thing.IsFlagSet("4096")) sectorcolor = new PixelColor(alpha, 64, 255, 0).ToInt();
+				// styd. A thing with the Nightmare flag is green and lets show what is behind it, as
+				// Doom64 EX and the remaster draw it: its color is this green whatever the light of
+				// its sector (R_GenerateSpritePlane) and it is blended with its own colors
+				// (DL_ProcessDrawList), which the renderer does for a thing marked this way
+				bool nightmare = Thing.IsFlagSet("4096");
+				if(nightmare)
+				{
+					sectorcolor = new PixelColor(255, 64, 255, 0).ToInt();
+					RenderPass = RenderPass.Alpha;
+				}
+				else if(doom64nightmare && (Thing.Sector == null))
+				{
+					RenderPass = RenderPass.Mask;
+				}
+				doom64nightmare = nightmare;
             }
 
             //mxd. Create verts for all sprite angles

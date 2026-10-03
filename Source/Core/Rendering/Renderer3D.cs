@@ -1321,6 +1321,7 @@ namespace CodeImp.DoomBuilder.Rendering
 				curtexturename = 0;
 				Color4 vertexcolor = new Color4();
 				fogfactor = -1;
+				bool nightmare = false; // styd
 
 				// Render things collected
 				foreach(VisualThing t in thingspass)
@@ -1352,6 +1353,18 @@ namespace CodeImp.DoomBuilder.Rendering
 						currentpass = t.RenderPass;
 					}
 
+					// styd. Doom 64: a thing with the Nightmare flag is blended with its own colors,
+					// as Doom64 EX does (DL_ProcessDrawList): where its color is dark, what is behind
+					// it shows. The pixels that its picture leaves out are not drawn.
+					if(t.Doom64Nightmare != nightmare)
+					{
+						nightmare = t.Doom64Nightmare;
+						graphics.Device.SetRenderState(RenderState.SourceBlend, (nightmare ? Blend.SourceColor : Blend.SourceAlpha));
+						graphics.Device.SetRenderState(RenderState.DestinationBlend, (nightmare ? Blend.InverseSourceColor
+							: (t.RenderPass == RenderPass.Additive ? Blend.One : Blend.InverseSourceAlpha)));
+						graphics.Device.SetRenderState(RenderState.AlphaTestEnable, nightmare);
+					}
+
 					// Change texture?
 					if(t.Texture.LongName != curtexturename)
 					{
@@ -1379,6 +1392,10 @@ namespace CodeImp.DoomBuilder.Rendering
 						//mxd. if fog is enagled, switch to shader, which calculates it
 						if(General.Settings.GZDrawFog && !fullbrightness && t.Thing.Sector != null && (doom64fog || t.Thing.Sector.FogMode != SectorFogMode.NONE)) // styd
 							wantedshaderpass += 8;
+
+						// styd. The green of a Doom 64 thing with the Nightmare flag is not a light:
+						// it stays when everything is shown at full brightness
+						if(t.Doom64Nightmare && fullbrightness) wantedshaderpass -= 1;
 
 						//mxd. Create the matrix for positioning
 						world = CreateThingPositionMatrix(t);
@@ -1445,6 +1462,14 @@ namespace CodeImp.DoomBuilder.Rendering
 						// Render!
 						graphics.Device.DrawPrimitives(PrimitiveType.TriangleList, 0, t.Triangles);
 					}
+				}
+
+				// styd. Back to the blending of this pass
+				if(nightmare)
+				{
+					graphics.Device.SetRenderState(RenderState.SourceBlend, Blend.SourceAlpha);
+					graphics.Device.SetRenderState(RenderState.DestinationBlend, Blend.InverseSourceAlpha);
+					graphics.Device.SetRenderState(RenderState.AlphaTestEnable, false);
 				}
 
                 // [ZZ] check if we want stencil

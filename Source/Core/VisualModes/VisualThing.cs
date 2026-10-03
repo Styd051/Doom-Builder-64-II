@@ -100,6 +100,9 @@ namespace CodeImp.DoomBuilder.VisualModes
 
         // [ZZ]
         protected PixelColor stencilColor;
+
+		// styd. Doom 64: the thing has the Nightmare flag, which has a way of its own to be drawn
+		protected bool doom64nightmare;
 		
 		#endregion
 		
@@ -141,6 +144,9 @@ namespace CodeImp.DoomBuilder.VisualModes
 
         // [ZZ]
         public PixelColor StencilColor { get { return stencilColor; } }
+
+		// styd
+		public bool Doom64Nightmare { get { return doom64nightmare; } }
 
         // [ZZ] this is used for spotlights
         public Vector3 VectorLookAt
