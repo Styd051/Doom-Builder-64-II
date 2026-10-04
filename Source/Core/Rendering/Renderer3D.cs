@@ -291,12 +291,15 @@ namespace CodeImp.DoomBuilder.Rendering
 			
 			// styd. In Doom 64 the field of view is the one of a screen of 4 by 3, as in the game
 			// (guFrustum(-8, 8, -6, 6, ...) in R_Init for 90 degrees). A window of another shape
-			// keeps this view over its height and shows more or less of the sides.
+			// keeps this view over its height and shows more or less of the sides. The game has
+			// square pixels; the stretched view of the preferences makes everything taller here
+			// as it does in the other map formats, and leaves the width of the view as it is.
 			if(General.Map.DOOM64)
 			{
+				float stretch = (General.Settings.GZStretchView ? General.Map.Data.VerticalViewStretch : 1.0f);
 				float tany = (float)Math.Tan(fov / 2.0f) * DOOM64_SCREEN_HEIGHT / DOOM64_SCREEN_WIDTH;
-				fovy = (float)Math.Atan(tany) * 2.0f;
-				doom64fovx = Math.Min((float)Math.Atan(tany * aspect) * 2.0f, DOOM64_MAX_FOV);
+				fovy = (float)Math.Atan(tany / stretch) * 2.0f;
+				doom64fovx = Math.Min((float)Math.Atan(tany * aspect / stretch) * 2.0f, DOOM64_MAX_FOV);
 			}
 
 			// Make the projection matrix

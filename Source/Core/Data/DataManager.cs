@@ -224,9 +224,6 @@ namespace CodeImp.DoomBuilder.Data
         {
             get
             {
-                // styd. The pixels of Doom 64 are square: guFrustum(-8, 8, -6, 6, ...) in R_Init
-                if ((General.Map != null) && General.Map.DOOM64)
-                    return 1.0f;
                 if (mapinfo == null)
                     return DOOM_PIXEL_RATIO;
                 return mapinfo.PixelRatio;
