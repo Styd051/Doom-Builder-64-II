@@ -2063,12 +2063,12 @@ namespace CodeImp.DoomBuilder.Rendering
 
 				// A picture scrolls by its width in a quarter turn and starts at the left edge of
 				// the view, which is column 160 at the middle of the screen of the game and more on
-				// a wider view; the clouds scroll three times in a full turn, and drift
-				float scroll = (l.Clouds ? l.ScrollS - turn * Doom64Sky.CLOUD_TURN : scalex - turn * 4f * l.Turn);
+				// a wider view; the clouds scroll twice in a full turn, and drift
+				float scroll = (l.Clouds ? turn * Doom64Sky.CLOUD_TURN - l.ScrollS : scalex - turn * 4f * l.Turn);
 
-				// Lightning makes the colors of the clouds brighter
-				Color4 top = new Color4(1f, l.TopColor.Red + l.Flash, l.TopColor.Green + l.Flash, l.TopColor.Blue + l.Flash);
-				Color4 bottom = new Color4(1f, l.BottomColor.Red + l.Flash, l.BottomColor.Green + l.Flash, l.BottomColor.Blue + l.Flash);
+				// The colors of the sky behind the clouds, which the lightning makes brighter
+				Color4 top = (l.Clouds ? Doom64Sky.Doubled(l.High) : l.TopColor);
+				Color4 bottom = (l.Clouds ? Doom64Sky.Doubled(l.Low) : l.BottomColor);
 
 				// A layer in front only covers what its picture covers, as much as its pixels are opaque
 				graphics.Device.SetRenderState(RenderState.AlphaBlendEnable, !l.Back);
@@ -2078,8 +2078,8 @@ namespace CodeImp.DoomBuilder.Rendering
 				graphics.Shaders.World3D.BeginPass(pass);
 				graphics.Shaders.World3D.Texture1 = l.Texture;
 				graphics.Shaders.World3D.Doom64Sky = new Vector4(scalex, scaley, pitch * Doom64Sky.SCREEN_FOCAL, scroll);
-				graphics.Shaders.World3D.Doom64SkyPicture = new Vector4(l.Width, l.Top, l.Height, l.HalfRow);
-				graphics.Shaders.World3D.Doom64SkyMode = new Vector4((l.Back ? 1f : 0f), (l.Mirrored ? 1f : 0f), l.ScrollT, (l.Solid ? 1f : 0f));
+				graphics.Shaders.World3D.Doom64SkyPicture = (l.Clouds ? new Vector4(scalex / scaley, Doom64Sky.CLOUD_OPACITY, 0f, 0f) : new Vector4(l.Width, l.Top, l.Height, l.HalfRow));
+				graphics.Shaders.World3D.Doom64SkyMode = new Vector4((l.Back ? 1f : 0f), (l.Mirrored ? 1f : 0f), (l.Clouds ? l.ScrollT : l.VStart), (l.Solid ? 1f : 0f));
 				graphics.Shaders.World3D.SetDoom64SkyColors(top, bottom, l.BaseColor);
 
 				VisualSector sector = null;

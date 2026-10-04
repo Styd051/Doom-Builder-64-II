@@ -40,7 +40,7 @@ namespace CodeImp.DoomBuilder.Data
 	{
 		public Texture Texture;
 		public bool Clouds;			// The clouds of the game; a picture otherwise
-		public bool Smooth;			// The picture is filtered, as the fire of the game is
+		public bool Smooth;			// The picture is filtered, as the game filters its pictures and its fire
 		public bool Back;			// The layer at the back: it is black where it has no picture
 		public bool Mirrored;		// Above its top the picture goes on mirrored; otherwise it ends there
 		public bool Solid;			// A rectangle that hides what is behind it, above its top too, as the fire does
@@ -49,6 +49,7 @@ namespace CodeImp.DoomBuilder.Data
 		public float Turn;			// Screen pixels of the game that the picture scrolls by in a quarter turn
 		public float Top;			// Screen row of the game at the top of the picture
 		public float HalfRow = 0.5f;	// Half a row of the texture, in the height of the texture
+		public float VStart;		// Where the texture starts at the top of the picture, in its height
 		public Color4 TopColor;		// Color at the top of the layer
 		public Color4 BottomColor;	// Color at the bottom of the layer
 		public Color4 BaseColor;	// Color of the clouds
@@ -58,22 +59,22 @@ namespace CodeImp.DoomBuilder.Data
 		public byte[] Fire;			// The pixels of the fire, when this is a fire that can burn
 		public float ScrollS;		// How far the clouds have drifted, in widths of their texture
 		public float ScrollT;		// The same in depth
-		public float Flash;			// What a flash of lightning adds to the colors of the clouds
+		public PixelColor High;		// The color of the sky at the top of the clouds, as the lightning leaves it
+		public PixelColor Low;		// The same at the horizon
 	}
 
 	// styd. What moves in a Doom 64 sky: the clouds drift, lightning flashes in them and the fire
-	// burns. This plays the steps of the game, which draws 30 images in a second.
+	// burns. This plays the steps of the remaster of the game, which makes 30 of them in a second.
 	internal sealed class Doom64SkyAnimation
 	{
 		private const float STEP_TIME = 1000f / 30f;	// Milliseconds of a step
 		private const int MAX_STEPS = 8;				// Steps in one go, after a long wait
 		private const int VBLS_IN_STEP = 2;				// Sixtieths of a second in a step
 		private const int CLOUD_WRAP = 16384;			// The offsets of the clouds go around
-		private const float CLOUD_S = 0.75f / 2048f;	// Widths of the cloud texture in one unit of its offset: gSPTexture(768 << 6, ...) on 64 pixels of 32 units
-		private const float CLOUD_T = 0.5f / 2048f;		// The same in depth: gSPTexture(..., 512 << 6)
+		private const float CLOUD_SCALE = 1f / 4096f;	// Widths of the cloud texture in one unit of its offsets
 		private const int THUNDER_START = 180;			// Sixtieths of a second before the first lightning
 		private const int FLASHES = 6;					// Times the light goes on or off in one lightning
-		private const float FLASH = 17f / 255f;			// What a flash adds to red, green and blue
+		private const int FLASH = 8;					// What a flash adds to the red and the green of the colors of the sky
 		private const int FIRE_SIZE = 64;
 		private const int FIRE_COOLING = 16;
 
@@ -104,6 +105,8 @@ namespace CodeImp.DoomBuilder.Data
 		private readonly Doom64SkyLayer clouds;		// The layer of the clouds, or null
 		private readonly Doom64SkyLayer fire;		// The layer of a fire that can burn, or null
 		private readonly byte[] stillfire;			// The pixels of the fire before it burns
+		private readonly PixelColor stillhigh;		// The colors of the sky before any lightning
+		private readonly PixelColor stilllow;
 
 		private float time;				// Milliseconds since the last step
 		private bool moved;				// Something is not as it was at the start
@@ -125,6 +128,7 @@ namespace CodeImp.DoomBuilder.Data
 			}
 
 			if(fire != null) stillfire = (byte[])fire.Fire.Clone();
+			if(clouds != null) { stillhigh = clouds.High; stilllow = clouds.Low; }
 			thundercounter = THUNDER_START;
 		}
 
@@ -153,13 +157,13 @@ namespace CodeImp.DoomBuilder.Data
 			{
 				if(clouds != null)
 				{
-					// R_RenderClouds
+					// The offsets of the clouds, as the game moves them
 					cloudx = (cloudx - (viewcos >> 14)) & (CLOUD_WRAP - 1);
 					cloudy = (cloudy + (viewsin >> 13)) & (CLOUD_WRAP - 1);
 					if(clouds.Thunder) Thunder();
 				}
 
-				// R_RenderFireSky: on one tic of the game out of two
+				// The fire burns on one step of the game out of two
 				firestep = !firestep;
 				if((fire != null) && firestep) { SpreadFire(); burned = true; }
 			}
@@ -168,16 +172,16 @@ namespace CodeImp.DoomBuilder.Data
 			{
 				// Between two steps the clouds go on as they will in the next one
 				float part = time / STEP_TIME;
-				clouds.ScrollS = (cloudx - (viewcos >> 14) * part) * CLOUD_S;
-				clouds.ScrollT = (cloudy + (viewsin >> 13) * part) * CLOUD_T;
-				clouds.Flash = flashes * FLASH;
+				clouds.ScrollS = (cloudx - (viewcos >> 14) * part) * CLOUD_SCALE;
+				clouds.ScrollT = (cloudy + (viewsin >> 13) * part) * CLOUD_SCALE;
 			}
 
 			if(burned) Doom64Sky.WriteFire(fire);
 		}
 
-		// R_CloudThunder: after a wait, the light of the clouds goes on and off three times,
-		// each time for 1 to 8 sixtieths of a second, then the next lightning is 1 to 8 seconds away
+		// The lightning of the remaster: after a wait, the light of the sky goes on and off three
+		// times, each time for 1 to 8 sixtieths of a second, then the next lightning is 1 to 8
+		// seconds away. The light is in the red and the green of the colors of the sky only.
 		private void Thunder()
 		{
 			thundercounter -= VBLS_IN_STEP;
@@ -185,20 +189,39 @@ namespace CodeImp.DoomBuilder.Data
 
 			if(lightningcounter == 0)
 			{
-				// The game plays one of its two sounds of thunder here
+				// The game plays one of its two sounds of thunder here, and takes a number that it does not use
+				Random();
 				Random();
 			}
 			else if(lightningcounter >= FLASHES)
 			{
-				int rand = Random() & 7;
-				thundercounter = (((rand << 4) - rand) << 2) + 60;
+				thundercounter = ((Random() & 7) + 1) * 60;
 				lightningcounter = 0;
 				return;
 			}
 
-			if((lightningcounter & 1) == 0) flashes++; else flashes--;
+			if((lightningcounter & 1) == 0)
+			{
+				flashes++;
+				clouds.High = Flashed(clouds.High, FLASH);
+				clouds.Low = Flashed(clouds.Low, FLASH);
+			}
+			else
+			{
+				flashes--;
+				clouds.High = Flashed(clouds.High, -FLASH);
+				clouds.Low = Flashed(clouds.Low, -FLASH);
+			}
 			thundercounter = (Random() & 7) + 1;
 			lightningcounter++;
+		}
+
+		// A color of the sky with more or less of the light of a flash, which stays in a byte
+		private static PixelColor Flashed(PixelColor c, int light)
+		{
+			c.r = (byte)General.Clamp(c.r + light, 0, 255);
+			c.g = (byte)General.Clamp(c.g + light, 0, 255);
+			return c;
 		}
 
 		// R_SpreadFire, for every column from its second row down: a pixel that burns goes one row
@@ -243,7 +266,8 @@ namespace CodeImp.DoomBuilder.Data
 			{
 				clouds.ScrollS = 0f;
 				clouds.ScrollT = 0f;
-				clouds.Flash = 0f;
+				clouds.High = stillhigh;
+				clouds.Low = stilllow;
 			}
 
 			if(fire != null)
@@ -286,11 +310,14 @@ namespace CodeImp.DoomBuilder.Data
 		public const float SCREEN_FOCAL = 160f;
 		public const float SCREEN_HORIZON = 120f;
 		public const float PIC_WIDTH = 256f;
-		public const float CLOUD_TURN = 3f;			// Times the cloud texture scrolls by in a full turn
+		public const float CLOUD_TURN = 2f;			// Times the cloud texture scrolls by in a full turn
+		public const float CLOUD_OPACITY = 96f / 255f;	// How much of the clouds covers the colors of the sky
 		private const float PIC_BOTTOM = 128f;		// Screen row under a sky picture
 		private const float BACKPIC_BOTTOM = 170f;	// Screen row under a back picture
 		private const float SECOND_PIC_BOTTOM = 240f;	// Screen row under the second sky picture of the sky that fades a picture in
 		private const float FIRE_WIDTH = 64f;
+		private const float PIC_V_START = 0.006f;	// Where the texture of a sky picture starts at its top, in its height
+		private const float FIRE_V_START = 0.01f;	// The same for the fire
 		private const int FIRE_SIZE = 64;			// Width and height of the fire texture of the game
 		private const float EVERYWHERE = 1000000f;	// Rows of a layer of one color
 
@@ -453,22 +480,24 @@ namespace CodeImp.DoomBuilder.Data
 			// The order is the one of the game, which the remaster keeps for the skies that maps
 			// define themselves: the back of the sky, its fire, then a picture in front.
 
-			// The back of the sky: one color (R_RenderVoidSky), the clouds over the colors of
-			// the sky (R_RenderClouds), a picture down to row 128 (R_RenderSpaceSky), or nothing
+			// The back of the sky: one color, the clouds over the colors of the sky, a picture down
+			// to row 128, or nothing. The game draws neither clouds nor picture without their texture.
 			if(sky.Void)
 			{
 				layers.Add(OneColor(device, sky.BaseColor.ToColorValue()));
 			}
-			else if(sky.Cloud)
+			else if(sky.Cloud && (pic != null))
 			{
 				Doom64SkyLayer l = new Doom64SkyLayer();
-				l.Texture = (pic != null ? MakeTexture(device, pic) : MakeTexture(device, 0));
+				l.Texture = MakeTexture(device, pic);
 				l.Clouds = true;
 				l.Thunder = sky.Thunder;
 				l.Back = true;
 				l.TopColor = sky.HighColor.ToColorValue();
 				l.BottomColor = sky.LowColor.ToColorValue();
 				l.BaseColor = sky.BaseColor.ToColorValue();
+				l.High = sky.HighColor;
+				l.Low = sky.LowColor;
 				layers.Add(l);
 			}
 			else if(pic != null)
@@ -495,6 +524,7 @@ namespace CodeImp.DoomBuilder.Data
 				l.Smooth = true;
 				l.Back = (layers.Count == 0);
 				l.Solid = true;
+				l.VStart = FIRE_V_START;
 				l.Width = FIRE_WIDTH;
 				l.Turn = PIC_WIDTH;
 				l.Height = SCREEN_HORIZON;
@@ -533,6 +563,7 @@ namespace CodeImp.DoomBuilder.Data
 
 		// A picture that stands on a screen row of the game. It has its own size, a pixel of it
 		// being a pixel of the screen of the game, and scrolls by its width in a quarter turn.
+		// The game filters it.
 		private static Doom64SkyLayer Picture(Device device, Bitmap picture, float bottom)
 		{
 			Doom64SkyLayer l = new Doom64SkyLayer();
@@ -545,6 +576,8 @@ namespace CodeImp.DoomBuilder.Data
 			}
 			l.Turn = l.Width;
 			l.Top = bottom - l.Height;
+			l.Smooth = true;
+			l.VStart = PIC_V_START;
 			l.TopColor = new Color4(1f, 1f, 1f, 1f);
 			l.BottomColor = l.TopColor;
 			return l;
@@ -565,26 +598,30 @@ namespace CodeImp.DoomBuilder.Data
 			return l;
 		}
 
+		// The game doubles the colors of the sky behind its clouds; what does not fit in a byte is lost
+		public static Color4 Doubled(PixelColor c)
+		{
+			return new Color4(1f, ((c.r * 2) & 255) / 255f, ((c.g * 2) & 255) / 255f, ((c.b * 2) & 255) / 255f);
+		}
+
 		// This makes a texture from a picture
 		private static Texture MakeTexture(Device device, Bitmap picture)
 		{
 			lock(picture)
 			{
-				// A copy in a known pixel format
-				using(Bitmap copy = new Bitmap(picture))
+				// The pixels as they are: a transparent pixel keeps its color, which the filter of the
+				// sky mixes with the colors around it, as the game does
+				Texture texture = new Texture(device, picture.Width, picture.Height, 1, Usage.None, Format.A8R8G8B8, Pool.Managed);
+				DataRectangle rect = texture.LockRectangle(0, LockFlags.None);
+				BitmapData data = picture.LockBits(new Rectangle(0, 0, picture.Width, picture.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+				for(int y = 0; y < picture.Height; y++)
 				{
-					Texture texture = new Texture(device, copy.Width, copy.Height, 1, Usage.None, Format.A8R8G8B8, Pool.Managed);
-					DataRectangle rect = texture.LockRectangle(0, LockFlags.None);
-					BitmapData data = copy.LockBits(new Rectangle(0, 0, copy.Width, copy.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
-					for(int y = 0; y < copy.Height; y++)
-					{
-						rect.Data.Seek((long)y * rect.Pitch, SeekOrigin.Begin);
-						rect.Data.WriteRange(new IntPtr(data.Scan0.ToInt64() + (long)y * data.Stride), copy.Width * 4);
-					}
-					copy.UnlockBits(data);
-					texture.UnlockRectangle(0);
-					return texture;
+					rect.Data.Seek((long)y * rect.Pitch, SeekOrigin.Begin);
+					rect.Data.WriteRange(new IntPtr(data.Scan0.ToInt64() + (long)y * data.Stride), picture.Width * 4);
 				}
+				picture.UnlockBits(data);
+				texture.UnlockRectangle(0);
+				return texture;
 			}
 		}
 

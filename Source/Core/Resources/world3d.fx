@@ -78,11 +78,12 @@ float4 doom64view;
 // pixels the middle of the view is above the horizon; w is how far the layer has scrolled.
 float4 doom64sky;
 // A picture of the sky: x is its width and z its height in screen pixels of the game, y is the
-// screen row of the game at its top, w is half a row of its texture.
+// screen row of the game at its top, w is half a row of its texture. For the clouds, x is the
+// width of the view over its height and y is how much of them covers the colors of the sky.
 float4 doom64skypic;
 // x is 1 for the layer at the back, which is black where it has no picture and goes on above its
-// top; y is 1 when it goes on mirrored, 0 when its top row goes on; z is how far the clouds have
-// scrolled in depth.
+// top; y is 1 when it goes on mirrored, 0 when it ends there; z is where the texture starts at
+// the top of a picture, in its height, or how far the clouds have scrolled in depth.
 float4 doom64skymode;
 // The colors at the top and at the bottom of a layer, and the color of the clouds
 float4 doom64skytop;
@@ -123,8 +124,8 @@ samplerCUBE skysamp = sampler_state
 	MaxAnisotropy = maxanisotropysetting;
 };
 
-// styd. Samplers of the sky of Doom 64: the game shows the pixels of its sky pictures as they
-// are, and filters its clouds and its fire
+// styd. Samplers of the sky of Doom 64: the game filters its sky pictures, its clouds and its
+// fire; a layer of one color needs no filter
 sampler2D doom64skypicsamp = sampler_state
 {
 	Texture = <texture1>;
@@ -399,7 +400,11 @@ float4 doom64skypicture(Doom64SkyPixelData pd, sampler2D samp)
 	// Above its top the picture is mirrored, or it ends there. The screen of the game ends at the
 	// top of its fire, whose top row burns at times: that row must not go on above it.
 	float mirrored = 1.0f - abs(frac(v * 0.5f) * 2.0f - 1.0f);
-	float tv = clamp(lerp(saturate(v), mirrored, doom64skymode.y), doom64skypic.w, 1.0f - doom64skypic.w);
+	float tv = lerp(saturate(v), mirrored, doom64skymode.y);
+
+	// The game starts a little below the top of the texture: its filter would reach the bottom
+	// row from there
+	tv = clamp(doom64skymode.z + tv * (1.0f - doom64skymode.z), doom64skypic.w, 1.0f - doom64skypic.w);
 	float4 texel = tex2D(samp, float2(column / doom64skypic.x, tv));
 	float inside = step(0.0f, v);
 	float notabove = max(inside, doom64skymode.y);
@@ -423,21 +428,23 @@ float4 ps_doom64skysmoothpicture(Doom64SkyPixelData pd) : COLOR
 	return doom64skypicture(pd, doom64skysmoothsamp);
 }
 
-// styd. The clouds of the sky of Doom 64. The game draws them on a plane that leans over the
-// view: it is 160 units away at the top of the screen, 120 pixels above the horizon, and 300 units
-// away at the horizon, where it is 600 units wide. The texture goes one and a half times over
-// its width and twice over its depth. Its color is the color of the clouds times the texture,
-// plus a color that goes from the top of the screen to the horizon (R_RenderClouds).
+// styd. The clouds of the sky of Doom 64, as the remaster of the game draws them. They are on a
+// plane that leans over the view: it is 160 units away where it is 121 units high, at the top of
+// the screen, and 300 units away at the horizon. The game sees it with a field of view of 74
+// degrees, a little more than the one of its screen. The colors of the sky go from the top of
+// that plane to the horizon; the texture of the clouds, in their color, covers a part of them.
+// The texture goes twice over the depth of the plane, and to the left over its width.
 float4 ps_doom64skyclouds(Doom64SkyPixelData pd) : COLOR
 {
 	float2 p = pd.scr.xy / pd.scr.w;
-	float x = p.x * doom64sky.x;
-	float y = p.y * doom64sky.y + doom64sky.z;
+	float x = p.x * doom64sky.x * 1.0047386f;
+	float y = (p.y * doom64sky.y + doom64sky.z) * 1.0047386f;
 	float up = max(y, 0.0f);
-	float v = (120.0f - up) / (120.0f + 0.875f * up);
-	float u = 0.5f + (1.0f + 0.875f * v) * x / 600.0f;
-	float cloud = tex2D(doom64skysmoothsamp, float2(u * 1.5f + doom64sky.w, v * 2.0f + doom64skymode.z)).r;
-	float3 color = doom64skybase.rgb * cloud + lerp(doom64skytop.rgb, doom64skybottom.rgb, saturate(1.0f - y / 120.0f));
+	float v = (121.0f - up) / (121.0f + 0.875f * up);
+	float across = (160.0f + 140.0f * v) * x / 160.0f;
+	float4 cloud = tex2D(doom64skysmoothsamp, float2(doom64sky.w + 0.5625f * doom64skypic.x - 0.0025f * across, doom64skymode.z + 2.0f * v));
+	float3 sky = lerp(doom64skytop.rgb, doom64skybottom.rgb, saturate(v));
+	float3 color = lerp(sky, cloud.rgb * doom64skybase.rgb, cloud.a * doom64skypic.y);
 
 	// Nothing is drawn below the horizon
 	return doom64skycolor(color * step(0.0f, y), 1.0f);
