@@ -401,13 +401,15 @@ float4 doom64skypicture(Doom64SkyPixelData pd, sampler2D samp)
 	float mirrored = 1.0f - abs(frac(v * 0.5f) * 2.0f - 1.0f);
 	float tv = clamp(lerp(saturate(v), mirrored, doom64skymode.y), doom64skypic.w, 1.0f - doom64skypic.w);
 	float4 texel = tex2D(samp, float2(column / doom64skypic.x, tv));
-	float notabove = max(step(0.0f, v), doom64skymode.y);
+	float inside = step(0.0f, v);
+	float notabove = max(inside, doom64skymode.y);
 	float3 color = texel.rgb * lerp(doom64skytop.rgb, doom64skybottom.rgb, saturate(v)) * notabove;
 
 	// Nothing is drawn below the picture. The layer at the back goes on above its top and is
-	// black where it has no picture; the other layers only cover what their picture covers.
+	// black where it has no picture; the other layers only cover what their picture covers,
+	// but for the fire, a rectangle that hides what is behind it above its top too.
 	float notbelow = step(v, 1.0f);
-	float alpha = texel.a * lerp(notbelow * step(0.0f, v), notbelow, doom64skymode.x);
+	float alpha = texel.a * lerp(notbelow * max(inside, doom64skymode.w), notbelow, doom64skymode.x);
 	return doom64skycolor(color * lerp(1.0f, alpha, doom64skymode.x), lerp(alpha, 1.0f, doom64skymode.x));
 }
 

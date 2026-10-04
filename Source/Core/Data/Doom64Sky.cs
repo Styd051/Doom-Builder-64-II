@@ -43,8 +43,10 @@ namespace CodeImp.DoomBuilder.Data
 		public bool Smooth;			// The picture is filtered, as the fire of the game is
 		public bool Back;			// The layer at the back: it is black where it has no picture
 		public bool Mirrored;		// Above its top the picture goes on mirrored; otherwise it ends there
+		public bool Solid;			// A rectangle that hides what is behind it, above its top too, as the fire does
 		public float Width;			// Width of the picture, in screen pixels of the game
 		public float Height;		// Height of the picture, in screen rows of the game
+		public float Turn;			// Screen pixels of the game that the picture scrolls by in a quarter turn
 		public float Top;			// Screen row of the game at the top of the picture
 		public float HalfRow = 0.5f;	// Half a row of the texture, in the height of the texture
 		public Color4 TopColor;		// Color at the top of the layer
@@ -276,9 +278,11 @@ namespace CodeImp.DoomBuilder.Data
 		public const float FOG_DEPTH_SCALE = 1000f * FOG_FAR_PLANE * FOG_NEAR_PLANE / (FOG_FAR_PLANE - FOG_NEAR_PLANE);
 
 		// The game draws its sky flat on a screen of 320x240 that shows 90 degrees: a screen pixel is
-		// 1/160 of the tangent of an angle and the horizon is on row 120. A sky picture is 256 pixels
-		// wide and scrolls by its width for a quarter turn; the fire is 64 pixels wide and stands on
-		// the upper half of the screen. See R_RenderSkyPic, R_RenderClouds and R_RenderFireSky.
+		// 1/160 of the tangent of an angle and the horizon is on row 120. A pixel of a sky picture is
+		// a pixel of that screen, and the picture scrolls by its width for a quarter turn: 256 pixels
+		// for the pictures of the game, any size in the remaster, for which maps bring their own. The
+		// fire is 64 pixels wide, scrolls four times as fast and stands on the upper half of the
+		// screen. See R_RenderSkyPic, R_RenderClouds and R_RenderFireSky.
 		public const float SCREEN_FOCAL = 160f;
 		public const float SCREEN_HORIZON = 120f;
 		public const float PIC_WIDTH = 256f;
@@ -446,6 +450,9 @@ namespace CodeImp.DoomBuilder.Data
 			Color4 white = new Color4(1f, 1f, 1f, 1f);
 			Color4 black = new Color4(1f, 0f, 0f, 0f);
 
+			// The order is the one of the game, which the remaster keeps for the skies that maps
+			// define themselves: the back of the sky, its fire, then a picture in front.
+
 			// The back of the sky: one color (R_RenderVoidSky), the clouds over the colors of
 			// the sky (R_RenderClouds), a picture down to row 128 (R_RenderSpaceSky), or nothing
 			if(sky.Void)
@@ -477,7 +484,8 @@ namespace CodeImp.DoomBuilder.Data
 			}
 
 			// The fire burns on the upper half of the screen, in the high color at its top and the
-			// low color at its foot (R_RenderFireSky)
+			// low color at its foot (R_RenderFireSky). It is a rectangle without a transparent pixel:
+			// over a sky picture it hides the part of it that is behind.
 			if((fire != null) && sky.Fire)
 			{
 				Doom64SkyLayer l = new Doom64SkyLayer();
@@ -486,24 +494,31 @@ namespace CodeImp.DoomBuilder.Data
 				lock(fire) { l.HalfRow = 0.5f / fire.Height; }
 				l.Smooth = true;
 				l.Back = (layers.Count == 0);
+				l.Solid = true;
 				l.Width = FIRE_WIDTH;
+				l.Turn = PIC_WIDTH;
 				l.Height = SCREEN_HORIZON;
 				l.TopColor = sky.HighColor.ToColorValue();
 				l.BottomColor = sky.LowColor.ToColorValue();
 				layers.Add(l);
 			}
 
-			if(sky.FadeInBackground)
+			// The game draws nothing more for a sky without a back picture
+			if(backpic != null)
 			{
-				// The back picture only shows when a line special asks for it. Until then the game
-				// fills its screen with a second sky picture (R_RenderEvilSky).
-				if((pic != null) && !sky.Cloud && !sky.Void) layers.Add(Picture(device, pic, SECOND_PIC_BOTTOM));
-			}
-			else if(backpic != null)
-			{
-				// A back picture stands in front of the sky, down to row 170. The sky shows through
-				// its transparent pixels.
-				layers.Add(Picture(device, backpic, BACKPIC_BOTTOM));
+				if(sky.FadeInBackground)
+				{
+					// The back picture only shows when a line special asks for it. Until then the game
+					// draws the sky picture a second time, down to the foot of its screen
+					// (R_RenderEvilSky). The sky shows through its transparent pixels.
+					if(pic != null) layers.Add(Picture(device, pic, SECOND_PIC_BOTTOM));
+				}
+				else
+				{
+					// A back picture stands in front of the sky, down to row 170. The sky shows through
+					// its transparent pixels.
+					layers.Add(Picture(device, backpic, BACKPIC_BOTTOM));
+				}
 			}
 
 			foreach(Doom64SkyLayer l in layers)
@@ -516,18 +531,19 @@ namespace CodeImp.DoomBuilder.Data
 			return layers;
 		}
 
-		// A picture that stands on a screen row of the game. It is as wide as a sky picture of
-		// the game whatever its own size.
+		// A picture that stands on a screen row of the game. It has its own size, a pixel of it
+		// being a pixel of the screen of the game, and scrolls by its width in a quarter turn.
 		private static Doom64SkyLayer Picture(Device device, Bitmap picture, float bottom)
 		{
 			Doom64SkyLayer l = new Doom64SkyLayer();
 			l.Texture = MakeTexture(device, picture);
-			l.Width = PIC_WIDTH;
 			lock(picture)
 			{
-				l.Height = picture.Height * PIC_WIDTH / picture.Width;
+				l.Width = picture.Width;
+				l.Height = picture.Height;
 				l.HalfRow = 0.5f / picture.Height;
 			}
+			l.Turn = l.Width;
 			l.Top = bottom - l.Height;
 			l.TopColor = new Color4(1f, 1f, 1f, 1f);
 			l.BottomColor = l.TopColor;
@@ -541,6 +557,7 @@ namespace CodeImp.DoomBuilder.Data
 			l.Texture = MakeTexture(device, 255);
 			l.Back = true;
 			l.Width = PIC_WIDTH;
+			l.Turn = PIC_WIDTH;
 			l.Height = EVERYWHERE * 2f;
 			l.Top = -EVERYWHERE;
 			l.TopColor = color;
