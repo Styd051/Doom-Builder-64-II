@@ -396,11 +396,13 @@ float4 doom64skypicture(Doom64SkyPixelData pd, sampler2D samp)
 	float row = 120.0f - p.y * doom64sky.y - doom64sky.z;
 	float v = (row - doom64skypic.y) / doom64skypic.z;
 
-	// Above its top the picture is mirrored or its top row goes on
+	// Above its top the picture is mirrored, or it ends there. The screen of the game ends at the
+	// top of its fire, whose top row burns at times: that row must not go on above it.
 	float mirrored = 1.0f - abs(frac(v * 0.5f) * 2.0f - 1.0f);
 	float tv = clamp(lerp(saturate(v), mirrored, doom64skymode.y), doom64skypic.w, 1.0f - doom64skypic.w);
 	float4 texel = tex2D(samp, float2(column / doom64skypic.x, tv));
-	float3 color = texel.rgb * lerp(doom64skytop.rgb, doom64skybottom.rgb, saturate(v));
+	float notabove = max(step(0.0f, v), doom64skymode.y);
+	float3 color = texel.rgb * lerp(doom64skytop.rgb, doom64skybottom.rgb, saturate(v)) * notabove;
 
 	// Nothing is drawn below the picture. The layer at the back goes on above its top and is
 	// black where it has no picture; the other layers only cover what their picture covers.

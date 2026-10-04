@@ -42,7 +42,7 @@ namespace CodeImp.DoomBuilder.Data
 		public bool Clouds;			// The clouds of the game; a picture otherwise
 		public bool Smooth;			// The picture is filtered, as the fire of the game is
 		public bool Back;			// The layer at the back: it is black where it has no picture
-		public bool Mirrored;		// Above its top the picture goes on mirrored; otherwise its top row does
+		public bool Mirrored;		// Above its top the picture goes on mirrored; otherwise it ends there
 		public float Width;			// Width of the picture, in screen pixels of the game
 		public float Height;		// Height of the picture, in screen rows of the game
 		public float Top;			// Screen row of the game at the top of the picture
