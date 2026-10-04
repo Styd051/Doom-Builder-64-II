@@ -3525,14 +3525,8 @@ namespace CodeImp.DoomBuilder.Data
 				fognear = sky.FogFactor;
 			}
 
-			// The light intensity of the preferences is for this color as it is for the colors of the sectors
-			if(General.Settings.LightIntensity != 0)
-			{
-				Lights light = new Lights(color.r, color.g, color.b, 0);
-				light.SetIntensity(General.Settings.LightIntensity / 10.0f);
-				color = light.color;
-			}
-
+			// The game leaves this color as it is: the brightness of its lights is not for it, and
+			// the brightness of its display is for the whole view
 			color = color.WithAlpha(255);
 		}
 

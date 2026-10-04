@@ -157,6 +157,8 @@ namespace CodeImp.DoomBuilder.Windows
 			this.lightintensitytitle = new System.Windows.Forms.Label();
 			this.lightintensity = new CodeImp.DoomBuilder.Controls.TransparentTrackBar();
 			this.lightintensitylabel = new System.Windows.Forms.Label();
+			this.doom64brightnesstitle = new System.Windows.Forms.Label();
+			this.doom64brightness = new System.Windows.Forms.NumericUpDown();
 			this.colorsgroup1 = new System.Windows.Forms.GroupBox();
 			this.colorguidelines = new CodeImp.DoomBuilder.Controls.ColorControl();
 			this.color3dFloors = new CodeImp.DoomBuilder.Controls.ColorControl();
@@ -246,6 +248,7 @@ namespace CodeImp.DoomBuilder.Windows
 			((System.ComponentModel.ISupportInitialize)(this.tbDynLightCount)).BeginInit();
 			((System.ComponentModel.ISupportInitialize)(this.imagebrightness)).BeginInit();
 			((System.ComponentModel.ISupportInitialize)(this.lightintensity)).BeginInit();
+			((System.ComponentModel.ISupportInitialize)(this.doom64brightness)).BeginInit();
 			((System.ComponentModel.ISupportInitialize)(this.hiddenthingsalpha)).BeginInit();
 			((System.ComponentModel.ISupportInitialize)(this.inactivethingsalpha)).BeginInit();
 			((System.ComponentModel.ISupportInitialize)(this.doublesidedalpha)).BeginInit();
@@ -1448,6 +1451,8 @@ namespace CodeImp.DoomBuilder.Windows
 			this.appearancegroup1.Controls.Add(this.lightintensitytitle);
 			this.appearancegroup1.Controls.Add(this.lightintensity);
 			this.appearancegroup1.Controls.Add(this.lightintensitylabel);
+			this.appearancegroup1.Controls.Add(this.doom64brightnesstitle);
+			this.appearancegroup1.Controls.Add(this.doom64brightness);
 			this.appearancegroup1.Location = new System.Drawing.Point(217, 8);
 			this.appearancegroup1.Name = "appearancegroup1";
 			this.appearancegroup1.Size = new System.Drawing.Size(475, 510);
@@ -1702,6 +1707,38 @@ namespace CodeImp.DoomBuilder.Windows
 			this.lightintensitylabel.Size = new System.Drawing.Size(30, 13);
 			this.lightintensitylabel.TabIndex = 51;
 			this.lightintensitylabel.Text = "+ 0%";
+			// 
+			// doom64brightnesstitle
+			// 
+			this.doom64brightnesstitle.AutoSize = true;
+			this.doom64brightnesstitle.Location = new System.Drawing.Point(229, 476);
+			this.doom64brightnesstitle.Name = "doom64brightnesstitle";
+			this.doom64brightnesstitle.Size = new System.Drawing.Size(141, 13);
+			this.doom64brightnesstitle.TabIndex = 52;
+			this.doom64brightnesstitle.Text = "Doom 64 display brightness:";
+			// 
+			// doom64brightness
+			// 
+			this.doom64brightness.DecimalPlaces = 1;
+			this.doom64brightness.Increment = new decimal(new int[] {
+            1,
+            0,
+            0,
+            65536});
+			this.doom64brightness.Location = new System.Drawing.Point(382, 472);
+			this.doom64brightness.Maximum = new decimal(new int[] {
+            2,
+            0,
+            0,
+            0});
+			this.doom64brightness.Name = "doom64brightness";
+			this.doom64brightness.Size = new System.Drawing.Size(52, 20);
+			this.doom64brightness.TabIndex = 53;
+			this.doom64brightness.Value = new decimal(new int[] {
+            1,
+            0,
+            0,
+            0});
 			// 
 			// colorsgroup1
 			// 
@@ -2446,6 +2483,7 @@ namespace CodeImp.DoomBuilder.Windows
 			((System.ComponentModel.ISupportInitialize)(this.tbDynLightCount)).EndInit();
 			((System.ComponentModel.ISupportInitialize)(this.imagebrightness)).EndInit();
 			((System.ComponentModel.ISupportInitialize)(this.lightintensity)).EndInit();
+			((System.ComponentModel.ISupportInitialize)(this.doom64brightness)).EndInit();
 			((System.ComponentModel.ISupportInitialize)(this.hiddenthingsalpha)).EndInit();
 			((System.ComponentModel.ISupportInitialize)(this.inactivethingsalpha)).EndInit();
 			((System.ComponentModel.ISupportInitialize)(this.doublesidedalpha)).EndInit();
@@ -2496,6 +2534,8 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.Label lightintensitytitle;
 		private CodeImp.DoomBuilder.Controls.TransparentTrackBar lightintensity;
 		private System.Windows.Forms.Label lightintensitylabel;
+		private System.Windows.Forms.Label doom64brightnesstitle;
+		private System.Windows.Forms.NumericUpDown doom64brightness;
 		private System.Windows.Forms.GroupBox groupBox2;
 		private System.Windows.Forms.Label fieldofviewlabel;
 		private System.Windows.Forms.Label label4;

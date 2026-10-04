@@ -608,6 +608,10 @@ namespace CodeImp.DoomBuilder.Rendering
                 graphics.Shaders.World3D.IgnoreNormals = false;
             }
 
+			// styd. The remaster of Doom 64 makes its whole view brighter once it is drawn.
+			// What only the editor shows comes after.
+			if(General.Map.DOOM64) RenderDoom64Brightness();
+
             // THING CAGES
             if (renderthingcages)
 			{
@@ -751,6 +755,55 @@ namespace CodeImp.DoomBuilder.Rendering
 			// Done
 			graphics.Shaders.World3D.EndPass();
 			graphics.Device.SetRenderState(RenderState.TextureFactor, -1);
+		}
+
+		// styd. A rectangle over the whole view
+		private static readonly WorldVertex[] doom64screenverts =
+		{
+			new WorldVertex(-1f, -1f, 0f, -1, 0f, 0f), new WorldVertex(-1f, 1f, 0f, -1, 0f, 0f),
+			new WorldVertex(1f, -1f, 0f, -1, 0f, 0f), new WorldVertex(1f, 1f, 0f, -1, 0f, 0f)
+		};
+
+		// styd. The display brightness of the remaster of Doom 64: every color of the view is
+		// multiplied by one plus this brightness, which is 1 unless the player changes it. The
+		// game does it with a rectangle over its view, in a gray of that brightness, blended as
+		// "what is there, times the gray, plus what is there"; a brightness above 1 takes a
+		// second rectangle.
+		private void RenderDoom64Brightness()
+		{
+			float brightness = General.Clamp(General.Settings.Doom64DisplayBrightness, 0f, 2f);
+			if(brightness <= 0f) return;
+
+			graphics.Device.SetRenderState(RenderState.CullMode, Cull.None);
+			graphics.Device.SetRenderState(RenderState.ZEnable, false);
+			graphics.Device.SetRenderState(RenderState.ZWriteEnable, false);
+			graphics.Device.SetRenderState(RenderState.FogEnable, false);
+			graphics.Device.SetRenderState(RenderState.AlphaTestEnable, false);
+			graphics.Device.SetRenderState(RenderState.AlphaBlendEnable, true);
+			graphics.Device.SetRenderState(RenderState.SourceBlend, Blend.DestinationColor);
+			graphics.Device.SetRenderState(RenderState.DestinationBlend, Blend.One);
+
+			graphics.Shaders.World3D.WorldViewProj = Matrix.Identity;
+			graphics.Shaders.World3D.BeginPass(16);
+			foreach(float part in new float[] { Math.Min(brightness, 1f), brightness - 1f })
+			{
+				// The game keeps this gray in a byte
+				float gray = (int)(part * 255f) / 255f;
+				if(gray <= 0f) continue;
+				graphics.Shaders.World3D.VertexColor = new Color4(1f, gray, gray, gray);
+				graphics.Shaders.World3D.ApplySettings();
+				graphics.Device.DrawUserPrimitives(PrimitiveType.TriangleStrip, 0, 2, doom64screenverts);
+			}
+			graphics.Shaders.World3D.EndPass();
+
+			// Back to what the rest of the view is drawn with
+			graphics.Device.SetRenderState(RenderState.CullMode, Cull.Counterclockwise);
+			graphics.Device.SetRenderState(RenderState.ZEnable, true);
+			graphics.Device.SetRenderState(RenderState.FogEnable, fogenabled);
+			graphics.Device.SetRenderState(RenderState.SourceBlend, Blend.SourceAlpha);
+			graphics.Device.SetRenderState(RenderState.DestinationBlend, Blend.InverseSourceAlpha);
+			world = Matrix.Identity;
+			ApplyMatrices3D();
 		}
 
 		//mxd
