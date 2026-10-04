@@ -215,6 +215,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				List<WorldVertex> verts = CreatePolygonVertices(polygons, tp, sd, lightvalue, lightabsolute);
 				if(verts.Count > 2)
 				{
+					SetDoom64TextureHoles(); // styd
 					base.SetVertices(verts);
 					return true;
 				}
@@ -235,6 +236,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				renderassky = General.Map.Data.IsSkyTexture(Sidedef.HighTexture)
 					|| (Sidedef.Other != null && Sidedef.Other.Sector != null
 					&& General.Map.Data.IsSkyFlat(Sidedef.Other.Sector.CeilTexture));
+				SetDoom64TextureHoles();
 				return;
 			}
 

@@ -77,6 +77,7 @@ namespace CodeImp.DoomBuilder.VisualModes
 		protected VisualGeometryType geometrytype;
 		protected string partname; //UDMF part name
 		protected bool renderassky;
+		protected bool renderskybehind; // styd
 		
 		#endregion
 
@@ -96,6 +97,10 @@ namespace CodeImp.DoomBuilder.VisualModes
 		// styd. In Doom 64 the sky is drawn behind the map: geometry that is drawn as sky shows what is
 		// behind it. Only a wall without another side hides what is behind it, as it does in the game.
 		public bool RenderAsSkyBackground { get { return renderassky && General.Map.DOOM64 && (geometrytype != VisualGeometryType.WALL_MIDDLE) && (geometrytype != VisualGeometryType.WALL_OCCLUSION); } }
+
+		// styd. In Doom 64 a texture with transparent pixels shows what is behind it through them.
+		// Where there is nothing behind, that is the sky: it is drawn behind such geometry.
+		public bool RenderSkyBehind { get { return renderskybehind && General.Map.DOOM64; } }
 
 		/// <summary>
 		/// Render pass in which this geometry must be rendered. Default is Solid.
@@ -149,6 +154,18 @@ namespace CodeImp.DoomBuilder.VisualModes
 
 		#region ================== Methods
 		
+		// styd. Doom 64 does not draw the transparent pixels of a texture, on a floor or a ceiling
+		// no more than on a wall. This sets how geometry with such a texture is drawn: with its
+		// holes, and with the sky behind it. Geometry that is drawn as sky is not concerned.
+		protected void SetDoom64TextureHoles()
+		{
+			if(!General.Map.DOOM64) return;
+
+			bool holes = !renderassky && (texture != null) && texture.IsImageLoaded && (texture.IsMasked || texture.IsTranslucent);
+			renderpass = (holes ? (texture.IsTranslucent ? RenderPass.Alpha : RenderPass.Mask) : RenderPass.Solid);
+			renderskybehind = holes;
+		}
+
 		// This sets the vertices for this geometry
 		protected void SetVertices(ICollection<WorldVertex> verts)
 		{

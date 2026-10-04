@@ -227,6 +227,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				List<WorldVertex> verts = CreatePolygonVertices(polygons, tp, sd, lightvalue, lightabsolute);
 				if(verts.Count > 2)
 				{
+					SetDoom64TextureHoles(); // styd
 					base.SetVertices(verts);
 					return true;
 				}

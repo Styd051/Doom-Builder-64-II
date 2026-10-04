@@ -2158,7 +2158,8 @@ namespace CodeImp.DoomBuilder.Rendering
 
 					if(sector != null)
 					{
-						graphics.Shaders.World3D.HighlightColor = CalculateHighlightColor((g == highlighted) && showhighlight, (g.Selected && showselection));
+						// The sky behind a texture with holes is not highlighted: the texture is
+						graphics.Shaders.World3D.HighlightColor = (g.RenderAsSky ? CalculateHighlightColor((g == highlighted) && showhighlight, (g.Selected && showselection)) : new Color4());
 						graphics.Shaders.World3D.ApplySettings();
 						graphics.Device.DrawPrimitives(PrimitiveType.TriangleList, g.VertexOffset, g.Triangles);
 					}
@@ -2265,6 +2266,14 @@ namespace CodeImp.DoomBuilder.Rendering
 				}
 				else
 				{
+					// styd. Doom 64: the sky is drawn first behind geometry whose texture has holes. A wall
+					// without another side hides what is behind it, as it does in the game.
+					if(g.RenderSkyBehind && General.Settings.GZDrawSky)
+					{
+						if(g.GeometryType == VisualGeometryType.WALL_MIDDLE) skygeo.Add(g);
+						else skybackgeo.Add(g);
+					}
+
 					switch(g.RenderPass)
 					{
 						case RenderPass.Solid:
