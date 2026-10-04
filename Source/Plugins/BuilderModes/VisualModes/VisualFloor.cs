@@ -188,7 +188,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			}
 
 			//mxd. Update sky render flag
-			renderassky = General.Map.Data.IsSkyFlat(level.sector.FloorTexture);
+			// styd. Doom 64 shows the sky through a floor with its blank texture
+			renderassky = General.Map.Data.IsSkyFlat(level.sector.FloorTexture) || General.Map.Data.IsSkyTexture(level.sector.FloorTexture);
 			
 			// Apply vertices
 			base.SetVertices(verts);

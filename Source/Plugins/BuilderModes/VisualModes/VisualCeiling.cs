@@ -203,7 +203,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 			//mxd. Update sky render flag
 			bool isrenderedassky = renderassky;
-			renderassky = General.Map.Data.IsSkyFlat(level.sector.CeilTexture);
+			// styd. Doom 64 shows the sky through a ceiling with its blank texture
+			renderassky = General.Map.Data.IsSkyFlat(level.sector.CeilTexture) || General.Map.Data.IsSkyTexture(level.sector.CeilTexture);
 			if(isrenderedassky != renderassky && Sector.Sides != null)
 			{
 				// Upper sidedef geometry may need updating...
