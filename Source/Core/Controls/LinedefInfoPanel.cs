@@ -36,6 +36,11 @@ namespace CodeImp.DoomBuilder.Controls
 	{
 		private readonly int hexenformatwidth;
 		private readonly int doomformatwidth;
+
+		// styd. The activation types of a Doom 64 linedef (the upper bits of its special), with the
+		// names and in the order of the linedef edit window
+		private static readonly int[] doom64activationbits = { 16384, 4096, 8192, 32768, 1024, 2048, 512 };
+		private static readonly string[] doom64activationnames = { "Use", "Cross", "Shoot", "Repeatable", "Blue Key", "Yellow Key", "Red Key" };
 		
 		// Constructor
 		public LinedefInfoPanel()
@@ -93,7 +98,7 @@ namespace CodeImp.DoomBuilder.Controls
 			}
 
 			//mxd. Hide activation or tag and rearrange labels 
-			if(!General.Map.FormatInterface.HasBuiltInActivations && General.Map.FormatInterface.HasNumericLinedefActivations) //Hexen map format?
+			if(!General.Map.FormatInterface.HasBuiltInActivations && General.Map.FormatInterface.HasNumericLinedefActivations && !General.Map.DOOM64) //Hexen map format? (styd: not Doom 64, its linedefs have a tag)
 			{ 
 				activation.Visible = true;
 				activationlabel.Text = "Activation:";
@@ -151,6 +156,20 @@ namespace CodeImp.DoomBuilder.Controls
 						activation.Enabled = false;
 						activation.Text = "None";
 					}
+				}
+				else if(General.Map.DOOM64)
+				{
+					// styd. Doom 64 has activation types of its own, next to the tag
+					List<string> types = new List<string>();
+					for(int i = 0; i < doom64activationbits.Length; i++)
+						if((l.Activate & doom64activationbits[i]) != 0) types.Add(doom64activationnames[i]);
+
+					activationlabel.Text = "Activation:";
+					activationlabel.Visible = true;
+					activation.Visible = true;
+					activation.Text = (types.Count > 0 ? string.Join(", ", types.ToArray()) : "None");
+					activation.Enabled = (types.Count > 0);
+					activationlabel.Enabled = (types.Count > 0);
 				}
 				else
 				{
