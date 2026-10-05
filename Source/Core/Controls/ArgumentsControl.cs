@@ -495,13 +495,18 @@ namespace CodeImp.DoomBuilder.Controls
 
 		#region ================== Redraw control
 
+		// styd. Doom 64 has no arguments: this control is never shown there, so there is no drawing to
+		// hold back. And Windows shows a hidden window whose drawing is switched back on: that made
+		// the hidden action group of the thing window appear over the tag of the thing.
 		private void BeginUpdate()
 		{
+			if(General.Map.DOOM64) return; // styd
 			SendMessage(this.Parent.Handle, WM_SETREDRAW, false, 0);
 		}
 
 		private void EndUpdate()
 		{
+			if(General.Map.DOOM64) return; // styd
 			SendMessage(this.Parent.Handle, WM_SETREDRAW, true, 0);
 			this.Parent.Refresh();
 		}
