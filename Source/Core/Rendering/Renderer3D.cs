@@ -937,6 +937,25 @@ namespace CodeImp.DoomBuilder.Rendering
 		}
 
 		// This performs a single render pass
+		// styd. How far the two textures of a liquid floor of Doom 64 have scrolled, in parts of the
+		// texture of the floor, as the remaster of the game scrolls them: a counter goes half a unit
+		// in every tic, and a sector that scrolls its floor scrolls both textures with it. The
+		// texture of the floor goes with the counter along its width; the texture that is drawn over
+		// it goes against the counter along its height.
+		private static Vector4 Doom64LiquidOffsets(VisualGeometry g, ImageData texture)
+		{
+			long tics = General.Map.Data.Doom64LiquidTics;
+			int width = Math.Max((int)texture.ScaledWidth, 1), height = Math.Max((int)texture.ScaledHeight, 1);
+			Vector2D flow = g.Doom64LiquidFlow;
+
+			// (whole numbers of tics and of units: nothing drifts however long the liquids move)
+			float counterx = (float)(tics % (2 * width)) / (2 * width);
+			float countery = (float)(tics % (2 * height)) / (2 * height);
+			float flowx = (float)((tics * (int)flow.x) % width) / width;
+			float flowy = (float)((tics * (int)flow.y) % height) / height;
+			return new Vector4(counterx + flowx, flowy, flowx, flowy - countery);
+		}
+
 		private void RenderSinglePass(Dictionary<ImageData, List<VisualGeometry>> geopass, Dictionary<ImageData, List<VisualThing>> thingspass)
 		{
 			ImageData curtexture;
@@ -1010,6 +1029,7 @@ namespace CodeImp.DoomBuilder.Rendering
 						{
 							if((liquid.Texture == null) || liquid.Texture.Disposed) liquid.CreateTexture();
 							graphics.Shaders.World3D.Texture2 = liquid.Texture;
+							graphics.Shaders.World3D.Doom64Liquid = Doom64LiquidOffsets(g, curtexture);
 							wantedshaderpass += SHADERPASS_DOOM64_LIQUID;
 						}
 

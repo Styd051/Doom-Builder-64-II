@@ -43,6 +43,15 @@ namespace CodeImp.DoomBuilder.VisualModes
 		// styd. The sector flag of Doom 64 that makes a floor liquid
 		private const string DOOM64_LIQUID_FLAG = "4";
 
+		// styd. The sector flags of Doom 64 that scroll a floor: it scrolls, three times as fast, and
+		// to the left, to the right, up and down
+		private const string DOOM64_SCROLL_FLOOR_FLAG = "2048";
+		private const string DOOM64_SCROLL_FAST_FLAG = "16";
+		private const string DOOM64_SCROLL_LEFT_FLAG = "4096";
+		private const string DOOM64_SCROLL_RIGHT_FLAG = "8192";
+		private const string DOOM64_SCROLL_UP_FLAG = "16384";
+		private const string DOOM64_SCROLL_DOWN_FLAG = "32768";
+
 		#endregion
 
 		#region ================== Variables
@@ -86,6 +95,7 @@ namespace CodeImp.DoomBuilder.VisualModes
 		protected bool renderassky;
 		protected bool renderskybehind; // styd
 		private ImageData doom64liquidtexture; // styd
+		private Vector2D doom64liquidflow; // styd
 		
 		#endregion
 
@@ -112,6 +122,10 @@ namespace CodeImp.DoomBuilder.VisualModes
 
 		// styd. Doom 64 draws a liquid floor with two textures: its own, and this one over it
 		public ImageData Doom64LiquidTexture { get { return doom64liquidtexture; } }
+
+		// styd. How far the sector of a liquid floor of Doom 64 scrolls that floor in a tic of the
+		// game, in map units to the left and up
+		public Vector2D Doom64LiquidFlow { get { return doom64liquidflow; } }
 
 		/// <summary>
 		/// Render pass in which this geometry must be rendered. Default is Solid.
@@ -183,9 +197,19 @@ namespace CodeImp.DoomBuilder.VisualModes
 		protected void SetDoom64Liquid(Sector s)
 		{
 			doom64liquidtexture = null;
+			doom64liquidflow = new Vector2D();
 			if(!General.Map.DOOM64 || renderassky || !s.IsFlagSet(DOOM64_LIQUID_FLAG)) return;
 
 			doom64liquidtexture = General.Map.Data.GetDoom64LiquidTexture(s.FloorTexture);
+
+			// A sector that scrolls its floor scrolls the two textures with it: a unit in a tic, or three
+			if(s.IsFlagSet(DOOM64_SCROLL_FLOOR_FLAG))
+			{
+				float speed = (s.IsFlagSet(DOOM64_SCROLL_FAST_FLAG) ? 3f : 1f);
+				doom64liquidflow = new Vector2D(
+					speed * ((s.IsFlagSet(DOOM64_SCROLL_LEFT_FLAG) ? 1f : 0f) - (s.IsFlagSet(DOOM64_SCROLL_RIGHT_FLAG) ? 1f : 0f)),
+					speed * ((s.IsFlagSet(DOOM64_SCROLL_UP_FLAG) ? 1f : 0f) - (s.IsFlagSet(DOOM64_SCROLL_DOWN_FLAG) ? 1f : 0f)));
+			}
 		}
 
 		// This sets the vertices for this geometry

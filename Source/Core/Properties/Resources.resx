@@ -547,6 +547,9 @@
   <data name="SkyAnimated" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>..\Resources\SkyAnimated.png;System.Drawing.Bitmap, System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
   </data>
+  <data name="LiquidAnimated" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\LiquidAnimated.png;System.Drawing.Bitmap, System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
   <data name="Pin" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>..\Resources\Pin.png;System.Drawing.Bitmap, System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
   </data>

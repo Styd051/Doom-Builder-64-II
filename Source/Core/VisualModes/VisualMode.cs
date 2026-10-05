@@ -1171,6 +1171,9 @@ namespace CodeImp.DoomBuilder.VisualModes
 
 			// styd. The sky of Doom 64 moves with the time, and its clouds with the direction of the view
 			if(General.Map.DOOM64) General.Map.Data.AnimateDoom64Sky(deltatime, (float)Math.Atan2(camvec.y, camvec.x));
+
+			// styd. Its liquid floors move with the time as well
+			if(General.Map.DOOM64) General.Map.Data.AnimateDoom64Liquids(deltatime);
 			
 			// Visibility culling
 			DoCulling();

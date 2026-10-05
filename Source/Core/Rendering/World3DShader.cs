@@ -58,6 +58,7 @@ namespace CodeImp.DoomBuilder.Rendering
 		private readonly EffectHandle doom64skytopHandle; // styd
 		private readonly EffectHandle doom64skybottomHandle; // styd
 		private readonly EffectHandle doom64skybaseHandle; // styd
+		private readonly EffectHandle doom64liquidHandle; // styd
 
         // [ZZ]
         private readonly EffectHandle stencilColorHandle;
@@ -304,6 +305,21 @@ namespace CodeImp.DoomBuilder.Rendering
 			}
 		}
 
+		// styd. How far the two textures of a liquid floor of Doom 64 have scrolled
+		private Vector4 doom64liquid;
+		public Vector4 Doom64Liquid
+		{
+			set
+			{
+				if(doom64liquid != value)
+				{
+					effect.SetValue(doom64liquidHandle, value);
+					doom64liquid = value;
+					settingschanged = true;
+				}
+			}
+		}
+
 		public void SetDoom64SkyColors(Color4 top, Color4 bottom, Color4 basecolor)
 		{
 			effect.SetValue(doom64skytopHandle, top);
@@ -397,6 +413,7 @@ namespace CodeImp.DoomBuilder.Rendering
 				doom64skytopHandle = effect.GetParameter(null, "doom64skytop"); // styd
 				doom64skybottomHandle = effect.GetParameter(null, "doom64skybottom"); // styd
 				doom64skybaseHandle = effect.GetParameter(null, "doom64skybase"); // styd
+				doom64liquidHandle = effect.GetParameter(null, "doom64liquid"); // styd
 
                 // [ZZ]
                 stencilColorHandle = effect.GetParameter(null, "stencilColor");
@@ -453,6 +470,7 @@ namespace CodeImp.DoomBuilder.Rendering
 				if(doom64skytopHandle != null) doom64skytopHandle.Dispose(); // styd
 				if(doom64skybottomHandle != null) doom64skybottomHandle.Dispose(); // styd
 				if(doom64skybaseHandle != null) doom64skybaseHandle.Dispose(); // styd
+				if(doom64liquidHandle != null) doom64liquidHandle.Dispose(); // styd
                 if(stencilColorHandle != null) stencilColorHandle.Dispose();
 				if(world != null) world.Dispose();
                 if(modelnormal != null) modelnormal.Dispose();

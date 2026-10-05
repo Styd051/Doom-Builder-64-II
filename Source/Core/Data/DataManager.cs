@@ -52,6 +52,7 @@ namespace CodeImp.DoomBuilder.Data
 		public const string INTERNAL_PREFIX = "internal:";
 		public const int CLASIC_IMAGE_NAME_LENGTH = 8; //mxd
 		private const int MAX_SKYTEXTURE_SIZE = 2048; //mxd
+		private const int DOOM64_TICS_PER_SECOND = 30; // styd. The game goes by this many steps in a second
 		internal static readonly char[] CATEGORY_SPLITTER = { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }; //mxd
 
 		private long UNKNOWN_THING; //mxd
@@ -138,6 +139,7 @@ namespace CodeImp.DoomBuilder.Data
 		// styd. The liquid floors of Doom 64
 		private Dictionary<string, string> doom64nexttextures; // The texture that follows each texture in the resources
 		private Dictionary<string, ImageData> doom64liquidtextures; // The texture that is drawn over the texture of a liquid floor
+		private long doom64liquidtime; // How long the liquid floors have been moving, in milliseconds
 
 		//mxd. Comment icons
 		private ImageData[] commenttextures;
@@ -3557,6 +3559,17 @@ namespace CodeImp.DoomBuilder.Data
 
 			doom64liquidtextures.Add(floortexture, image);
 			return image;
+		}
+
+		// styd. The time of the liquid floors of Doom 64, in tics of the game
+		internal int Doom64LiquidTics { get { return (int)(doom64liquidtime * DOOM64_TICS_PER_SECOND / 1000); } }
+
+		// styd. This lets the time of the liquid floors of a Doom 64 map go by, when they are set to
+		// move. Liquids that are set not to move are put back where they were.
+		internal void AnimateDoom64Liquids(long milliseconds)
+		{
+			if(General.Settings.Doom64AnimateLiquids) doom64liquidtime += milliseconds;
+			else doom64liquidtime = 0;
 		}
 
 		// styd. This gives the fog of a Doom 64 map. The game takes it from the sky of the map,

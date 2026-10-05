@@ -2105,6 +2105,7 @@ namespace CodeImp.DoomBuilder.Windows
 			buttontogglefog.Visible = General.Settings.GZToolbarGZDoom && maploaded;
 			buttontogglesky.Visible = General.Settings.GZToolbarGZDoom && maploaded;
 			buttontoggleskyanimation.Visible = General.Settings.GZToolbarGZDoom && maploaded && General.Map.DOOM64; // styd
+			buttontoggleliquidanimation.Visible = General.Settings.GZToolbarGZDoom && maploaded && General.Map.DOOM64; // styd
 			buttontoggleeventlines.Visible = General.Settings.GZToolbarGZDoom && maploaded;
 			buttontogglevisualvertices.Visible = General.Settings.GZToolbarGZDoom && maploaded && General.Map.UDMF;
 			separatorgzmodes.Visible = General.Settings.GZToolbarGZDoom && maploaded;
@@ -2267,6 +2268,8 @@ namespace CodeImp.DoomBuilder.Windows
 				buttontogglesky.Checked = General.Settings.GZDrawSky;
 				buttontoggleskyanimation.Visible = General.Map.DOOM64; // styd
 				buttontoggleskyanimation.Checked = General.Settings.Doom64AnimateSky; // styd
+				buttontoggleliquidanimation.Visible = General.Map.DOOM64; // styd
+				buttontoggleliquidanimation.Checked = General.Settings.Doom64AnimateLiquids; // styd
 				buttontoggleeventlines.Checked = General.Settings.GZShowEventLines;
 				buttontogglevisualvertices.Visible = General.Map.UDMF;
 				buttontogglevisualvertices.Checked = General.Settings.GZShowVisualVertices;
@@ -3060,6 +3063,8 @@ namespace CodeImp.DoomBuilder.Windows
 			itemtogglesky.Checked = General.Settings.GZDrawSky;
 			itemtoggleskyanimation.Visible = (General.Map != null && General.Map.DOOM64); // styd
 			itemtoggleskyanimation.Checked = General.Settings.Doom64AnimateSky; // styd
+			itemtoggleliquidanimation.Visible = (General.Map != null && General.Map.DOOM64); // styd
+			itemtoggleliquidanimation.Checked = General.Settings.Doom64AnimateLiquids; // styd
 			itemtoggleeventlines.Checked = General.Settings.GZShowEventLines;
 			itemtogglevisualverts.Visible = (General.Map != null && General.Map.UDMF);
 			itemtogglevisualverts.Checked = General.Settings.GZShowVisualVertices;
@@ -3144,6 +3149,20 @@ namespace CodeImp.DoomBuilder.Windows
 			buttontoggleskyanimation.Checked = General.Settings.Doom64AnimateSky;
 
 			General.MainWindow.DisplayStatus(StatusType.Action, "Sky animation is " + (General.Settings.Doom64AnimateSky ? "ENABLED" : "DISABLED"));
+			General.MainWindow.RedrawDisplay();
+			General.MainWindow.UpdateGZDoomPanel();
+		}
+
+		// styd. The liquid floors of Doom 64 move in visual mode, or stay as they are
+		[BeginAction("doom64toggleliquidanimation")]
+		internal void ToggleLiquidAnimation()
+		{
+			General.Settings.Doom64AnimateLiquids = !General.Settings.Doom64AnimateLiquids;
+
+			itemtoggleliquidanimation.Checked = General.Settings.Doom64AnimateLiquids;
+			buttontoggleliquidanimation.Checked = General.Settings.Doom64AnimateLiquids;
+
+			General.MainWindow.DisplayStatus(StatusType.Action, "Liquid animation is " + (General.Settings.Doom64AnimateLiquids ? "ENABLED" : "DISABLED"));
 			General.MainWindow.RedrawDisplay();
 			General.MainWindow.UpdateGZDoomPanel();
 		}
