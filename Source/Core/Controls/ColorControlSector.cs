@@ -108,9 +108,21 @@ namespace CodeImp.DoomBuilder.Controls
 			bool tagchanged = (newtag != initialtag);
 			bool colorchanged = (this.Color.ToInt() != initialcolor.ToInt());
 			bool indexchanged = (newindex != initialindex);
-			if(!colorchanged && !tagchanged && !indexchanged) return false;
 
+			// styd: the +/- clicks also count when they could not change the color that is shown here,
+			// which is the one of the first sector (black, or a color at its brightest): they can still
+			// change the color of the other sectors. As many - as + clicks undo each other.
+			bool intensitychanged = false;
 			if((intensitysteps.Count > 0) && (this.Color.ToInt() == expectedcolor.ToInt()))
+			{
+				int clicks = 0;
+				foreach(float step in intensitysteps) clicks += Math.Sign(step);
+				intensitychanged = (colorchanged || (clicks != 0));
+			}
+
+			if(!colorchanged && !tagchanged && !indexchanged && !intensitychanged) return false;
+
+			if(intensitychanged)
 			{
 				// Only the +/- buttons were used: replay the clicks on the color of this sector
 				foreach(float step in intensitysteps) light.SetIntensity(step);
