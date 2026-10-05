@@ -38,6 +38,13 @@ namespace CodeImp.DoomBuilder.VisualModes
 
 		#endregion
 
+		#region ================== Constants
+
+		// styd. The sector flag of Doom 64 that makes a floor liquid
+		private const string DOOM64_LIQUID_FLAG = "4";
+
+		#endregion
+
 		#region ================== Variables
 
 		// Texture
@@ -78,6 +85,7 @@ namespace CodeImp.DoomBuilder.VisualModes
 		protected string partname; //UDMF part name
 		protected bool renderassky;
 		protected bool renderskybehind; // styd
+		private ImageData doom64liquidtexture; // styd
 		
 		#endregion
 
@@ -101,6 +109,9 @@ namespace CodeImp.DoomBuilder.VisualModes
 		// styd. In Doom 64 a texture with transparent pixels shows what is behind it through them.
 		// Where there is nothing behind, that is the sky: it is drawn behind such geometry.
 		public bool RenderSkyBehind { get { return renderskybehind && General.Map.DOOM64; } }
+
+		// styd. Doom 64 draws a liquid floor with two textures: its own, and this one over it
+		public ImageData Doom64LiquidTexture { get { return doom64liquidtexture; } }
 
 		/// <summary>
 		/// Render pass in which this geometry must be rendered. Default is Solid.
@@ -164,6 +175,17 @@ namespace CodeImp.DoomBuilder.VisualModes
 			bool holes = !renderassky && (texture != null) && texture.IsImageLoaded && (texture.IsMasked || texture.IsTranslucent);
 			renderpass = (holes ? (texture.IsTranslucent ? RenderPass.Alpha : RenderPass.Mask) : RenderPass.Solid);
 			renderskybehind = holes;
+		}
+
+		// styd. Doom 64 draws the floor of a sector with the liquid flag with two textures: the one of
+		// the floor, and the next one of the textures of the game over it. This looks for that second
+		// texture. A floor that is drawn as sky has none.
+		protected void SetDoom64Liquid(Sector s)
+		{
+			doom64liquidtexture = null;
+			if(!General.Map.DOOM64 || renderassky || !s.IsFlagSet(DOOM64_LIQUID_FLAG)) return;
+
+			doom64liquidtexture = General.Map.Data.GetDoom64LiquidTexture(s.FloorTexture);
 		}
 
 		// This sets the vertices for this geometry

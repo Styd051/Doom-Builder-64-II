@@ -191,6 +191,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			// styd. Doom 64 shows the sky through a floor with its blank texture
 			renderassky = General.Map.Data.IsSkyFlat(level.sector.FloorTexture) || General.Map.Data.IsSkyTexture(level.sector.FloorTexture);
 			SetDoom64TextureHoles(); // styd
+			SetDoom64Liquid(level.sector); // styd
 			
 			// Apply vertices
 			base.SetVertices(verts);

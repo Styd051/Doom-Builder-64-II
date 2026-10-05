@@ -90,11 +90,18 @@ float4 doom64skytop;
 float4 doom64skybottom;
 float4 doom64skybase;
 
+// styd. Liquid floor of Doom 64: how far the texture of the floor (x, y) and the texture that
+// is drawn over it (z, w) have scrolled, in texture coordinates
+float4 doom64liquid;
+
 //sky
 static const float4 skynormal = float4(0.0f, 1.0f, 0.0f, 0.0f);
 
 // Texture input
 const texture texture1;
+
+// styd. The texture that Doom 64 draws over the texture of a liquid floor
+const texture texture2;
 
 // Filter settings
 const dword minfiltersettings;
@@ -140,6 +147,19 @@ sampler2D doom64skysmoothsamp = sampler_state
 	MagFilter = Linear;
 	MinFilter = Linear;
 	MipFilter = None;
+};
+
+// styd. Sampler of the second texture of a liquid floor of Doom 64, set as the first one is
+sampler2D doom64liquidsamp = sampler_state
+{
+	Texture = <texture2>;
+	MagFilter = magfiltersettings;
+	MinFilter = minfiltersettings;
+	MipFilter = mipfiltersettings;
+	MipMapLodBias = 0.0f;
+	MaxAnisotropy = maxanisotropysetting;
+	AddressU = Wrap;
+	AddressV = Wrap;
 };
 
 // Vertex shader
@@ -450,6 +470,62 @@ float4 ps_doom64skyclouds(Doom64SkyPixelData pd) : COLOR
 	return doom64skycolor(color * step(0.0f, y), 1.0f);
 }
 
+// styd. A liquid floor of Doom 64, as the remaster of the game draws it: the texture of the
+// floor, then the next texture of the game over it at 160 of 255. Each one scrolls its own way.
+float4 doom64liquidtexel(float2 uv)
+{
+	float4 below = tex2D(texturesamp, uv + doom64liquid.xy);
+	float4 above = tex2D(doom64liquidsamp, uv + doom64liquid.zw);
+	return float4(lerp(below.rgb, above.rgb, above.a * (160.0f / 255.0f)), below.a);
+}
+
+// The pixel shaders of the world, with these two textures
+float4 ps_doom64liquid(PixelData pd) : COLOR
+{
+	return desaturate(doom64liquidtexel(pd.uv) * pd.color);
+}
+
+float4 ps_doom64liquid_fullbright(PixelData pd) : COLOR
+{
+	float4 tcolor = doom64liquidtexel(pd.uv);
+	tcolor.a *= pd.color.a;
+	return tcolor;
+}
+
+float4 ps_doom64liquid_highlight(PixelData pd) : COLOR
+{
+	float4 tcolor = doom64liquidtexel(pd.uv);
+	if(tcolor.a == 0) return tcolor;
+
+	float4 ncolor = desaturate(tcolor * pd.color);
+	return float4(highlightcolor.rgb * highlightcolor.a + (ncolor.rgb - 0.4f * highlightcolor.a), max(pd.color.a + 0.25f, 0.5f));
+}
+
+float4 ps_doom64liquid_fullbright_highlight(PixelData pd) : COLOR
+{
+	float4 tcolor = doom64liquidtexel(pd.uv);
+	if(tcolor.a == 0) return tcolor;
+
+	return float4(highlightcolor.rgb * highlightcolor.a + (tcolor.rgb - 0.4f * highlightcolor.a), max(pd.color.a + 0.25f, 0.5f));
+}
+
+float4 ps_doom64liquid_fog(LitPixelData pd) : COLOR
+{
+	float4 tcolor = doom64liquidtexel(pd.uv);
+	if(tcolor.a == 0) return tcolor;
+
+	return desaturate(getFogColor(pd, tcolor * pd.color));
+}
+
+float4 ps_doom64liquid_highlight_fog(LitPixelData pd) : COLOR
+{
+	float4 tcolor = doom64liquidtexel(pd.uv);
+	if(tcolor.a == 0) return tcolor;
+
+	float4 ncolor = desaturate(getFogColor(pd, tcolor * pd.color));
+	return float4(highlightcolor.rgb * highlightcolor.a + (ncolor.rgb - 0.4f * highlightcolor.a), max(ncolor.a + 0.25f, 0.5f));
+}
+
 // Technique for shader model 2.0
 technique SM20 
 {
@@ -580,5 +656,50 @@ technique SM20
 	{
 		VertexShader = compile vs_2_0 vs_doom64sky();
 		PixelShader  = compile ps_2_0 ps_doom64skyclouds();
+	}
+
+	// styd. Liquid floors of Doom 64: the passes p0 to p3, p8 and p10 with their two textures,
+	// 21 passes further
+	pass p21
+	{
+		VertexShader = compile vs_2_0 vs_main();
+		PixelShader  = compile ps_2_0 ps_doom64liquid();
+	}
+
+	pass p22
+	{
+		VertexShader = compile vs_2_0 vs_main();
+		PixelShader  = compile ps_2_0 ps_doom64liquid_fullbright();
+	}
+
+	pass p23
+	{
+		VertexShader = compile vs_2_0 vs_main();
+		PixelShader  = compile ps_2_0 ps_doom64liquid_highlight();
+	}
+
+	pass p24
+	{
+		VertexShader = compile vs_2_0 vs_main();
+		PixelShader  = compile ps_2_0 ps_doom64liquid_fullbright_highlight();
+	}
+
+	pass p25 {} // these are only there to keep the passes 21 apart
+	pass p26 {}
+	pass p27 {}
+	pass p28 {}
+
+	pass p29
+	{
+		VertexShader = compile vs_2_0 vs_lightpass();
+		PixelShader  = compile ps_2_0 ps_doom64liquid_fog();
+	}
+
+	pass p30 {}
+
+	pass p31
+	{
+		VertexShader = compile vs_2_0 vs_lightpass();
+		PixelShader  = compile ps_2_0 ps_doom64liquid_highlight_fog();
 	}
 }

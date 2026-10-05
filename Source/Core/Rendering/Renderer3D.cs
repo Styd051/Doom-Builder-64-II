@@ -53,6 +53,9 @@ namespace CodeImp.DoomBuilder.Rendering
 		private const int SHADERPASS_DOOM64_SKY_SMOOTH = 19;
 		private const int SHADERPASS_DOOM64_SKY_CLOUDS = 20;
 
+		// styd. Shader passes of the liquid floors of Doom 64: the passes of the world, this much further
+		private const int SHADERPASS_DOOM64_LIQUID = 21;
+
 		#endregion
 
 		#region ================== Variables
@@ -628,6 +631,7 @@ namespace CodeImp.DoomBuilder.Rendering
 			
 			// Remove references
 			graphics.Shaders.World3D.Texture1 = null;
+			graphics.Shaders.World3D.Texture2 = null; // styd
 			
 			// Done
 			graphics.Shaders.World3D.End();
@@ -999,6 +1003,15 @@ namespace CodeImp.DoomBuilder.Rendering
 						//mxd. Render fog?
 						if(General.Settings.GZDrawFog && !fullbrightness && (doom64fog || sector.Sector.FogMode != SectorFogMode.NONE)) // styd
 							wantedshaderpass += 8;
+
+						// styd. A liquid floor of Doom 64 is drawn with its two textures, in passes of its own
+						ImageData liquid = g.Doom64LiquidTexture;
+						if((liquid != null) && !showlightonly && object.ReferenceEquals(curtexture, group.Key) && liquid.IsImageLoaded && !liquid.IsDisposed)
+						{
+							if((liquid.Texture == null) || liquid.Texture.Disposed) liquid.CreateTexture();
+							graphics.Shaders.World3D.Texture2 = liquid.Texture;
+							wantedshaderpass += SHADERPASS_DOOM64_LIQUID;
+						}
 
 						// Switch shader pass?
 						if(currentshaderpass != wantedshaderpass)

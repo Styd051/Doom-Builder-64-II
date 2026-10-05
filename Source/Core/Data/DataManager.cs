@@ -135,6 +135,10 @@ namespace CodeImp.DoomBuilder.Data
 		private List<Doom64SkyLayer> doom64skylayers; // What the visual mode draws for the sky, from the back to the front
 		private Doom64SkyAnimation doom64skyanimation; // What moves in these layers
 
+		// styd. The liquid floors of Doom 64
+		private Dictionary<string, string> doom64nexttextures; // The texture that follows each texture in the resources
+		private Dictionary<string, ImageData> doom64liquidtextures; // The texture that is drawn over the texture of a liquid floor
+
 		//mxd. Comment icons
 		private ImageData[] commenttextures;
 		
@@ -325,6 +329,8 @@ namespace CodeImp.DoomBuilder.Data
 				Doom64Sky.DisposeLayers(doom64skylayers); // styd
 				doom64skylayers = null;
 				doom64skyanimation = null;
+				doom64nexttextures = null;
+				doom64liquidtextures = null;
 				
 				// Done
 				isdisposed = true;
@@ -468,6 +474,7 @@ namespace CodeImp.DoomBuilder.Data
 			LoadPalette();
 			LoadThingPalettes(); // villsa
 			LoadDoom64Skies(); // styd
+			LoadDoom64TextureOrder(); // styd
 			Dictionary<string, TexturesParser> cachedparsers = new Dictionary<string, TexturesParser>(); //mxd
 			int texcount = LoadTextures(texturesonly, texturenamesshorttofull, cachedparsers);
 			int flatcount = LoadFlats(flatsonly, flatnamesshorttofull, cachedparsers);
@@ -3509,6 +3516,47 @@ namespace CodeImp.DoomBuilder.Data
 				doom64skyanimation.Advance(milliseconds, angle);
 			else if(doom64skyanimation.Moved && !General.Settings.Doom64AnimateSky)
 				doom64skyanimation.Reset();
+		}
+
+		// styd. This reads which texture follows each texture in the resources: Doom 64 draws a liquid
+		// floor with the texture of the floor and with the next one of its textures. The first
+		// resource that has a texture gives its order, as the textures of the game come first.
+		private void LoadDoom64TextureOrder()
+		{
+			doom64nexttextures = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+			doom64liquidtextures = new Dictionary<string, ImageData>(StringComparer.OrdinalIgnoreCase);
+			if(!General.Map.DOOM64) return;
+
+			foreach(DataReader dr in containers)
+			{
+				WADReader wr = dr as WADReader;
+				if(wr == null) continue;
+
+				List<string> names = wr.GetTextureRangeNames();
+				for(int i = 0; i < names.Count; i++)
+					if(!doom64nexttextures.ContainsKey(names[i])) doom64nexttextures.Add(names[i], (i + 1 < names.Count ? names[i + 1] : null));
+			}
+		}
+
+		// styd. This gives the texture that Doom 64 draws over the texture of a liquid floor, or null
+		// when there is none. Its image is kept loaded as long as the resources are.
+		internal ImageData GetDoom64LiquidTexture(string floortexture)
+		{
+			if((doom64nexttextures == null) || string.IsNullOrEmpty(floortexture)) return null;
+
+			ImageData image;
+			if(doom64liquidtextures.TryGetValue(floortexture, out image)) return image;
+
+			string next;
+			if(doom64nexttextures.TryGetValue(floortexture, out next) && (next != null))
+			{
+				image = GetFlatImage(next);
+				if((image == null) || (image is UnknownImage)) image = null;
+				else image.AddReference();
+			}
+
+			doom64liquidtextures.Add(floortexture, image);
+			return image;
 		}
 
 		// styd. This gives the fog of a Doom 64 map. The game takes it from the sky of the map,

@@ -30,6 +30,7 @@ namespace CodeImp.DoomBuilder.Rendering
 
 		// Property handlers
 		private readonly EffectHandle texture1;
+		private readonly EffectHandle texture2; // styd
 		private readonly EffectHandle worldviewproj;
 		private readonly EffectHandle minfiltersettings;
 		private readonly EffectHandle magfiltersettings;
@@ -80,6 +81,9 @@ namespace CodeImp.DoomBuilder.Rendering
 		}
 
 		public BaseTexture Texture1 { set { effect.SetTexture(texture1, value); settingschanged = true; } }
+
+		// styd. The texture that Doom 64 draws over the texture of a liquid floor
+		public BaseTexture Texture2 { set { effect.SetTexture(texture2, value); settingschanged = true; } }
 
 		//mxd
 		private Color4 vertexcolor;
@@ -366,6 +370,7 @@ namespace CodeImp.DoomBuilder.Rendering
 			{
 				worldviewproj = effect.GetParameter(null, "worldviewproj");
 				texture1 = effect.GetParameter(null, "texture1");
+				texture2 = effect.GetParameter(null, "texture2"); // styd
 				minfiltersettings = effect.GetParameter(null, "minfiltersettings");
 				magfiltersettings = effect.GetParameter(null, "magfiltersettings");
 				mipfiltersettings = effect.GetParameter(null, "mipfiltersettings");
@@ -423,6 +428,7 @@ namespace CodeImp.DoomBuilder.Rendering
 			{
 				// Clean up
 				if(texture1 != null) texture1.Dispose();
+				if(texture2 != null) texture2.Dispose(); // styd
 				if(worldviewproj != null) worldviewproj.Dispose();
 				if(minfiltersettings != null) minfiltersettings.Dispose();
 				if(magfiltersettings != null) magfiltersettings.Dispose();
