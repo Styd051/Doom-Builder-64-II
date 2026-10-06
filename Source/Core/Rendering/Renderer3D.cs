@@ -43,6 +43,11 @@ namespace CodeImp.DoomBuilder.Rendering
 		private const int SHADERPASS_LIGHT = 17; //mxd
 		private const int SHADERPASS_SKYBOX = 5; //mxd
 		
+		// styd. Shape of the screen of Doom 64, and the widest view over the width of a window
+		private const float DOOM64_SCREEN_WIDTH = 4f;
+		private const float DOOM64_SCREEN_HEIGHT = 3f;
+		private const float DOOM64_MAX_FOV = 175f * Angle2D.PI / 180f;
+
 		// styd. Shader passes of the sky of Doom 64: a picture, a picture that is filtered, the clouds
 		private const int SHADERPASS_DOOM64_SKY_PICTURE = 18;
 		private const int SHADERPASS_DOOM64_SKY_SMOOTH = 19;
@@ -72,6 +77,9 @@ namespace CodeImp.DoomBuilder.Rendering
 		// Frustum
 		private ProjectedFrustum2D frustum;
 		
+		// styd. Doom 64: the field of view over the width of the window, see CreateProjection
+		private float doom64fovx;
+
 		// Thing cage
 		private bool renderthingcages;
 		//mxd
@@ -289,6 +297,19 @@ namespace CodeImp.DoomBuilder.Rendering
 			float reversefovy = reversefov * aspect;
 			float fovy = (float)Math.Atan(1.0f / reversefovy) * 2.0f;
 			
+			// styd. In Doom 64 the field of view is the one of a screen of 4 by 3, as in the game
+			// (guFrustum(-8, 8, -6, 6, ...) in R_Init for 90 degrees). A window of another shape
+			// keeps this view over its height and shows more or less of the sides. The game has
+			// square pixels; the stretched view of the preferences makes everything taller here
+			// as it does in the other map formats, and leaves the width of the view as it is.
+			if(General.Map.DOOM64)
+			{
+				float stretch = (General.Settings.GZStretchView ? General.Map.Data.VerticalViewStretch : 1.0f);
+				float tany = (float)Math.Tan(fov / 2.0f) * DOOM64_SCREEN_HEIGHT / DOOM64_SCREEN_WIDTH;
+				fovy = (float)Math.Atan(tany / stretch) * 2.0f;
+				doom64fovx = Math.Min((float)Math.Atan(tany * aspect / stretch) * 2.0f, DOOM64_MAX_FOV);
+			}
+
 			// Make the projection matrix
 			projection = Matrix.PerspectiveFovRH(fovy, aspect, PROJ_NEAR_PLANE, General.Settings.ViewDistance);
 			viewproj = view3d * projection; //mxd
@@ -305,8 +326,11 @@ namespace CodeImp.DoomBuilder.Rendering
 			float anglez = delta.GetAngleZ();
 
 			// Create frustum
+			// styd. In Doom 64 the width of the view depends on the shape of the window
+			float frustumfov = Angle2D.DegToRad(General.Settings.VisualFOV);
+			if(General.Map.DOOM64 && (doom64fovx > 0f)) frustumfov = doom64fovx;
 			frustum = new ProjectedFrustum2D(pos, anglexy, anglez, PROJ_NEAR_PLANE,
-				General.Settings.ViewDistance, Angle2D.DegToRad(General.Settings.VisualFOV));
+				General.Settings.ViewDistance, frustumfov);
 			
 			// Make the view matrix
 			view3d = Matrix.LookAtRH(D3DDevice.V3(pos), D3DDevice.V3(lookat), new Vector3(0f, 0f, 1f));
