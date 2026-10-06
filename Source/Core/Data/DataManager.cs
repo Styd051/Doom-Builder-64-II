@@ -3561,11 +3561,13 @@ namespace CodeImp.DoomBuilder.Data
 			return image;
 		}
 
-		// styd. The time of the liquid floors of Doom 64, in tics of the game
+		// styd. The time of the liquid floors of Doom 64, and of its floors and ceilings that scroll,
+		// in tics of the game
 		internal int Doom64LiquidTics { get { return (int)(doom64liquidtime * DOOM64_TICS_PER_SECOND / 1000); } }
 
-		// styd. This lets the time of the liquid floors of a Doom 64 map go by, when they are set to
-		// move. Liquids that are set not to move are put back where they were.
+		// styd. This lets the time of the liquid floors of a Doom 64 map go by, and of its floors and
+		// ceilings that scroll, when they are set to move. Set not to move, they are put back where
+		// they were.
 		internal void AnimateDoom64Liquids(long milliseconds)
 		{
 			if(General.Settings.Doom64AnimateLiquids) doom64liquidtime += milliseconds;

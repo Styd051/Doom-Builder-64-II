@@ -3153,7 +3153,8 @@ namespace CodeImp.DoomBuilder.Windows
 			General.MainWindow.UpdateGZDoomPanel();
 		}
 
-		// styd. The liquid floors of Doom 64 move in visual mode, or stay as they are
+		// styd. The liquid floors of Doom 64, and its floors and ceilings that scroll, move in visual
+		// mode, or stay as they are
 		[BeginAction("doom64toggleliquidanimation")]
 		internal void ToggleLiquidAnimation()
 		{
@@ -3162,7 +3163,7 @@ namespace CodeImp.DoomBuilder.Windows
 			itemtoggleliquidanimation.Checked = General.Settings.Doom64AnimateLiquids;
 			buttontoggleliquidanimation.Checked = General.Settings.Doom64AnimateLiquids;
 
-			General.MainWindow.DisplayStatus(StatusType.Action, "Liquid animation is " + (General.Settings.Doom64AnimateLiquids ? "ENABLED" : "DISABLED"));
+			General.MainWindow.DisplayStatus(StatusType.Action, "Liquid and scrolling animation is " + (General.Settings.Doom64AnimateLiquids ? "ENABLED" : "DISABLED"));
 			General.MainWindow.RedrawDisplay();
 			General.MainWindow.UpdateGZDoomPanel();
 		}

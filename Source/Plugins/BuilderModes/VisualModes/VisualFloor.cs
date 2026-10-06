@@ -192,6 +192,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			renderassky = General.Map.Data.IsSkyFlat(level.sector.FloorTexture) || General.Map.Data.IsSkyTexture(level.sector.FloorTexture);
 			SetDoom64TextureHoles(); // styd
 			SetDoom64Liquid(level.sector); // styd
+			SetDoom64Scroll(level.sector, false); // styd
 			
 			// Apply vertices
 			base.SetVertices(verts);

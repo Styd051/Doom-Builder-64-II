@@ -1851,7 +1851,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemtoggleliquidanimation.Name = "itemtoggleliquidanimation";
 			this.itemtoggleliquidanimation.Size = new System.Drawing.Size(273, 22);
 			this.itemtoggleliquidanimation.Tag = "builder_doom64toggleliquidanimation";
-			this.itemtoggleliquidanimation.Text = "Animate liquids (Visual mode)";
+			this.itemtoggleliquidanimation.Text = "Animate liquids and scrolling floors/ceilings (Visual mode)";
 			this.itemtoggleliquidanimation.Click += new System.EventHandler(this.InvokeTaggedAction);
 			// 
 			// itemeventlines
@@ -2284,7 +2284,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.buttontoggleliquidanimation.Name = "buttontoggleliquidanimation";
 			this.buttontoggleliquidanimation.Size = new System.Drawing.Size(23, 20);
 			this.buttontoggleliquidanimation.Tag = "builder_doom64toggleliquidanimation";
-			this.buttontoggleliquidanimation.Text = "Animate Liquids (Visual mode)";
+			this.buttontoggleliquidanimation.Text = "Animate Liquids and Scrolling Floors/Ceilings (Visual mode)";
 			this.buttontoggleliquidanimation.Click += new System.EventHandler(this.InvokeTaggedAction);
 			// 
 			// buttontoggleeventlines

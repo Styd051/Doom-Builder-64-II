@@ -43,8 +43,9 @@ namespace CodeImp.DoomBuilder.VisualModes
 		// styd. The sector flag of Doom 64 that makes a floor liquid
 		private const string DOOM64_LIQUID_FLAG = "4";
 
-		// styd. The sector flags of Doom 64 that scroll a floor: it scrolls, three times as fast, and
-		// to the left, to the right, up and down
+		// styd. The sector flags of Doom 64 that scroll a floor or a ceiling: the ceiling scrolls, the
+		// floor scrolls, three times as fast, and to the left, to the right, up and down
+		private const string DOOM64_SCROLL_CEILING_FLAG = "1024";
 		private const string DOOM64_SCROLL_FLOOR_FLAG = "2048";
 		private const string DOOM64_SCROLL_FAST_FLAG = "16";
 		private const string DOOM64_SCROLL_LEFT_FLAG = "4096";
@@ -95,7 +96,7 @@ namespace CodeImp.DoomBuilder.VisualModes
 		protected bool renderassky;
 		protected bool renderskybehind; // styd
 		private ImageData doom64liquidtexture; // styd
-		private Vector2D doom64liquidflow; // styd
+		private Vector2D doom64scrollflow; // styd
 		
 		#endregion
 
@@ -123,9 +124,9 @@ namespace CodeImp.DoomBuilder.VisualModes
 		// styd. Doom 64 draws a liquid floor with two textures: its own, and this one over it
 		public ImageData Doom64LiquidTexture { get { return doom64liquidtexture; } }
 
-		// styd. How far the sector of a liquid floor of Doom 64 scrolls that floor in a tic of the
+		// styd. How far the sector of a floor or of a ceiling of Doom 64 scrolls it in a tic of the
 		// game, in map units to the left and up
-		public Vector2D Doom64LiquidFlow { get { return doom64liquidflow; } }
+		public Vector2D Doom64ScrollFlow { get { return doom64scrollflow; } }
 
 		/// <summary>
 		/// Render pass in which this geometry must be rendered. Default is Solid.
@@ -197,19 +198,23 @@ namespace CodeImp.DoomBuilder.VisualModes
 		protected void SetDoom64Liquid(Sector s)
 		{
 			doom64liquidtexture = null;
-			doom64liquidflow = new Vector2D();
 			if(!General.Map.DOOM64 || renderassky || !s.IsFlagSet(DOOM64_LIQUID_FLAG)) return;
 
 			doom64liquidtexture = General.Map.Data.GetDoom64LiquidTexture(s.FloorTexture);
+		}
 
-			// A sector that scrolls its floor scrolls the two textures with it: a unit in a tic, or three
-			if(s.IsFlagSet(DOOM64_SCROLL_FLOOR_FLAG))
-			{
-				float speed = (s.IsFlagSet(DOOM64_SCROLL_FAST_FLAG) ? 3f : 1f);
-				doom64liquidflow = new Vector2D(
-					speed * ((s.IsFlagSet(DOOM64_SCROLL_LEFT_FLAG) ? 1f : 0f) - (s.IsFlagSet(DOOM64_SCROLL_RIGHT_FLAG) ? 1f : 0f)),
-					speed * ((s.IsFlagSet(DOOM64_SCROLL_UP_FLAG) ? 1f : 0f) - (s.IsFlagSet(DOOM64_SCROLL_DOWN_FLAG) ? 1f : 0f)));
-			}
+		// styd. A sector of Doom 64 scrolls its floor, or its ceiling, when it has the flag for it: a
+		// unit in a tic, or three, to the left or to the right and up or down. The two textures of a
+		// liquid floor scroll with it. A floor or a ceiling that is drawn as sky does not scroll.
+		protected void SetDoom64Scroll(Sector s, bool ceiling)
+		{
+			doom64scrollflow = new Vector2D();
+			if(!General.Map.DOOM64 || renderassky || !s.IsFlagSet(ceiling ? DOOM64_SCROLL_CEILING_FLAG : DOOM64_SCROLL_FLOOR_FLAG)) return;
+
+			float speed = (s.IsFlagSet(DOOM64_SCROLL_FAST_FLAG) ? 3f : 1f);
+			doom64scrollflow = new Vector2D(
+				speed * ((s.IsFlagSet(DOOM64_SCROLL_LEFT_FLAG) ? 1f : 0f) - (s.IsFlagSet(DOOM64_SCROLL_RIGHT_FLAG) ? 1f : 0f)),
+				speed * ((s.IsFlagSet(DOOM64_SCROLL_UP_FLAG) ? 1f : 0f) - (s.IsFlagSet(DOOM64_SCROLL_DOWN_FLAG) ? 1f : 0f)));
 		}
 
 		// This sets the vertices for this geometry

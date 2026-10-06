@@ -936,7 +936,18 @@ namespace CodeImp.DoomBuilder.Rendering
 			vb.Dispose();
 		}
 
-		// This performs a single render pass
+		// styd. How far the sector of a floor or of a ceiling of Doom 64 has scrolled it, in parts of
+		// its texture, as the game scrolls it: so many units in every tic.
+		private static Vector2 Doom64ScrollOffset(VisualGeometry g, ImageData texture)
+		{
+			long tics = General.Map.Data.Doom64LiquidTics;
+			int width = Math.Max((int)texture.ScaledWidth, 1), height = Math.Max((int)texture.ScaledHeight, 1);
+			Vector2D flow = g.Doom64ScrollFlow;
+
+			// (whole numbers of tics and of units: nothing drifts however long it moves)
+			return new Vector2((float)((tics * (int)flow.x) % width) / width, (float)((tics * (int)flow.y) % height) / height);
+		}
+
 		// styd. How far the two textures of a liquid floor of Doom 64 have scrolled, in parts of the
 		// texture of the floor, as the remaster of the game scrolls them: a counter goes half a unit
 		// in every tic, and a sector that scrolls its floor scrolls both textures with it. The
@@ -946,16 +957,15 @@ namespace CodeImp.DoomBuilder.Rendering
 		{
 			long tics = General.Map.Data.Doom64LiquidTics;
 			int width = Math.Max((int)texture.ScaledWidth, 1), height = Math.Max((int)texture.ScaledHeight, 1);
-			Vector2D flow = g.Doom64LiquidFlow;
+			Vector2 scroll = Doom64ScrollOffset(g, texture);
 
 			// (whole numbers of tics and of units: nothing drifts however long the liquids move)
 			float counterx = (float)(tics % (2 * width)) / (2 * width);
 			float countery = (float)(tics % (2 * height)) / (2 * height);
-			float flowx = (float)((tics * (int)flow.x) % width) / width;
-			float flowy = (float)((tics * (int)flow.y) % height) / height;
-			return new Vector4(counterx + flowx, flowy, flowx, flowy - countery);
+			return new Vector4(counterx + scroll.X, scroll.Y, scroll.X, scroll.Y - countery);
 		}
 
+		// This performs a single render pass
 		private void RenderSinglePass(Dictionary<ImageData, List<VisualGeometry>> geopass, Dictionary<ImageData, List<VisualThing>> thingspass)
 		{
 			ImageData curtexture;
@@ -1031,6 +1041,19 @@ namespace CodeImp.DoomBuilder.Rendering
 							graphics.Shaders.World3D.Texture2 = liquid.Texture;
 							graphics.Shaders.World3D.Doom64Liquid = Doom64LiquidOffsets(g, curtexture);
 							wantedshaderpass += SHADERPASS_DOOM64_LIQUID;
+						}
+						// styd. A floor or a ceiling that its sector has scrolled is drawn in these passes too,
+						// with its own texture as the second one, at the same place: two times the same texel
+						// make that texel, so this is the texture alone where it has scrolled to
+						else if(((g.Doom64ScrollFlow.x != 0f) || (g.Doom64ScrollFlow.y != 0f)) && !showlightonly && object.ReferenceEquals(curtexture, group.Key))
+						{
+							Vector2 scroll = Doom64ScrollOffset(g, curtexture);
+							if((scroll.X != 0f) || (scroll.Y != 0f))
+							{
+								graphics.Shaders.World3D.Texture2 = curtexture.Texture;
+								graphics.Shaders.World3D.Doom64Liquid = new Vector4(scroll.X, scroll.Y, scroll.X, scroll.Y);
+								wantedshaderpass += SHADERPASS_DOOM64_LIQUID;
+							}
 						}
 
 						// Switch shader pass?
