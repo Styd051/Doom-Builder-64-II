@@ -59,6 +59,7 @@ namespace CodeImp.DoomBuilder.Rendering
 		private readonly EffectHandle doom64skybottomHandle; // styd
 		private readonly EffectHandle doom64skybaseHandle; // styd
 		private readonly EffectHandle doom64liquidHandle; // styd
+		private readonly EffectHandle doom64lightHandle; // styd
 
         // [ZZ]
         private readonly EffectHandle stencilColorHandle;
@@ -320,6 +321,21 @@ namespace CodeImp.DoomBuilder.Rendering
 			}
 		}
 
+		// styd. What the light effect of a sector of Doom 64 adds to the texture of what it shows
+		private float doom64light;
+		public float Doom64Light
+		{
+			set
+			{
+				if(doom64light != value)
+				{
+					effect.SetValue(doom64lightHandle, new Vector4(value, 0f, 0f, 0f));
+					doom64light = value;
+					settingschanged = true;
+				}
+			}
+		}
+
 		public void SetDoom64SkyColors(Color4 top, Color4 bottom, Color4 basecolor)
 		{
 			effect.SetValue(doom64skytopHandle, top);
@@ -414,6 +430,7 @@ namespace CodeImp.DoomBuilder.Rendering
 				doom64skybottomHandle = effect.GetParameter(null, "doom64skybottom"); // styd
 				doom64skybaseHandle = effect.GetParameter(null, "doom64skybase"); // styd
 				doom64liquidHandle = effect.GetParameter(null, "doom64liquid"); // styd
+				doom64lightHandle = effect.GetParameter(null, "doom64light"); // styd
 
                 // [ZZ]
                 stencilColorHandle = effect.GetParameter(null, "stencilColor");
@@ -471,6 +488,7 @@ namespace CodeImp.DoomBuilder.Rendering
 				if(doom64skybottomHandle != null) doom64skybottomHandle.Dispose(); // styd
 				if(doom64skybaseHandle != null) doom64skybaseHandle.Dispose(); // styd
 				if(doom64liquidHandle != null) doom64liquidHandle.Dispose(); // styd
+				if(doom64lightHandle != null) doom64lightHandle.Dispose(); // styd
                 if(stencilColorHandle != null) stencilColorHandle.Dispose();
 				if(world != null) world.Dispose();
                 if(modelnormal != null) modelnormal.Dispose();

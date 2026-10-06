@@ -121,6 +121,7 @@ namespace CodeImp.DoomBuilder.Config
 		private bool gzDrawSky;
 		private bool doom64AnimateSky; // styd
 		private bool doom64AnimateLiquids; // styd
+		private bool doom64AnimateLights; // styd
 		private float doom64DisplayBrightness; // styd
 		private bool gzToolbarGZDoom;
 		private bool gzSynchCameras;
@@ -245,6 +246,7 @@ namespace CodeImp.DoomBuilder.Config
 		public bool GZDrawSky { get { return gzDrawSky; } internal set { gzDrawSky = value; } }
 		public bool Doom64AnimateSky { get { return doom64AnimateSky; } internal set { doom64AnimateSky = value; } } // styd
 		public bool Doom64AnimateLiquids { get { return doom64AnimateLiquids; } internal set { doom64AnimateLiquids = value; } } // styd
+		public bool Doom64AnimateLights { get { return doom64AnimateLights; } internal set { doom64AnimateLights = value; } } // styd
 		public float Doom64DisplayBrightness { get { return doom64DisplayBrightness; } internal set { doom64DisplayBrightness = value; } } // styd
 		public bool GZToolbarGZDoom { get { return gzToolbarGZDoom; } internal set { gzToolbarGZDoom = value; } }
 		public bool GZSynchCameras { get { return gzSynchCameras; } internal set { gzSynchCameras = value; } }
@@ -379,6 +381,7 @@ namespace CodeImp.DoomBuilder.Config
 				gzDrawSky = cfg.ReadSetting("gzdrawsky", true);
 				doom64AnimateSky = cfg.ReadSetting("doom64animatesky", false); // styd
 				doom64AnimateLiquids = cfg.ReadSetting("doom64animateliquids", false); // styd
+				doom64AnimateLights = cfg.ReadSetting("doom64animatelights", false); // styd
 				doom64DisplayBrightness = General.Clamp(cfg.ReadSetting("doom64displaybrightness", 1.0f), 0.0f, 2.0f); // styd
 				gzToolbarGZDoom = cfg.ReadSetting("gztoolbargzdoom", true);
 				gzSynchCameras = cfg.ReadSetting("gzsynchcameras", true);
@@ -494,6 +497,7 @@ namespace CodeImp.DoomBuilder.Config
 			cfg.WriteSetting("gzdrawsky", gzDrawSky);
 			cfg.WriteSetting("doom64animatesky", doom64AnimateSky); // styd
 			cfg.WriteSetting("doom64animateliquids", doom64AnimateLiquids); // styd
+			cfg.WriteSetting("doom64animatelights", doom64AnimateLights); // styd
 			cfg.WriteSetting("doom64displaybrightness", doom64DisplayBrightness); // styd
 			cfg.WriteSetting("gzsynchcameras", gzSynchCameras);
 			cfg.WriteSetting("gzshoweventlines", gzShowEventLines);

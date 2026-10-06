@@ -94,6 +94,10 @@ float4 doom64skybase;
 // is drawn over it (z, w) have scrolled, in texture coordinates
 float4 doom64liquid;
 
+// styd. Light effect of a sector of Doom 64: what it adds to the texture of what the sector
+// shows (x), before that texture gets the color of the sector
+float4 doom64light;
+
 //sky
 static const float4 skynormal = float4(0.0f, 1.0f, 0.0f, 0.0f);
 
@@ -472,11 +476,12 @@ float4 ps_doom64skyclouds(Doom64SkyPixelData pd) : COLOR
 
 // styd. A liquid floor of Doom 64, as the remaster of the game draws it: the texture of the
 // floor, then the next texture of the game over it at 160 of 255. Each one scrolls its own way.
+// The light effect of the sector is added to what the textures give.
 float4 doom64liquidtexel(float2 uv)
 {
 	float4 below = tex2D(texturesamp, uv + doom64liquid.xy);
 	float4 above = tex2D(doom64liquidsamp, uv + doom64liquid.zw);
-	return float4(lerp(below.rgb, above.rgb, above.a * (160.0f / 255.0f)), below.a);
+	return float4(lerp(below.rgb, above.rgb, above.a * (160.0f / 255.0f)) + doom64light.x, below.a);
 }
 
 // The pixel shaders of the world, with these two textures

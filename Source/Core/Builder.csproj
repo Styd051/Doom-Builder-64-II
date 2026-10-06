@@ -182,6 +182,7 @@
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="Data\DirectoryReader.cs" />
+    <Compile Include="Data\Doom64SectorLights.cs" />
     <Compile Include="Data\Doom64Sky.cs" />
     <Compile Include="Data\FileImage.cs" />
     <Compile Include="Data\FlatImage.cs" />
@@ -1325,6 +1326,7 @@
     <None Include="Resources\Sky.png" />
     <None Include="Resources\SkyAnimated.png" />
     <None Include="Resources\LiquidAnimated.png" />
+    <None Include="Resources\LightAnimated.png" />
     <None Include="Resources\Update.png" />
     <None Include="Resources\Reload.png" />
     <None Include="Resources\Preferences.png" />

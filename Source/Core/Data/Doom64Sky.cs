@@ -102,6 +102,9 @@ namespace CodeImp.DoomBuilder.Data
 			120, 163, 236, 249
 		};
 
+		// The light effects of the sectors take their random numbers from it as well
+		internal static byte[] RandomTable { get { return rndtable; } }
+
 		private readonly Doom64SkyLayer clouds;		// The layer of the clouds, or null
 		private readonly Doom64SkyLayer fire;		// The layer of a fire that can burn, or null
 		private readonly byte[] stillfire;			// The pixels of the fire before it burns

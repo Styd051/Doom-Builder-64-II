@@ -1174,6 +1174,9 @@ namespace CodeImp.DoomBuilder.VisualModes
 
 			// styd. Its liquid floors move with the time as well
 			if(General.Map.DOOM64) General.Map.Data.AnimateDoom64Liquids(deltatime);
+
+			// styd. And so do the light effects of its sectors
+			if(General.Map.DOOM64) General.Map.Data.AnimateDoom64SectorLights(deltatime);
 			
 			// Visibility culling
 			DoCulling();

@@ -2106,6 +2106,7 @@ namespace CodeImp.DoomBuilder.Windows
 			buttontogglesky.Visible = General.Settings.GZToolbarGZDoom && maploaded;
 			buttontoggleskyanimation.Visible = General.Settings.GZToolbarGZDoom && maploaded && General.Map.DOOM64; // styd
 			buttontoggleliquidanimation.Visible = General.Settings.GZToolbarGZDoom && maploaded && General.Map.DOOM64; // styd
+			buttontogglelightanimation.Visible = General.Settings.GZToolbarGZDoom && maploaded && General.Map.DOOM64; // styd
 			buttontoggleeventlines.Visible = General.Settings.GZToolbarGZDoom && maploaded;
 			buttontogglevisualvertices.Visible = General.Settings.GZToolbarGZDoom && maploaded && General.Map.UDMF;
 			separatorgzmodes.Visible = General.Settings.GZToolbarGZDoom && maploaded;
@@ -2270,6 +2271,8 @@ namespace CodeImp.DoomBuilder.Windows
 				buttontoggleskyanimation.Checked = General.Settings.Doom64AnimateSky; // styd
 				buttontoggleliquidanimation.Visible = General.Map.DOOM64; // styd
 				buttontoggleliquidanimation.Checked = General.Settings.Doom64AnimateLiquids; // styd
+				buttontogglelightanimation.Visible = General.Map.DOOM64; // styd
+				buttontogglelightanimation.Checked = General.Settings.Doom64AnimateLights; // styd
 				buttontoggleeventlines.Checked = General.Settings.GZShowEventLines;
 				buttontogglevisualvertices.Visible = General.Map.UDMF;
 				buttontogglevisualvertices.Checked = General.Settings.GZShowVisualVertices;
@@ -3065,6 +3068,8 @@ namespace CodeImp.DoomBuilder.Windows
 			itemtoggleskyanimation.Checked = General.Settings.Doom64AnimateSky; // styd
 			itemtoggleliquidanimation.Visible = (General.Map != null && General.Map.DOOM64); // styd
 			itemtoggleliquidanimation.Checked = General.Settings.Doom64AnimateLiquids; // styd
+			itemtogglelightanimation.Visible = (General.Map != null && General.Map.DOOM64); // styd
+			itemtogglelightanimation.Checked = General.Settings.Doom64AnimateLights; // styd
 			itemtoggleeventlines.Checked = General.Settings.GZShowEventLines;
 			itemtogglevisualverts.Visible = (General.Map != null && General.Map.UDMF);
 			itemtogglevisualverts.Checked = General.Settings.GZShowVisualVertices;
@@ -3164,6 +3169,21 @@ namespace CodeImp.DoomBuilder.Windows
 			buttontoggleliquidanimation.Checked = General.Settings.Doom64AnimateLiquids;
 
 			General.MainWindow.DisplayStatus(StatusType.Action, "Liquid and scrolling animation is " + (General.Settings.Doom64AnimateLiquids ? "ENABLED" : "DISABLED"));
+			General.MainWindow.RedrawDisplay();
+			General.MainWindow.UpdateGZDoomPanel();
+		}
+
+		// styd. The light effects of the sectors of Doom 64 move in visual mode, or every sector
+		// keeps its own light
+		[BeginAction("doom64togglelightanimation")]
+		internal void ToggleLightAnimation()
+		{
+			General.Settings.Doom64AnimateLights = !General.Settings.Doom64AnimateLights;
+
+			itemtogglelightanimation.Checked = General.Settings.Doom64AnimateLights;
+			buttontogglelightanimation.Checked = General.Settings.Doom64AnimateLights;
+
+			General.MainWindow.DisplayStatus(StatusType.Action, "Sector light animation is " + (General.Settings.Doom64AnimateLights ? "ENABLED" : "DISABLED"));
 			General.MainWindow.RedrawDisplay();
 			General.MainWindow.UpdateGZDoomPanel();
 		}

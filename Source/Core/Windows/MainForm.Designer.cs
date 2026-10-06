@@ -195,6 +195,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemtogglesky = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemtoggleskyanimation = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemtoggleliquidanimation = new System.Windows.Forms.ToolStripMenuItem();
+			this.itemtogglelightanimation = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemtoggleeventlines = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemtogglevisualverts = new System.Windows.Forms.ToolStripMenuItem();
 			this.buttonfullbrightness = new System.Windows.Forms.ToolStripButton();
@@ -233,6 +234,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.buttontogglesky = new System.Windows.Forms.ToolStripButton();
 			this.buttontoggleskyanimation = new System.Windows.Forms.ToolStripButton();
 			this.buttontoggleliquidanimation = new System.Windows.Forms.ToolStripButton();
+			this.buttontogglelightanimation = new System.Windows.Forms.ToolStripButton();
 			this.buttontoggleeventlines = new System.Windows.Forms.ToolStripButton();
 			this.buttontogglevisualvertices = new System.Windows.Forms.ToolStripButton();
 			this.separatorgzmodes = new System.Windows.Forms.ToolStripSeparator();
@@ -812,6 +814,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemtogglesky,
 			this.itemtoggleskyanimation,
 			this.itemtoggleliquidanimation,
+			this.itemtogglelightanimation,
 			this.itemtoggleeventlines,
 			this.itemtogglevisualverts,
 			this.separatorhelpers,
@@ -1432,6 +1435,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.buttontogglesky,
 			this.buttontoggleskyanimation,
 			this.buttontoggleliquidanimation,
+			this.buttontogglelightanimation,
 			this.buttontoggleeventlines,
 			this.buttontogglevisualvertices,
 			this.separatorgzmodes,
@@ -1853,6 +1857,16 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemtoggleliquidanimation.Tag = "builder_doom64toggleliquidanimation";
 			this.itemtoggleliquidanimation.Text = "Animate liquids and scrolling textures (Visual mode)";
 			this.itemtoggleliquidanimation.Click += new System.EventHandler(this.InvokeTaggedAction);
+			//
+			// itemtogglelightanimation
+			//
+			this.itemtogglelightanimation.CheckOnClick = true;
+			this.itemtogglelightanimation.Image = global::CodeImp.DoomBuilder.Properties.Resources.LightAnimated;
+			this.itemtogglelightanimation.Name = "itemtogglelightanimation";
+			this.itemtogglelightanimation.Size = new System.Drawing.Size(273, 22);
+			this.itemtogglelightanimation.Tag = "builder_doom64togglelightanimation";
+			this.itemtogglelightanimation.Text = "Animate sector light effects (Visual mode)";
+			this.itemtogglelightanimation.Click += new System.EventHandler(this.InvokeTaggedAction);
 			// 
 			// itemeventlines
 			// 
@@ -2286,6 +2300,18 @@ namespace CodeImp.DoomBuilder.Windows
 			this.buttontoggleliquidanimation.Tag = "builder_doom64toggleliquidanimation";
 			this.buttontoggleliquidanimation.Text = "Animate Liquids and Scrolling Textures (Visual mode)";
 			this.buttontoggleliquidanimation.Click += new System.EventHandler(this.InvokeTaggedAction);
+			//
+			// buttontogglelightanimation
+			//
+			this.buttontogglelightanimation.CheckOnClick = true;
+			this.buttontogglelightanimation.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+			this.buttontogglelightanimation.Image = global::CodeImp.DoomBuilder.Properties.Resources.LightAnimated;
+			this.buttontogglelightanimation.ImageTransparentColor = System.Drawing.Color.Magenta;
+			this.buttontogglelightanimation.Name = "buttontogglelightanimation";
+			this.buttontogglelightanimation.Size = new System.Drawing.Size(23, 20);
+			this.buttontogglelightanimation.Tag = "builder_doom64togglelightanimation";
+			this.buttontogglelightanimation.Text = "Animate Sector Light Effects (Visual mode)";
+			this.buttontogglelightanimation.Click += new System.EventHandler(this.InvokeTaggedAction);
 			// 
 			// buttontoggleeventlines
 			// 
@@ -3137,6 +3163,7 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.ToolStripButton buttontogglesky;
 		private System.Windows.Forms.ToolStripButton buttontoggleskyanimation;
 		private System.Windows.Forms.ToolStripButton buttontoggleliquidanimation;
+		private System.Windows.Forms.ToolStripButton buttontogglelightanimation;
 		private System.Windows.Forms.ToolStripStatusLabel warnsLabel;
 		private System.Windows.Forms.ToolStripMenuItem itemReloadModedef;
 		private System.Windows.Forms.ToolStripMenuItem itemReloadGldefs;
@@ -3198,6 +3225,7 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.ToolStripMenuItem itemtogglesky;
 		private System.Windows.Forms.ToolStripMenuItem itemtoggleskyanimation;
 		private System.Windows.Forms.ToolStripMenuItem itemtoggleliquidanimation;
+		private System.Windows.Forms.ToolStripMenuItem itemtogglelightanimation;
 		private System.Windows.Forms.ToolStripMenuItem itemtoggleeventlines;
 		private System.Windows.Forms.ToolStripMenuItem itemtogglevisualverts;
 		private ToolStripMenuItem itemimport;

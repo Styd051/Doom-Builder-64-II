@@ -141,6 +141,9 @@ namespace CodeImp.DoomBuilder.Data
 		private Dictionary<string, ImageData> doom64liquidtextures; // The texture that is drawn over the texture of a liquid floor
 		private long doom64liquidtime; // How long the liquid floors have been moving, in milliseconds
 
+		// styd. The light effects of the sectors of Doom 64
+		private Doom64SectorLights doom64sectorlights; // What they add to the light of each sector, or null when they stand still
+
 		//mxd. Comment icons
 		private ImageData[] commenttextures;
 		
@@ -333,6 +336,7 @@ namespace CodeImp.DoomBuilder.Data
 				doom64skyanimation = null;
 				doom64nexttextures = null;
 				doom64liquidtextures = null;
+				doom64sectorlights = null;
 				
 				// Done
 				isdisposed = true;
@@ -3572,6 +3576,26 @@ namespace CodeImp.DoomBuilder.Data
 		{
 			if(General.Settings.Doom64AnimateLiquids) doom64liquidtime += milliseconds;
 			else doom64liquidtime = 0;
+		}
+
+		// styd. This lets the time of the light effects of the sectors of a Doom 64 map go by, when
+		// they are set to move. Set not to move, every sector is put back at its own light.
+		internal void AnimateDoom64SectorLights(long milliseconds)
+		{
+			if(General.Settings.Doom64AnimateLights)
+			{
+				if(doom64sectorlights == null) doom64sectorlights = new Doom64SectorLights();
+				doom64sectorlights.Advance(General.Map.Map, milliseconds);
+			}
+			else doom64sectorlights = null;
+		}
+
+		// styd. What the light effect of a sector of Doom 64 adds at this time to the textures of
+		// what that sector shows, of 255
+		internal int GetDoom64SectorLight(Sector s)
+		{
+			if((doom64sectorlights == null) || !General.Settings.Doom64AnimateLights) return 0;
+			return doom64sectorlights.GetLevel(s);
 		}
 
 		// styd. This gives the fog of a Doom 64 map. The game takes it from the sky of the map,

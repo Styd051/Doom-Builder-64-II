@@ -971,30 +971,19 @@ namespace CodeImp.DoomBuilder.Rendering
 			return new Vector4(counterx + scroll.X, scroll.Y, scroll.X, scroll.Y - countery);
 		}
 
-		// styd. This sets the second texture and the offsets of the passes that draw the liquid floors
-		// of Doom 64 and what the game has scrolled, and returns how far these passes are from the
-		// usual ones: 0 for geometry that is drawn as usual. A liquid floor has its second texture. A
-		// floor, a ceiling or a wall that has scrolled has a transparent second texture, which leaves
-		// its own texture as it is, where it has scrolled to.
-		private int SetDoom64ScrollPass(VisualGeometry g)
+		// styd. What the light effect of a sector of Doom 64 adds at this time to the textures of what
+		// the sector shows, as the game adds it before it gives them the color of the sector. Nothing
+		// at full brightness, where the light of the sectors is not shown.
+		private static float Doom64SectorLight(Sector s)
 		{
-			// (not when another texture is drawn in the place of its own, or the lighting alone)
-			ImageData texture = g.Texture;
-			if(showlightonly || (texture is UnknownImage) || !texture.IsImageLoaded || texture.IsDisposed) return 0;
+			if(fullbrightness || (s == null) || !General.Map.DOOM64) return 0f;
+			return General.Map.Data.GetDoom64SectorLight(s) / 255f;
+		}
 
-			ImageData liquid = g.Doom64LiquidTexture;
-			if((liquid != null) && liquid.IsImageLoaded && !liquid.IsDisposed)
-			{
-				if((liquid.Texture == null) || liquid.Texture.Disposed) liquid.CreateTexture();
-				graphics.Shaders.World3D.Texture2 = liquid.Texture;
-				graphics.Shaders.World3D.Doom64Liquid = Doom64LiquidOffsets(g, texture);
-				return SHADERPASS_DOOM64_LIQUID;
-			}
-
-			if((g.Doom64ScrollFlow.x == 0f) && (g.Doom64ScrollFlow.y == 0f)) return 0;
-			Vector2 scroll = Doom64ScrollOffset(g, texture);
-			if((scroll.X == 0f) && (scroll.Y == 0f)) return 0;
-
+		// styd. This sets a transparent texture as the second texture of the passes that draw the
+		// liquid floors of Doom 64: it leaves their first texture as it is
+		private void SetDoom64ClearTexture()
+		{
 			if((doom64cleartexture == null) || doom64cleartexture.Disposed)
 			{
 				doom64cleartexture = new Texture(graphics.Device, 1, 1, 1, Usage.None, Format.A8R8G8B8, Pool.Managed);
@@ -1002,7 +991,54 @@ namespace CodeImp.DoomBuilder.Rendering
 				doom64cleartexture.UnlockRectangle(0);
 			}
 			graphics.Shaders.World3D.Texture2 = doom64cleartexture;
+		}
+
+		// styd. This sets the second texture, the offsets and the light of the passes that draw the
+		// liquid floors of Doom 64, what the game has scrolled and what a light effect lights, and
+		// returns how far these passes are from the usual ones: 0 for geometry that is drawn as usual.
+		// A liquid floor has its second texture. A floor, a ceiling or a wall that has scrolled, or
+		// whose sector has a light at this time, has a transparent second texture, which leaves its
+		// own texture as it is, where it has scrolled to.
+		private int SetDoom64ScrollPass(VisualGeometry g)
+		{
+			// (not when another texture is drawn in the place of its own, or the lighting alone)
+			ImageData texture = g.Texture;
+			if(showlightonly || (texture is UnknownImage) || !texture.IsImageLoaded || texture.IsDisposed) return 0;
+
+			float light = Doom64SectorLight((g.Sector != null) ? g.Sector.Sector : null);
+
+			ImageData liquid = g.Doom64LiquidTexture;
+			if((liquid != null) && liquid.IsImageLoaded && !liquid.IsDisposed)
+			{
+				if((liquid.Texture == null) || liquid.Texture.Disposed) liquid.CreateTexture();
+				graphics.Shaders.World3D.Texture2 = liquid.Texture;
+				graphics.Shaders.World3D.Doom64Liquid = Doom64LiquidOffsets(g, texture);
+				graphics.Shaders.World3D.Doom64Light = light;
+				return SHADERPASS_DOOM64_LIQUID;
+			}
+
+			Vector2 scroll = new Vector2();
+			if((g.Doom64ScrollFlow.x != 0f) || (g.Doom64ScrollFlow.y != 0f)) scroll = Doom64ScrollOffset(g, texture);
+			if((scroll.X == 0f) && (scroll.Y == 0f) && (light == 0f)) return 0;
+
+			SetDoom64ClearTexture();
 			graphics.Shaders.World3D.Doom64Liquid = new Vector4(scroll.X, scroll.Y, 0f, 0f);
+			graphics.Shaders.World3D.Doom64Light = light;
+			return SHADERPASS_DOOM64_LIQUID;
+		}
+
+		// styd. The same for a thing in a sector of Doom 64 that has a light at this time, given the
+		// pass that it would be drawn with: the passes 0, 2, 8 and 10 have such a pass.
+		private int SetDoom64LightPass(VisualThing t, int wantedshaderpass)
+		{
+			if(((wantedshaderpass & ~10) != 0) || (t.StencilColor.a != 0)) return 0;
+
+			float light = Doom64SectorLight(t.Thing.Sector);
+			if(light == 0f) return 0;
+
+			SetDoom64ClearTexture();
+			graphics.Shaders.World3D.Doom64Liquid = new Vector4();
+			graphics.Shaders.World3D.Doom64Light = light;
 			return SHADERPASS_DOOM64_LIQUID;
 		}
 
@@ -1192,6 +1228,9 @@ namespace CodeImp.DoomBuilder.Rendering
 							{
 								vertexcolor = new Color4();
 							}
+
+							// styd. A thing in a sector of Doom 64 that has a light at this time gets it
+							wantedshaderpass += SetDoom64LightPass(t, wantedshaderpass);
 
 							// Switch shader pass?
 							if(currentshaderpass != wantedshaderpass) 
@@ -1557,6 +1596,9 @@ namespace CodeImp.DoomBuilder.Rendering
 						{
 							vertexcolor = new Color4();
 						}
+
+						// styd. A thing in a sector of Doom 64 that has a light at this time gets it
+						wantedshaderpass += SetDoom64LightPass(t, wantedshaderpass);
 
 						// Switch shader pass?
 						if(currentshaderpass != wantedshaderpass)
