@@ -53,6 +53,13 @@ namespace CodeImp.DoomBuilder.VisualModes
 		private const string DOOM64_SCROLL_UP_FLAG = "16384";
 		private const string DOOM64_SCROLL_DOWN_FLAG = "32768";
 
+		// styd. The line flags of Doom 64 that scroll the textures of a wall: to the right, to the
+		// left, up and down
+		private const string DOOM64_WALL_SCROLL_RIGHT_FLAG = "131072";
+		private const string DOOM64_WALL_SCROLL_LEFT_FLAG = "262144";
+		private const string DOOM64_WALL_SCROLL_UP_FLAG = "524288";
+		private const string DOOM64_WALL_SCROLL_DOWN_FLAG = "1048576";
+
 		#endregion
 
 		#region ================== Variables
@@ -124,8 +131,8 @@ namespace CodeImp.DoomBuilder.VisualModes
 		// styd. Doom 64 draws a liquid floor with two textures: its own, and this one over it
 		public ImageData Doom64LiquidTexture { get { return doom64liquidtexture; } }
 
-		// styd. How far the sector of a floor or of a ceiling of Doom 64 scrolls it in a tic of the
-		// game, in map units to the left and up
+		// styd. How far the game scrolls the texture of this floor, ceiling or wall of Doom 64 in a
+		// tic: the units that it adds to the place of the texture, along its width and its height
 		public Vector2D Doom64ScrollFlow { get { return doom64scrollflow; } }
 
 		/// <summary>
@@ -215,6 +222,20 @@ namespace CodeImp.DoomBuilder.VisualModes
 			doom64scrollflow = new Vector2D(
 				speed * ((s.IsFlagSet(DOOM64_SCROLL_LEFT_FLAG) ? 1f : 0f) - (s.IsFlagSet(DOOM64_SCROLL_RIGHT_FLAG) ? 1f : 0f)),
 				speed * ((s.IsFlagSet(DOOM64_SCROLL_UP_FLAG) ? 1f : 0f) - (s.IsFlagSet(DOOM64_SCROLL_DOWN_FLAG) ? 1f : 0f)));
+		}
+
+		// styd. A line of Doom 64 scrolls the textures of its front side when it has the flags for
+		// it: in every tic the game adds a unit to the offsets of that side, or takes one away. The
+		// back side of the line does not scroll.
+		protected void SetDoom64Scroll(Sidedef sd)
+		{
+			doom64scrollflow = new Vector2D();
+			if(!General.Map.DOOM64 || (sd == null) || !sd.IsFront) return;
+
+			Linedef l = sd.Line;
+			doom64scrollflow = new Vector2D(
+				(l.IsFlagSet(DOOM64_WALL_SCROLL_RIGHT_FLAG) ? 1f : 0f) - (l.IsFlagSet(DOOM64_WALL_SCROLL_LEFT_FLAG) ? 1f : 0f),
+				(l.IsFlagSet(DOOM64_WALL_SCROLL_UP_FLAG) ? 1f : 0f) - (l.IsFlagSet(DOOM64_WALL_SCROLL_DOWN_FLAG) ? 1f : 0f));
 		}
 
 		// This sets the vertices for this geometry

@@ -273,6 +273,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 						}
 					}
 
+					SetDoom64Scroll(Sidedef); // styd
 					base.SetVertices(verts);
 					return true;
 				}

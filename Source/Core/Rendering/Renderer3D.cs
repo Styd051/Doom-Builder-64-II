@@ -126,6 +126,10 @@ namespace CodeImp.DoomBuilder.Rendering
 		private bool doom64fog;
 		private Color4 doom64fogcolor;
 
+		// styd. Doom 64: a texture of one transparent pixel. Drawn over another texture, it leaves it
+		// as it is: it is the second texture of what the game has scrolled.
+		private Texture doom64cleartexture;
+
 		//mxd. Solid things to be rendered (currently(?) there won't be any). Must be sorted by sector.
 		private Dictionary<ImageData, List<VisualThing>> solidthings;
 
@@ -205,6 +209,7 @@ namespace CodeImp.DoomBuilder.Rendering
 			{
 				// Clean up
 				if(vertexhandle != null) vertexhandle.Dispose(); //mxd
+				if(doom64cleartexture != null) doom64cleartexture.Dispose(); // styd
 				
 				// Done
 				base.Dispose();
@@ -936,16 +941,17 @@ namespace CodeImp.DoomBuilder.Rendering
 			vb.Dispose();
 		}
 
-		// styd. How far the sector of a floor or of a ceiling of Doom 64 has scrolled it, in parts of
-		// its texture, as the game scrolls it: so many units in every tic.
+		// styd. How far the game has scrolled the texture of a floor, a ceiling or a wall of Doom 64,
+		// in parts of that texture: so many units in every tic.
 		private static Vector2 Doom64ScrollOffset(VisualGeometry g, ImageData texture)
 		{
 			long tics = General.Map.Data.Doom64LiquidTics;
 			int width = Math.Max((int)texture.ScaledWidth, 1), height = Math.Max((int)texture.ScaledHeight, 1);
 			Vector2D flow = g.Doom64ScrollFlow;
 
-			// (whole numbers of tics and of units: nothing drifts however long it moves)
-			return new Vector2((float)((tics * (int)flow.x) % width) / width, (float)((tics * (int)flow.y) % height) / height);
+			// (whole numbers of tics and of units: nothing drifts however long it moves; a texture that
+			// a wall mirrors comes back on itself after two times its size)
+			return new Vector2((float)((tics * (int)flow.x) % (2 * width)) / width, (float)((tics * (int)flow.y) % (2 * height)) / height);
 		}
 
 		// styd. How far the two textures of a liquid floor of Doom 64 have scrolled, in parts of the
@@ -963,6 +969,41 @@ namespace CodeImp.DoomBuilder.Rendering
 			float counterx = (float)(tics % (2 * width)) / (2 * width);
 			float countery = (float)(tics % (2 * height)) / (2 * height);
 			return new Vector4(counterx + scroll.X, scroll.Y, scroll.X, scroll.Y - countery);
+		}
+
+		// styd. This sets the second texture and the offsets of the passes that draw the liquid floors
+		// of Doom 64 and what the game has scrolled, and returns how far these passes are from the
+		// usual ones: 0 for geometry that is drawn as usual. A liquid floor has its second texture. A
+		// floor, a ceiling or a wall that has scrolled has a transparent second texture, which leaves
+		// its own texture as it is, where it has scrolled to.
+		private int SetDoom64ScrollPass(VisualGeometry g)
+		{
+			// (not when another texture is drawn in the place of its own, or the lighting alone)
+			ImageData texture = g.Texture;
+			if(showlightonly || (texture is UnknownImage) || !texture.IsImageLoaded || texture.IsDisposed) return 0;
+
+			ImageData liquid = g.Doom64LiquidTexture;
+			if((liquid != null) && liquid.IsImageLoaded && !liquid.IsDisposed)
+			{
+				if((liquid.Texture == null) || liquid.Texture.Disposed) liquid.CreateTexture();
+				graphics.Shaders.World3D.Texture2 = liquid.Texture;
+				graphics.Shaders.World3D.Doom64Liquid = Doom64LiquidOffsets(g, texture);
+				return SHADERPASS_DOOM64_LIQUID;
+			}
+
+			if((g.Doom64ScrollFlow.x == 0f) && (g.Doom64ScrollFlow.y == 0f)) return 0;
+			Vector2 scroll = Doom64ScrollOffset(g, texture);
+			if((scroll.X == 0f) && (scroll.Y == 0f)) return 0;
+
+			if((doom64cleartexture == null) || doom64cleartexture.Disposed)
+			{
+				doom64cleartexture = new Texture(graphics.Device, 1, 1, 1, Usage.None, Format.A8R8G8B8, Pool.Managed);
+				doom64cleartexture.LockRectangle(0, LockFlags.None).Data.Write(0);
+				doom64cleartexture.UnlockRectangle(0);
+			}
+			graphics.Shaders.World3D.Texture2 = doom64cleartexture;
+			graphics.Shaders.World3D.Doom64Liquid = new Vector4(scroll.X, scroll.Y, 0f, 0f);
+			return SHADERPASS_DOOM64_LIQUID;
 		}
 
 		// This performs a single render pass
@@ -1033,28 +1074,9 @@ namespace CodeImp.DoomBuilder.Rendering
 						if(General.Settings.GZDrawFog && !fullbrightness && (doom64fog || sector.Sector.FogMode != SectorFogMode.NONE)) // styd
 							wantedshaderpass += 8;
 
-						// styd. A liquid floor of Doom 64 is drawn with its two textures, in passes of its own
-						ImageData liquid = g.Doom64LiquidTexture;
-						if((liquid != null) && !showlightonly && object.ReferenceEquals(curtexture, group.Key) && liquid.IsImageLoaded && !liquid.IsDisposed)
-						{
-							if((liquid.Texture == null) || liquid.Texture.Disposed) liquid.CreateTexture();
-							graphics.Shaders.World3D.Texture2 = liquid.Texture;
-							graphics.Shaders.World3D.Doom64Liquid = Doom64LiquidOffsets(g, curtexture);
-							wantedshaderpass += SHADERPASS_DOOM64_LIQUID;
-						}
-						// styd. A floor or a ceiling that its sector has scrolled is drawn in these passes too,
-						// with its own texture as the second one, at the same place: two times the same texel
-						// make that texel, so this is the texture alone where it has scrolled to
-						else if(((g.Doom64ScrollFlow.x != 0f) || (g.Doom64ScrollFlow.y != 0f)) && !showlightonly && object.ReferenceEquals(curtexture, group.Key))
-						{
-							Vector2 scroll = Doom64ScrollOffset(g, curtexture);
-							if((scroll.X != 0f) || (scroll.Y != 0f))
-							{
-								graphics.Shaders.World3D.Texture2 = curtexture.Texture;
-								graphics.Shaders.World3D.Doom64Liquid = new Vector4(scroll.X, scroll.Y, scroll.X, scroll.Y);
-								wantedshaderpass += SHADERPASS_DOOM64_LIQUID;
-							}
-						}
+						// styd. A liquid floor of Doom 64 is drawn with its two textures, in passes of its
+						// own; a floor, a ceiling or a wall that has scrolled is drawn in these passes too
+						wantedshaderpass += SetDoom64ScrollPass(g);
 
 						// Switch shader pass?
 						if(currentshaderpass != wantedshaderpass)
@@ -1367,6 +1389,9 @@ namespace CodeImp.DoomBuilder.Rendering
                     //mxd. Render fog?
                     if (General.Settings.GZDrawFog && !fullbrightness && (doom64fog || sector.Sector.FogMode != SectorFogMode.NONE)) // styd
                         wantedshaderpass += 8;
+
+                    // styd. The liquid floors of Doom 64, and what the game has scrolled
+                    wantedshaderpass += SetDoom64ScrollPass(g);
 
                     // Switch shader pass?
                     if (currentshaderpass != wantedshaderpass)

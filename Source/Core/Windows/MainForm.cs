@@ -3153,8 +3153,8 @@ namespace CodeImp.DoomBuilder.Windows
 			General.MainWindow.UpdateGZDoomPanel();
 		}
 
-		// styd. The liquid floors of Doom 64, and its floors and ceilings that scroll, move in visual
-		// mode, or stay as they are
+		// styd. The liquid floors of Doom 64, and its floors, ceilings and walls that scroll, move in
+		// visual mode, or stay as they are
 		[BeginAction("doom64toggleliquidanimation")]
 		internal void ToggleLiquidAnimation()
 		{

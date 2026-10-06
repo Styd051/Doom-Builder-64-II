@@ -228,6 +228,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				if(verts.Count > 2)
 				{
 					SetDoom64TextureHoles(); // styd
+					SetDoom64Scroll(Sidedef); // styd
 					base.SetVertices(verts);
 					return true;
 				}
