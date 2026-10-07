@@ -61,6 +61,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		private const int DOOM64_TICRATE = 30;
 		private const int DOOM64_SPAWN_FADE_TICS = (255 + BaseVisualThing.DOOM64_SPAWN_FADE - 1) / BaseVisualThing.DOOM64_SPAWN_FADE;
 		private const int DOOM64_SPAWN_PREVIEW_TICS = DOOM64_SPAWN_FADE_TICS + 2 * DOOM64_TICRATE;
+
+		// styd. For how long, in milliseconds, a target is aimed at before its preview begins by itself
+		private const int DOOM64_SPAWN_AIM_TIME = 500;
 		
 		#endregion
 		
@@ -107,6 +110,12 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		private int doom64spawntag;
 		private long doom64spawntime = -1;
 		private int doom64spawntics;
+
+		// styd. A preview can begin by itself: what has been the target, for how long in milliseconds,
+		// and whether its time has come already (a target gets one preview)
+		private IVisualPickable doom64aimtarget;
+		private long doom64aimtime;
+		private bool doom64aimdone;
 		
 		//mxd. Used in Cut/PasteSelection actions
 		private readonly List<ThingCopyData> copybuffer;
@@ -1274,6 +1283,108 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			}
 		}
 
+		// styd. This finds the tag of the Doom 64 things that the target makes appear: the one of the
+		// targeted thing with the Spawner flag, or of the targeted line with the Thing Spawn action.
+		// Returns false, with what to tell, when the target is neither.
+		private bool GetDoom64SpawnPreviewTag(out int tag, out string problem)
+		{
+			tag = 0;
+			problem = null;
+
+			if(target.picked is BaseVisualThing)
+			{
+				Thing t = ((BaseVisualThing)target.picked).Thing;
+				if(t.IsFlagSet(VisualThing.DOOM64_SPAWNER_FLAG))
+				{
+					tag = t.Tag;
+					return true;
+				}
+				problem = "This thing does not have the Spawner flag!";
+			}
+			else if(target.picked is BaseVisualGeometrySidedef)
+			{
+				Linedef l = ((BaseVisualGeometrySidedef)target.picked).Sidedef.Line;
+				if(l.Action == DOOM64_THING_SPAWN_ACTION)
+				{
+					tag = l.Tag;
+					return true;
+				}
+				problem = "This line does not have the Thing Spawn action (" + DOOM64_THING_SPAWN_ACTION + ")!";
+			}
+			else
+			{
+				problem = "Target a thing with the Spawner flag, or a line with the Thing Spawn action (" + DOOM64_THING_SPAWN_ACTION + ")!";
+			}
+
+			return false;
+		}
+
+		// styd. This begins the preview of a Thing Spawn action for the Doom 64 things with the
+		// Spawner flag that have the given tag. Returns false when there is no such thing.
+		private bool StartDoom64SpawnPreview(int tag)
+		{
+			int count = 0;
+			foreach(Thing t in General.Map.Map.Things)
+			{
+				if((t.Tag == tag) && t.IsFlagSet(VisualThing.DOOM64_SPAWNER_FLAG)) count++;
+			}
+			if(count == 0) return false;
+
+			// A preview that is going on ends here
+			if(doom64spawntime >= 0)
+			{
+				doom64spawntime = -1;
+				UpdateDoom64SpawnerThings();
+			}
+
+			doom64spawntag = tag;
+			doom64spawntime = 0;
+			doom64spawntics = 0;
+			SetupDoom64SpawnPreviewThings();
+			General.Interface.DisplayStatus(StatusType.Action, "Thing Spawn preview: " + count + ((count == 1) ? " thing" : " things") + " with the tag " + tag + ".");
+			return true;
+		}
+
+		// styd. With its option, the preview of a Thing Spawn action begins by itself when the target
+		// has been a Doom 64 thing with the Spawner flag, or a line with that action, for a while.
+		// A target gets one preview: it has to change and to come back for another one.
+		private void ProcessDoom64SpawnPreviewOnAim(long deltatime)
+		{
+			if(!General.Map.DOOM64 || !General.Settings.Doom64SpawnPreviewOnAim)
+			{
+				doom64aimtarget = null;
+				return;
+			}
+
+			// Another target: the time starts again
+			if(target.picked != doom64aimtarget)
+			{
+				doom64aimtarget = target.picked;
+				doom64aimtime = 0;
+				doom64aimdone = false;
+				return;
+			}
+
+			if(doom64aimdone) return;
+			doom64aimtime += deltatime;
+			if(doom64aimtime < DOOM64_SPAWN_AIM_TIME) return;
+			doom64aimdone = true;
+
+			// (a preview of this tag that is going on is not begun again)
+			int tag;
+			string problem;
+			if(GetDoom64SpawnPreviewTag(out tag, out problem) && ((doom64spawntime < 0) || (tag != doom64spawntag))) StartDoom64SpawnPreview(tag);
+		}
+
+		// styd. This gives what the renderer highlights: the target, unless it is a Doom 64 thing that
+		// appears in the preview of a Thing Spawn action, as a highlighted thing is never faint
+		private IVisualPickable GetHighlightedTarget()
+		{
+			BaseVisualThing vt = target.picked as BaseVisualThing;
+			if((vt != null) && (GetDoom64SpawnPreviewTics(vt.Thing) >= 0)) return null;
+			return target.picked;
+		}
+
 		// styd. This makes the preview of a Thing Spawn action go on. The things change at each tic
 		// of the game while they appear; when the preview is over they are shown as they are set
 		// to be again.
@@ -1307,6 +1418,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			// has changed
 			if(General.Map.DOOM64 && (doom64spawnermode != General.Settings.Doom64SpawnerThings)) UpdateDoom64SpawnerThings();
 			ProcessDoom64SpawnPreview(deltatime);
+			ProcessDoom64SpawnPreviewOnAim(deltatime);
 
 			// Process things?
 			base.ProcessThings = (BuilderPlug.Me.ShowVisualThings != 0);
@@ -1418,7 +1530,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				renderer.ShowSelection = General.Settings.GZOldHighlightMode || General.Settings.UseHighlight; //mxd
 
 				if(General.Settings.UseHighlight)
-					renderer.SetHighlightedObject(target.picked);
+					renderer.SetHighlightedObject(GetHighlightedTarget());
 				
 				// Begin with geometry
 				renderer.StartGeometry();
@@ -3019,57 +3131,18 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 			PickTargetUnlocked();
 
-			// The tag is the one of the targeted thing or line
 			int tag;
-			if(target.picked is BaseVisualThing)
+			string problem;
+			if(!GetDoom64SpawnPreviewTag(out tag, out problem))
 			{
-				Thing t = ((BaseVisualThing)target.picked).Thing;
-				if(!t.IsFlagSet(VisualThing.DOOM64_SPAWNER_FLAG))
-				{
-					General.Interface.DisplayStatus(StatusType.Warning, "This thing does not have the Spawner flag!");
-					return;
-				}
-				tag = t.Tag;
-			}
-			else if(target.picked is BaseVisualGeometrySidedef)
-			{
-				Linedef l = ((BaseVisualGeometrySidedef)target.picked).Sidedef.Line;
-				if(l.Action != DOOM64_THING_SPAWN_ACTION)
-				{
-					General.Interface.DisplayStatus(StatusType.Warning, "This line does not have the Thing Spawn action (" + DOOM64_THING_SPAWN_ACTION + ")!");
-					return;
-				}
-				tag = l.Tag;
-			}
-			else
-			{
-				General.Interface.DisplayStatus(StatusType.Warning, "Target a thing with the Spawner flag, or a line with the Thing Spawn action (" + DOOM64_THING_SPAWN_ACTION + ")!");
+				General.Interface.DisplayStatus(StatusType.Warning, problem);
 				return;
 			}
 
-			int count = 0;
-			foreach(Thing t in General.Map.Map.Things)
-			{
-				if((t.Tag == tag) && t.IsFlagSet(VisualThing.DOOM64_SPAWNER_FLAG)) count++;
-			}
-			if(count == 0)
+			if(!StartDoom64SpawnPreview(tag))
 			{
 				General.Interface.DisplayStatus(StatusType.Warning, "No thing with the Spawner flag has the tag " + tag + "!");
-				return;
 			}
-
-			// A preview that is going on ends here
-			if(doom64spawntime >= 0)
-			{
-				doom64spawntime = -1;
-				UpdateDoom64SpawnerThings();
-			}
-
-			doom64spawntag = tag;
-			doom64spawntime = 0;
-			doom64spawntics = 0;
-			SetupDoom64SpawnPreviewThings();
-			General.Interface.DisplayStatus(StatusType.Action, "Thing Spawn preview: " + count + ((count == 1) ? " thing" : " things") + " with the tag " + tag + ".");
 		}
 
 		//mxd

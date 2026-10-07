@@ -200,6 +200,8 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemspawnerghost = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemspawnerhidden = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemspawnershown = new System.Windows.Forms.ToolStripMenuItem();
+			this.itemspawnerseparator = new System.Windows.Forms.ToolStripSeparator();
+			this.itemspawnerpreviewonaim = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemtoggleeventlines = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemtogglevisualverts = new System.Windows.Forms.ToolStripMenuItem();
 			this.buttonfullbrightness = new System.Windows.Forms.ToolStripButton();
@@ -243,6 +245,8 @@ namespace CodeImp.DoomBuilder.Windows
 			this.spawnerghost = new System.Windows.Forms.ToolStripMenuItem();
 			this.spawnerhidden = new System.Windows.Forms.ToolStripMenuItem();
 			this.spawnershown = new System.Windows.Forms.ToolStripMenuItem();
+			this.spawnerseparator = new System.Windows.Forms.ToolStripSeparator();
+			this.spawnerpreviewonaim = new System.Windows.Forms.ToolStripMenuItem();
 			this.buttontoggleeventlines = new System.Windows.Forms.ToolStripButton();
 			this.buttontogglevisualvertices = new System.Windows.Forms.ToolStripButton();
 			this.separatorgzmodes = new System.Windows.Forms.ToolStripSeparator();
@@ -1883,7 +1887,9 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemdoom64spawnermodes.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
 			this.itemspawnerghost,
 			this.itemspawnerhidden,
-			this.itemspawnershown});
+			this.itemspawnershown,
+			this.itemspawnerseparator,
+			this.itemspawnerpreviewonaim});
 			this.itemdoom64spawnermodes.Image = global::CodeImp.DoomBuilder.Properties.Resources.SpawnerGhost;
 			this.itemdoom64spawnermodes.Name = "itemdoom64spawnermodes";
 			this.itemdoom64spawnermodes.Size = new System.Drawing.Size(273, 22);
@@ -1918,6 +1924,19 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemspawnershown.Tag = 2;
 			this.itemspawnershown.Text = "Show Spawner things";
 			this.itemspawnershown.Click += new System.EventHandler(this.ChangeDoom64SpawnerMode);
+			//
+			// itemspawnerseparator
+			//
+			this.itemspawnerseparator.Name = "itemspawnerseparator";
+			this.itemspawnerseparator.Size = new System.Drawing.Size(297, 6);
+			//
+			// itemspawnerpreviewonaim
+			//
+			this.itemspawnerpreviewonaim.Name = "itemspawnerpreviewonaim";
+			this.itemspawnerpreviewonaim.Size = new System.Drawing.Size(300, 22);
+			this.itemspawnerpreviewonaim.Tag = "builder_doom64togglespawnpreviewonaim";
+			this.itemspawnerpreviewonaim.Text = "Preview Thing Spawn when aiming";
+			this.itemspawnerpreviewonaim.Click += new System.EventHandler(this.InvokeTaggedAction);
 			// 
 			// itemeventlines
 			// 
@@ -2370,7 +2389,9 @@ namespace CodeImp.DoomBuilder.Windows
 			this.doom64spawnermode.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
 			this.spawnerghost,
 			this.spawnerhidden,
-			this.spawnershown});
+			this.spawnershown,
+			this.spawnerseparator,
+			this.spawnerpreviewonaim});
 			this.doom64spawnermode.Image = global::CodeImp.DoomBuilder.Properties.Resources.SpawnerGhost;
 			this.doom64spawnermode.ImageTransparentColor = System.Drawing.Color.Magenta;
 			this.doom64spawnermode.Name = "doom64spawnermode";
@@ -2408,6 +2429,19 @@ namespace CodeImp.DoomBuilder.Windows
 			this.spawnershown.Tag = 2;
 			this.spawnershown.Text = "Show Spawner things";
 			this.spawnershown.Click += new System.EventHandler(this.ChangeDoom64SpawnerMode);
+			//
+			// spawnerseparator
+			//
+			this.spawnerseparator.Name = "spawnerseparator";
+			this.spawnerseparator.Size = new System.Drawing.Size(297, 6);
+			//
+			// spawnerpreviewonaim
+			//
+			this.spawnerpreviewonaim.Name = "spawnerpreviewonaim";
+			this.spawnerpreviewonaim.Size = new System.Drawing.Size(300, 22);
+			this.spawnerpreviewonaim.Tag = "builder_doom64togglespawnpreviewonaim";
+			this.spawnerpreviewonaim.Text = "Preview Thing Spawn when aiming";
+			this.spawnerpreviewonaim.Click += new System.EventHandler(this.InvokeTaggedAction);
 			// 
 			// buttontoggleeventlines
 			// 
@@ -3264,6 +3298,8 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.ToolStripMenuItem spawnerghost;
 		private System.Windows.Forms.ToolStripMenuItem spawnerhidden;
 		private System.Windows.Forms.ToolStripMenuItem spawnershown;
+		private System.Windows.Forms.ToolStripSeparator spawnerseparator;
+		private System.Windows.Forms.ToolStripMenuItem spawnerpreviewonaim;
 		private System.Windows.Forms.ToolStripStatusLabel warnsLabel;
 		private System.Windows.Forms.ToolStripMenuItem itemReloadModedef;
 		private System.Windows.Forms.ToolStripMenuItem itemReloadGldefs;
@@ -3330,6 +3366,8 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.ToolStripMenuItem itemspawnerghost;
 		private System.Windows.Forms.ToolStripMenuItem itemspawnerhidden;
 		private System.Windows.Forms.ToolStripMenuItem itemspawnershown;
+		private System.Windows.Forms.ToolStripSeparator itemspawnerseparator;
+		private System.Windows.Forms.ToolStripMenuItem itemspawnerpreviewonaim;
 		private System.Windows.Forms.ToolStripMenuItem itemtoggleeventlines;
 		private System.Windows.Forms.ToolStripMenuItem itemtogglevisualverts;
 		private ToolStripMenuItem itemimport;

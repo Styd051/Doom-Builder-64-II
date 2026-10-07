@@ -123,6 +123,7 @@ namespace CodeImp.DoomBuilder.Config
 		private bool doom64AnimateLiquids; // styd
 		private bool doom64AnimateLights; // styd
 		private Doom64SpawnerMode doom64SpawnerThings; // styd
+		private bool doom64SpawnPreviewOnAim; // styd
 		private float doom64DisplayBrightness; // styd
 		private bool gzToolbarGZDoom;
 		private bool gzSynchCameras;
@@ -249,6 +250,7 @@ namespace CodeImp.DoomBuilder.Config
 		public bool Doom64AnimateLiquids { get { return doom64AnimateLiquids; } internal set { doom64AnimateLiquids = value; } } // styd
 		public bool Doom64AnimateLights { get { return doom64AnimateLights; } internal set { doom64AnimateLights = value; } } // styd
 		public Doom64SpawnerMode Doom64SpawnerThings { get { return doom64SpawnerThings; } internal set { doom64SpawnerThings = value; } } // styd
+		public bool Doom64SpawnPreviewOnAim { get { return doom64SpawnPreviewOnAim; } internal set { doom64SpawnPreviewOnAim = value; } } // styd
 		public float Doom64DisplayBrightness { get { return doom64DisplayBrightness; } internal set { doom64DisplayBrightness = value; } } // styd
 		public bool GZToolbarGZDoom { get { return gzToolbarGZDoom; } internal set { gzToolbarGZDoom = value; } }
 		public bool GZSynchCameras { get { return gzSynchCameras; } internal set { gzSynchCameras = value; } }
@@ -385,6 +387,7 @@ namespace CodeImp.DoomBuilder.Config
 				doom64AnimateLiquids = cfg.ReadSetting("doom64animateliquids", false); // styd
 				doom64AnimateLights = cfg.ReadSetting("doom64animatelights", false); // styd
 				doom64SpawnerThings = (Doom64SpawnerMode)General.Clamp(cfg.ReadSetting("doom64spawnerthings", (int)Doom64SpawnerMode.GHOST), 0, 2); // styd
+				doom64SpawnPreviewOnAim = cfg.ReadSetting("doom64spawnpreviewonaim", true); // styd
 				doom64DisplayBrightness = General.Clamp(cfg.ReadSetting("doom64displaybrightness", 1.0f), 0.0f, 2.0f); // styd
 				gzToolbarGZDoom = cfg.ReadSetting("gztoolbargzdoom", true);
 				gzSynchCameras = cfg.ReadSetting("gzsynchcameras", true);
@@ -502,6 +505,7 @@ namespace CodeImp.DoomBuilder.Config
 			cfg.WriteSetting("doom64animateliquids", doom64AnimateLiquids); // styd
 			cfg.WriteSetting("doom64animatelights", doom64AnimateLights); // styd
 			cfg.WriteSetting("doom64spawnerthings", (int)doom64SpawnerThings); // styd
+			cfg.WriteSetting("doom64spawnpreviewonaim", doom64SpawnPreviewOnAim); // styd
 			cfg.WriteSetting("doom64displaybrightness", doom64DisplayBrightness); // styd
 			cfg.WriteSetting("gzsynchcameras", gzSynchCameras);
 			cfg.WriteSetting("gzshoweventlines", gzShowEventLines);

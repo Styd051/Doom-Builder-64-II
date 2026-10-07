@@ -2275,11 +2275,15 @@ namespace CodeImp.DoomBuilder.Windows
 				buttontogglelightanimation.Visible = General.Map.DOOM64; // styd
 				buttontogglelightanimation.Checked = General.Settings.Doom64AnimateLights; // styd
 				doom64spawnermode.Visible = General.Map.DOOM64; // styd
-				foreach(ToolStripMenuItem item in doom64spawnermode.DropDownItems) // styd
+				foreach(ToolStripItem spawneritem in doom64spawnermode.DropDownItems) // styd
 				{
+					// (the list also has the option of the Thing Spawn preview)
+					ToolStripMenuItem item = spawneritem as ToolStripMenuItem;
+					if((item == null) || !(item.Tag is int)) continue;
 					item.Checked = ((Doom64SpawnerMode)item.Tag == General.Settings.Doom64SpawnerThings);
 					if(item.Checked) doom64spawnermode.Image = item.Image;
 				}
+				spawnerpreviewonaim.Checked = General.Settings.Doom64SpawnPreviewOnAim; // styd
 				buttontoggleeventlines.Checked = General.Settings.GZShowEventLines;
 				buttontogglevisualvertices.Visible = General.Map.UDMF;
 				buttontogglevisualvertices.Checked = General.Settings.GZShowVisualVertices;
@@ -3078,11 +3082,15 @@ namespace CodeImp.DoomBuilder.Windows
 			itemtogglelightanimation.Visible = (General.Map != null && General.Map.DOOM64); // styd
 			itemtogglelightanimation.Checked = General.Settings.Doom64AnimateLights; // styd
 			itemdoom64spawnermodes.Visible = (General.Map != null && General.Map.DOOM64); // styd
-			foreach(ToolStripMenuItem item in itemdoom64spawnermodes.DropDownItems) // styd
+			foreach(ToolStripItem spawneritem in itemdoom64spawnermodes.DropDownItems) // styd
 			{
+				// (the submenu also has the option of the Thing Spawn preview)
+				ToolStripMenuItem item = spawneritem as ToolStripMenuItem;
+				if((item == null) || !(item.Tag is int)) continue;
 				item.Checked = ((Doom64SpawnerMode)item.Tag == General.Settings.Doom64SpawnerThings);
 				if(item.Checked) itemdoom64spawnermodes.Image = item.Image;
 			}
+			itemspawnerpreviewonaim.Checked = General.Settings.Doom64SpawnPreviewOnAim; // styd
 			itemtoggleeventlines.Checked = General.Settings.GZShowEventLines;
 			itemtogglevisualverts.Visible = (General.Map != null && General.Map.UDMF);
 			itemtogglevisualverts.Checked = General.Settings.GZShowVisualVertices;
@@ -3239,6 +3247,21 @@ namespace CodeImp.DoomBuilder.Windows
 			UpdateViewMenu();
 			UpdateGZDoomPanel();
 			RedrawDisplay();
+		}
+
+		// styd. In visual mode the preview of a Doom 64 Thing Spawn action begins by itself when a
+		// thing with the Spawner flag, or a line with that action, is aimed at; or only when its
+		// own action is run
+		[BeginAction("doom64togglespawnpreviewonaim")]
+		internal void ToggleSpawnPreviewOnAim()
+		{
+			General.Settings.Doom64SpawnPreviewOnAim = !General.Settings.Doom64SpawnPreviewOnAim;
+
+			itemspawnerpreviewonaim.Checked = General.Settings.Doom64SpawnPreviewOnAim;
+			spawnerpreviewonaim.Checked = General.Settings.Doom64SpawnPreviewOnAim;
+
+			General.MainWindow.DisplayStatus(StatusType.Action, "Thing Spawn preview on aim is " + (General.Settings.Doom64SpawnPreviewOnAim ? "ENABLED" : "DISABLED"));
+			General.MainWindow.UpdateGZDoomPanel();
 		}
 
 		[BeginAction("gztoggleeventlines")]
