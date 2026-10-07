@@ -2107,6 +2107,7 @@ namespace CodeImp.DoomBuilder.Windows
 			buttontoggleskyanimation.Visible = General.Settings.GZToolbarGZDoom && maploaded && General.Map.DOOM64; // styd
 			buttontoggleliquidanimation.Visible = General.Settings.GZToolbarGZDoom && maploaded && General.Map.DOOM64; // styd
 			buttontogglelightanimation.Visible = General.Settings.GZToolbarGZDoom && maploaded && General.Map.DOOM64; // styd
+			doom64spawnermode.Visible = General.Settings.GZToolbarGZDoom && maploaded && General.Map.DOOM64; // styd
 			buttontoggleeventlines.Visible = General.Settings.GZToolbarGZDoom && maploaded;
 			buttontogglevisualvertices.Visible = General.Settings.GZToolbarGZDoom && maploaded && General.Map.UDMF;
 			separatorgzmodes.Visible = General.Settings.GZToolbarGZDoom && maploaded;
@@ -2273,6 +2274,12 @@ namespace CodeImp.DoomBuilder.Windows
 				buttontoggleliquidanimation.Checked = General.Settings.Doom64AnimateLiquids; // styd
 				buttontogglelightanimation.Visible = General.Map.DOOM64; // styd
 				buttontogglelightanimation.Checked = General.Settings.Doom64AnimateLights; // styd
+				doom64spawnermode.Visible = General.Map.DOOM64; // styd
+				foreach(ToolStripMenuItem item in doom64spawnermode.DropDownItems) // styd
+				{
+					item.Checked = ((Doom64SpawnerMode)item.Tag == General.Settings.Doom64SpawnerThings);
+					if(item.Checked) doom64spawnermode.Image = item.Image;
+				}
 				buttontoggleeventlines.Checked = General.Settings.GZShowEventLines;
 				buttontogglevisualvertices.Visible = General.Map.UDMF;
 				buttontogglevisualvertices.Checked = General.Settings.GZShowVisualVertices;
@@ -3070,6 +3077,12 @@ namespace CodeImp.DoomBuilder.Windows
 			itemtoggleliquidanimation.Checked = General.Settings.Doom64AnimateLiquids; // styd
 			itemtogglelightanimation.Visible = (General.Map != null && General.Map.DOOM64); // styd
 			itemtogglelightanimation.Checked = General.Settings.Doom64AnimateLights; // styd
+			itemdoom64spawnermodes.Visible = (General.Map != null && General.Map.DOOM64); // styd
+			foreach(ToolStripMenuItem item in itemdoom64spawnermodes.DropDownItems) // styd
+			{
+				item.Checked = ((Doom64SpawnerMode)item.Tag == General.Settings.Doom64SpawnerThings);
+				if(item.Checked) itemdoom64spawnermodes.Image = item.Image;
+			}
 			itemtoggleeventlines.Checked = General.Settings.GZShowEventLines;
 			itemtogglevisualverts.Visible = (General.Map != null && General.Map.UDMF);
 			itemtogglevisualverts.Checked = General.Settings.GZShowVisualVertices;
@@ -3186,6 +3199,46 @@ namespace CodeImp.DoomBuilder.Windows
 			General.MainWindow.DisplayStatus(StatusType.Action, "Sector light animation is " + (General.Settings.Doom64AnimateLights ? "ENABLED" : "DISABLED"));
 			General.MainWindow.RedrawDisplay();
 			General.MainWindow.UpdateGZDoomPanel();
+		}
+
+		// styd. The things of Doom 64 with the Spawner flag are not in the level when it starts. In
+		// visual mode they are shown as ghosts, hidden as in the game, or shown as any other thing:
+		// this goes to the next of these
+		[BeginAction("doom64togglespawnerthings")]
+		internal void ToggleSpawnerThings()
+		{
+			SetDoom64SpawnerMode((Doom64SpawnerMode)(((int)General.Settings.Doom64SpawnerThings + 1) % 3));
+		}
+
+		// styd
+		private void ChangeDoom64SpawnerMode(object sender, EventArgs e)
+		{
+			SetDoom64SpawnerMode((Doom64SpawnerMode)((ToolStripMenuItem)sender).Tag);
+		}
+
+		// styd
+		private void SetDoom64SpawnerMode(Doom64SpawnerMode mode)
+		{
+			General.Settings.Doom64SpawnerThings = mode;
+
+			switch(mode)
+			{
+				case Doom64SpawnerMode.GHOST:
+					General.MainWindow.DisplayStatus(StatusType.Action, "Things with the Spawner flag are shown as GHOSTS");
+					break;
+
+				case Doom64SpawnerMode.HIDDEN:
+					General.MainWindow.DisplayStatus(StatusType.Action, "Things with the Spawner flag are HIDDEN, as when the level starts");
+					break;
+
+				case Doom64SpawnerMode.SHOWN:
+					General.MainWindow.DisplayStatus(StatusType.Action, "Things with the Spawner flag are SHOWN as any other thing");
+					break;
+			}
+
+			UpdateViewMenu();
+			UpdateGZDoomPanel();
+			RedrawDisplay();
 		}
 
 		[BeginAction("gztoggleeventlines")]

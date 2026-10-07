@@ -196,6 +196,10 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemtoggleskyanimation = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemtoggleliquidanimation = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemtogglelightanimation = new System.Windows.Forms.ToolStripMenuItem();
+			this.itemdoom64spawnermodes = new System.Windows.Forms.ToolStripMenuItem();
+			this.itemspawnerghost = new System.Windows.Forms.ToolStripMenuItem();
+			this.itemspawnerhidden = new System.Windows.Forms.ToolStripMenuItem();
+			this.itemspawnershown = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemtoggleeventlines = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemtogglevisualverts = new System.Windows.Forms.ToolStripMenuItem();
 			this.buttonfullbrightness = new System.Windows.Forms.ToolStripButton();
@@ -235,6 +239,10 @@ namespace CodeImp.DoomBuilder.Windows
 			this.buttontoggleskyanimation = new System.Windows.Forms.ToolStripButton();
 			this.buttontoggleliquidanimation = new System.Windows.Forms.ToolStripButton();
 			this.buttontogglelightanimation = new System.Windows.Forms.ToolStripButton();
+			this.doom64spawnermode = new System.Windows.Forms.ToolStripSplitButton();
+			this.spawnerghost = new System.Windows.Forms.ToolStripMenuItem();
+			this.spawnerhidden = new System.Windows.Forms.ToolStripMenuItem();
+			this.spawnershown = new System.Windows.Forms.ToolStripMenuItem();
 			this.buttontoggleeventlines = new System.Windows.Forms.ToolStripButton();
 			this.buttontogglevisualvertices = new System.Windows.Forms.ToolStripButton();
 			this.separatorgzmodes = new System.Windows.Forms.ToolStripSeparator();
@@ -815,6 +823,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemtoggleskyanimation,
 			this.itemtoggleliquidanimation,
 			this.itemtogglelightanimation,
+			this.itemdoom64spawnermodes,
 			this.itemtoggleeventlines,
 			this.itemtogglevisualverts,
 			this.separatorhelpers,
@@ -1436,6 +1445,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.buttontoggleskyanimation,
 			this.buttontoggleliquidanimation,
 			this.buttontogglelightanimation,
+			this.doom64spawnermode,
 			this.buttontoggleeventlines,
 			this.buttontogglevisualvertices,
 			this.separatorgzmodes,
@@ -1867,6 +1877,47 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemtogglelightanimation.Tag = "builder_doom64togglelightanimation";
 			this.itemtogglelightanimation.Text = "Animate sector light effects (Visual mode)";
 			this.itemtogglelightanimation.Click += new System.EventHandler(this.InvokeTaggedAction);
+			//
+			// itemdoom64spawnermodes
+			//
+			this.itemdoom64spawnermodes.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+			this.itemspawnerghost,
+			this.itemspawnerhidden,
+			this.itemspawnershown});
+			this.itemdoom64spawnermodes.Image = global::CodeImp.DoomBuilder.Properties.Resources.SpawnerGhost;
+			this.itemdoom64spawnermodes.Name = "itemdoom64spawnermodes";
+			this.itemdoom64spawnermodes.Size = new System.Drawing.Size(273, 22);
+			this.itemdoom64spawnermodes.Text = "Things with the Spawner flag (Visual mode)";
+			//
+			// itemspawnerghost
+			//
+			this.itemspawnerghost.CheckOnClick = true;
+			this.itemspawnerghost.Image = global::CodeImp.DoomBuilder.Properties.Resources.SpawnerGhost;
+			this.itemspawnerghost.Name = "itemspawnerghost";
+			this.itemspawnerghost.Size = new System.Drawing.Size(300, 22);
+			this.itemspawnerghost.Tag = 0;
+			this.itemspawnerghost.Text = "Show Spawner things as ghosts";
+			this.itemspawnerghost.Click += new System.EventHandler(this.ChangeDoom64SpawnerMode);
+			//
+			// itemspawnerhidden
+			//
+			this.itemspawnerhidden.CheckOnClick = true;
+			this.itemspawnerhidden.Image = global::CodeImp.DoomBuilder.Properties.Resources.SpawnerHidden;
+			this.itemspawnerhidden.Name = "itemspawnerhidden";
+			this.itemspawnerhidden.Size = new System.Drawing.Size(300, 22);
+			this.itemspawnerhidden.Tag = 1;
+			this.itemspawnerhidden.Text = "Hide Spawner things (as when the level starts)";
+			this.itemspawnerhidden.Click += new System.EventHandler(this.ChangeDoom64SpawnerMode);
+			//
+			// itemspawnershown
+			//
+			this.itemspawnershown.CheckOnClick = true;
+			this.itemspawnershown.Image = global::CodeImp.DoomBuilder.Properties.Resources.SpawnerShown;
+			this.itemspawnershown.Name = "itemspawnershown";
+			this.itemspawnershown.Size = new System.Drawing.Size(300, 22);
+			this.itemspawnershown.Tag = 2;
+			this.itemspawnershown.Text = "Show Spawner things";
+			this.itemspawnershown.Click += new System.EventHandler(this.ChangeDoom64SpawnerMode);
 			// 
 			// itemeventlines
 			// 
@@ -2312,6 +2363,51 @@ namespace CodeImp.DoomBuilder.Windows
 			this.buttontogglelightanimation.Tag = "builder_doom64togglelightanimation";
 			this.buttontogglelightanimation.Text = "Animate Sector Light Effects (Visual mode)";
 			this.buttontogglelightanimation.Click += new System.EventHandler(this.InvokeTaggedAction);
+			//
+			// doom64spawnermode
+			//
+			this.doom64spawnermode.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+			this.doom64spawnermode.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+			this.spawnerghost,
+			this.spawnerhidden,
+			this.spawnershown});
+			this.doom64spawnermode.Image = global::CodeImp.DoomBuilder.Properties.Resources.SpawnerGhost;
+			this.doom64spawnermode.ImageTransparentColor = System.Drawing.Color.Magenta;
+			this.doom64spawnermode.Name = "doom64spawnermode";
+			this.doom64spawnermode.Size = new System.Drawing.Size(32, 20);
+			this.doom64spawnermode.Tag = "builder_doom64togglespawnerthings";
+			this.doom64spawnermode.Text = "Things with the Spawner Flag (Visual mode)";
+			this.doom64spawnermode.ButtonClick += new System.EventHandler(this.InvokeTaggedAction);
+			//
+			// spawnerghost
+			//
+			this.spawnerghost.CheckOnClick = true;
+			this.spawnerghost.Image = global::CodeImp.DoomBuilder.Properties.Resources.SpawnerGhost;
+			this.spawnerghost.Name = "spawnerghost";
+			this.spawnerghost.Size = new System.Drawing.Size(300, 22);
+			this.spawnerghost.Tag = 0;
+			this.spawnerghost.Text = "Show Spawner things as ghosts";
+			this.spawnerghost.Click += new System.EventHandler(this.ChangeDoom64SpawnerMode);
+			//
+			// spawnerhidden
+			//
+			this.spawnerhidden.CheckOnClick = true;
+			this.spawnerhidden.Image = global::CodeImp.DoomBuilder.Properties.Resources.SpawnerHidden;
+			this.spawnerhidden.Name = "spawnerhidden";
+			this.spawnerhidden.Size = new System.Drawing.Size(300, 22);
+			this.spawnerhidden.Tag = 1;
+			this.spawnerhidden.Text = "Hide Spawner things (as when the level starts)";
+			this.spawnerhidden.Click += new System.EventHandler(this.ChangeDoom64SpawnerMode);
+			//
+			// spawnershown
+			//
+			this.spawnershown.CheckOnClick = true;
+			this.spawnershown.Image = global::CodeImp.DoomBuilder.Properties.Resources.SpawnerShown;
+			this.spawnershown.Name = "spawnershown";
+			this.spawnershown.Size = new System.Drawing.Size(300, 22);
+			this.spawnershown.Tag = 2;
+			this.spawnershown.Text = "Show Spawner things";
+			this.spawnershown.Click += new System.EventHandler(this.ChangeDoom64SpawnerMode);
 			// 
 			// buttontoggleeventlines
 			// 
@@ -3164,6 +3260,10 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.ToolStripButton buttontoggleskyanimation;
 		private System.Windows.Forms.ToolStripButton buttontoggleliquidanimation;
 		private System.Windows.Forms.ToolStripButton buttontogglelightanimation;
+		private System.Windows.Forms.ToolStripSplitButton doom64spawnermode;
+		private System.Windows.Forms.ToolStripMenuItem spawnerghost;
+		private System.Windows.Forms.ToolStripMenuItem spawnerhidden;
+		private System.Windows.Forms.ToolStripMenuItem spawnershown;
 		private System.Windows.Forms.ToolStripStatusLabel warnsLabel;
 		private System.Windows.Forms.ToolStripMenuItem itemReloadModedef;
 		private System.Windows.Forms.ToolStripMenuItem itemReloadGldefs;
@@ -3226,6 +3326,10 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.ToolStripMenuItem itemtoggleskyanimation;
 		private System.Windows.Forms.ToolStripMenuItem itemtoggleliquidanimation;
 		private System.Windows.Forms.ToolStripMenuItem itemtogglelightanimation;
+		private System.Windows.Forms.ToolStripMenuItem itemdoom64spawnermodes;
+		private System.Windows.Forms.ToolStripMenuItem itemspawnerghost;
+		private System.Windows.Forms.ToolStripMenuItem itemspawnerhidden;
+		private System.Windows.Forms.ToolStripMenuItem itemspawnershown;
 		private System.Windows.Forms.ToolStripMenuItem itemtoggleeventlines;
 		private System.Windows.Forms.ToolStripMenuItem itemtogglevisualverts;
 		private ToolStripMenuItem itemimport;

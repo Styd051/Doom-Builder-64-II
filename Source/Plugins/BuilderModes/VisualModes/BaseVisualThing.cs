@@ -34,6 +34,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
 	{
 		#region ================== Constants
 		
+		// styd. A Doom 64 thing that is shown as a ghost has this much of its opacity
+		private const float DOOM64_GHOST_ALPHA = 0.5f;
+
 		#endregion
 		
 		#region ================== Variables
@@ -54,6 +57,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 		// If this is set to true, the thing will be rebuilt after the action is performed.
 		private bool changed;
+
+		// styd. Doom 64: the thing is shown as a ghost
+		private bool doom64ghost;
 
 		#endregion
 		
@@ -291,6 +297,16 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 			if(General.Map.DOOM64)
 			{
+				// styd. A thing with the Spawner flag is not in the level when it starts: the game only
+				// makes it when a line or a macro asks for the things of its tag (P_SpawnMapThing,
+				// EV_SpawnMobjTemplate). As a ghost it has half the opacity that it will have.
+				bool ghost = Thing.IsFlagSet(DOOM64_SPAWNER_FLAG) && (General.Settings.Doom64SpawnerThings == Doom64SpawnerMode.GHOST);
+				if(ghost)
+				{
+					alpha = (byte)(alpha * DOOM64_GHOST_ALPHA);
+					sectorcolor = PixelColor.FromInt(sectorcolor).WithAlpha(alpha).ToInt();
+				}
+
 				// villsa. A thing has the thing color of its sector, wherever it is in that sector
 				if(Thing.Sector != null)
 				{
@@ -308,14 +324,20 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				bool nightmare = Thing.IsFlagSet("4096");
 				if(nightmare)
 				{
-					sectorcolor = new PixelColor(255, 64, 255, 0).ToInt();
+					// (it is blended by its color: a ghost of it has half of that green)
+					sectorcolor = (ghost ? new PixelColor(255, 32, 127, 0) : new PixelColor(255, 64, 255, 0)).ToInt();
 					RenderPass = RenderPass.Alpha;
 				}
-				else if(doom64nightmare && (Thing.Sector == null))
+				else if(ghost)
+				{
+					RenderPass = RenderPass.Alpha;
+				}
+				else if((doom64nightmare || doom64ghost) && (Thing.Sector == null))
 				{
 					RenderPass = RenderPass.Mask;
 				}
 				doom64nightmare = nightmare;
+				doom64ghost = ghost;
             }
 
             //mxd. Create verts for all sprite angles

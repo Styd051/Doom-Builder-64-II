@@ -559,6 +559,10 @@ namespace CodeImp.DoomBuilder.VisualModes
 						// Not filtered out?
 						if(!General.Map.ThingsFilter.IsThingVisible(t)) continue;
 
+						// styd. A Doom 64 thing with the Spawner flag can be left out, as it is not in the
+						// level when it starts
+						if(General.Map.DOOM64 && (General.Settings.Doom64SpawnerThings == Doom64SpawnerMode.HIDDEN) && t.IsFlagSet(VisualThing.DOOM64_SPAWNER_FLAG)) continue;
+
 						VisualThing vt;
 						if(allthings.ContainsKey(t))
 						{

@@ -90,6 +90,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 		// List of selected objects when an action is performed
 		private List<IVisualEventReceiver> selectedobjects;
+
+		// styd. How the Doom 64 things with the Spawner flag were shown when the things were made
+		private Doom64SpawnerMode doom64spawnermode;
 		
 		//mxd. Used in Cut/PasteSelection actions
 		private readonly List<ThingCopyData> copybuffer;
@@ -179,6 +182,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			// Initialize
 			this.gravity = new Vector3D(0.0f, 0.0f, 0.0f);
 			this.selectedobjects = new List<IVisualEventReceiver>();
+			this.doom64spawnermode = General.Settings.Doom64SpawnerThings; // styd
 			
 			//mxd
 			this.copybuffer = new List<ThingCopyData>();
@@ -1211,10 +1215,36 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			General.Map.Map.Update();
 		}
 		
+		// styd. This makes the Doom 64 things with the Spawner flag again, for the way they are set
+		// to be shown: as ghosts, hidden or as any other thing. A thing that is hidden from now on
+		// is no longer selected.
+		private void UpdateDoom64SpawnerThings()
+		{
+			doom64spawnermode = General.Settings.Doom64SpawnerThings;
+
+			foreach(KeyValuePair<Thing, VisualThing> vt in allthings)
+			{
+				if((vt.Value == null) || !vt.Key.IsFlagSet(VisualThing.DOOM64_SPAWNER_FLAG)) continue;
+
+				BaseVisualThing bvt = (BaseVisualThing)vt.Value;
+				if((doom64spawnermode == Doom64SpawnerMode.HIDDEN) && bvt.Selected)
+				{
+					bvt.Selected = false;
+					RemoveSelectedObject(bvt);
+				}
+				bvt.Setup();
+			}
+		}
+
 		// Processing
 		public override void OnProcess(long deltatime)
 		{
 			long pickinterval = PICK_INTERVAL; // biwa
+
+			// styd. The Doom 64 things with the Spawner flag are made again when the way to show them
+			// has changed
+			if(General.Map.DOOM64 && (doom64spawnermode != General.Settings.Doom64SpawnerThings)) UpdateDoom64SpawnerThings();
+
 			// Process things?
 			base.ProcessThings = (BuilderPlug.Me.ShowVisualThings != 0);
 			

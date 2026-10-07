@@ -41,6 +41,9 @@ namespace CodeImp.DoomBuilder.VisualModes
 		private const float DYNLIGHT_INTENSITY_SCALER = 255.0f;
 		private const float SUBLIGHT_INTENSITY_SCALER = 255.0f * 1.5f; // Scaler for subtractive dynamic lights
 
+		// styd. The flag of a Doom 64 thing that the game only makes when a line or a macro asks for it
+		public const string DOOM64_SPAWNER_FLAG = "32";
+
 		#endregion
 		
 		#region ================== Variables

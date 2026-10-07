@@ -1327,6 +1327,9 @@
     <None Include="Resources\SkyAnimated.png" />
     <None Include="Resources\LiquidAnimated.png" />
     <None Include="Resources\LightAnimated.png" />
+    <None Include="Resources\SpawnerGhost.png" />
+    <None Include="Resources\SpawnerHidden.png" />
+    <None Include="Resources\SpawnerShown.png" />
     <None Include="Resources\Update.png" />
     <None Include="Resources\Reload.png" />
     <None Include="Resources\Preferences.png" />
