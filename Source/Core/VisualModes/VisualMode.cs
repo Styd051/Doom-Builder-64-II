@@ -561,7 +561,7 @@ namespace CodeImp.DoomBuilder.VisualModes
 
 						// styd. A Doom 64 thing with the Spawner flag can be left out, as it is not in the
 						// level when it starts
-						if(General.Map.DOOM64 && (General.Settings.Doom64SpawnerThings == Doom64SpawnerMode.HIDDEN) && t.IsFlagSet(VisualThing.DOOM64_SPAWNER_FLAG)) continue;
+						if(General.Map.DOOM64 && (General.Settings.Doom64SpawnerThings == Doom64SpawnerMode.HIDDEN) && t.IsFlagSet(VisualThing.DOOM64_SPAWNER_FLAG) && !IsDoom64SpawnPreview(t)) continue;
 
 						VisualThing vt;
 						if(allthings.ContainsKey(t))
@@ -1007,6 +1007,10 @@ namespace CodeImp.DoomBuilder.VisualModes
 		/// Implement this to create an instance of your VisualThing implementation.
 		/// </summary>
 		protected abstract VisualThing CreateVisualThing(Thing t);
+
+		// styd. This tells if a Doom 64 thing with the Spawner flag is shown for now although such
+		// things are hidden: a visual mode can show how the game makes it appear
+		protected virtual bool IsDoom64SpawnPreview(Thing t) { return false; }
 		
 		/// <summary>
 		/// This returns the VisualSector for the given Sector.

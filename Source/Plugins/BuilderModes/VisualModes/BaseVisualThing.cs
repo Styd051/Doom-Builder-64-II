@@ -37,6 +37,12 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// styd. A Doom 64 thing that is shown as a ghost has this much of its opacity
 		private const float DOOM64_GHOST_ALPHA = 0.5f;
 
+		// styd. The opacity that a Doom 64 thing gains at each tic when a Thing Spawn action makes it
+		// appear, and the Spectre, which is there at once with this opacity (EV_SpawnMobjTemplate)
+		internal const int DOOM64_SPAWN_FADE = 8;
+		private const int DOOM64_SPECTRE_TYPE = 58;
+		private const byte DOOM64_SPECTRE_SPAWN_ALPHA = 48;
+
 		#endregion
 		
 		#region ================== Variables
@@ -58,7 +64,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// If this is set to true, the thing will be rebuilt after the action is performed.
 		private bool changed;
 
-		// styd. Doom 64: the thing is shown as a ghost
+		// styd. Doom 64: the thing is shown as a ghost, or as it appears in the game
 		private bool doom64ghost;
 
 		#endregion
@@ -300,10 +306,21 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				// styd. A thing with the Spawner flag is not in the level when it starts: the game only
 				// makes it when a line or a macro asks for the things of its tag (P_SpawnMapThing,
 				// EV_SpawnMobjTemplate). As a ghost it has half the opacity that it will have.
-				bool ghost = Thing.IsFlagSet(DOOM64_SPAWNER_FLAG) && (General.Settings.Doom64SpawnerThings == Doom64SpawnerMode.GHOST);
+				int spawntics = (Thing.IsFlagSet(DOOM64_SPAWNER_FLAG) ? mode.GetDoom64SpawnPreviewTics(Thing) : -1);
+				bool ghost = Thing.IsFlagSet(DOOM64_SPAWNER_FLAG) && (spawntics < 0) && (General.Settings.Doom64SpawnerThings == Doom64SpawnerMode.GHOST);
+				int spawnfull = 0;
 				if(ghost)
 				{
 					alpha = (byte)(alpha * DOOM64_GHOST_ALPHA);
+					sectorcolor = PixelColor.FromInt(sectorcolor).WithAlpha(alpha).ToInt();
+				}
+				// In the preview of a Thing Spawn action it appears as in the game: it has no opacity at
+				// first, and gains some at each tic until it has the one of its type (T_FadeThinker).
+				// Only the Spectre is there at once, as faint as when it has seen the player.
+				else if(spawntics >= 0)
+				{
+					spawnfull = alpha;
+					alpha = ((Thing.Type == DOOM64_SPECTRE_TYPE) ? DOOM64_SPECTRE_SPAWN_ALPHA : (byte)Math.Min(spawnfull, spawntics * DOOM64_SPAWN_FADE));
 					sectorcolor = PixelColor.FromInt(sectorcolor).WithAlpha(alpha).ToInt();
 				}
 
@@ -324,11 +341,15 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				bool nightmare = Thing.IsFlagSet("4096");
 				if(nightmare)
 				{
-					// (it is blended by its color: a ghost of it has half of that green)
-					sectorcolor = (ghost ? new PixelColor(255, 32, 127, 0) : new PixelColor(255, 64, 255, 0)).ToInt();
+					// (it is blended by its color: a ghost of it has half of that green, and it appears
+					// as that green grows)
+					PixelColor green = new PixelColor(255, 64, 255, 0);
+					if(ghost) green = new PixelColor(255, (byte)(green.r * DOOM64_GHOST_ALPHA), (byte)(green.g * DOOM64_GHOST_ALPHA), 0);
+					else if(spawnfull > 0) green = new PixelColor(255, (byte)(green.r * alpha / spawnfull), (byte)(green.g * alpha / spawnfull), 0);
+					sectorcolor = green.ToInt();
 					RenderPass = RenderPass.Alpha;
 				}
-				else if(ghost)
+				else if(ghost || ((spawntics >= 0) && (alpha < 255)))
 				{
 					RenderPass = RenderPass.Alpha;
 				}
@@ -337,7 +358,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					RenderPass = RenderPass.Mask;
 				}
 				doom64nightmare = nightmare;
-				doom64ghost = ghost;
+				doom64ghost = ghost || (spawntics >= 0);
             }
 
             //mxd. Create verts for all sprite angles
