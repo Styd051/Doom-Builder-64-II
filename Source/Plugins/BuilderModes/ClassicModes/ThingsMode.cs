@@ -364,6 +364,9 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 				// New association highlights something?
 				if(t.Tag != 0) highlightasso.Set(t.Position, t.Tag, UniversalType.ThingTag, linktype);
+				// styd. (in Doom 64 the lines of the tag of the thing are shown: a thing without a tag
+				// does not keep the ones of the thing before)
+				else if(General.Map.DOOM64) highlightasso.Set(new Vector2D(), 0, 0);
 			}
 			else
 			{

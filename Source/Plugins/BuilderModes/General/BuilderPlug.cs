@@ -705,6 +705,20 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				}
 			}
 
+			// styd. Doom 64: a line and the things that have its tag go together. Line actions aim at
+			// these things, and a thing that is picked up or dies uses the line of its tag
+			// (P_TouchSpecialThing, A_OnDeathTrigger). So a thing shows the lines of its tag, as such a
+			// line shows the thing.
+			if(General.Map.DOOM64 && (asso.Type == UniversalType.ThingTag))
+			{
+				foreach(Linedef l in General.Map.Map.Linedefs)
+				{
+					if(!asso.Tags.Overlaps(l.Tags)) continue;
+					renderer.PlotLinedef(l, General.Colors.Indication);
+					if(General.Settings.GZShowEventLines) eventlines.Add(new Line3D(l.GetCenterPoint(), asso.Center));
+				}
+			}
+
 			// Linedefs
 			foreach(Linedef l in General.Map.Map.Linedefs)
 			{
