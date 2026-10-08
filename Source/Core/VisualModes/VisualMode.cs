@@ -1185,6 +1185,9 @@ namespace CodeImp.DoomBuilder.VisualModes
 
 			// styd. And so do the light effects of its sectors
 			if(General.Map.DOOM64) General.Map.Data.AnimateDoom64SectorLights(deltatime);
+
+			// styd. And its animated textures
+			if(General.Map.DOOM64) General.Map.Data.AnimateDoom64Textures(deltatime);
 			
 			// Visibility culling
 			DoCulling();

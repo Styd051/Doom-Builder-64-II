@@ -553,6 +553,9 @@
   <data name="LightAnimated" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>..\Resources\LightAnimated.png;System.Drawing.Bitmap, System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
   </data>
+  <data name="TextureAnimated" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\TextureAnimated.png;System.Drawing.Bitmap, System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
   <data name="SpawnerGhost" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>..\Resources\SpawnerGhost.png;System.Drawing.Bitmap, System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
   </data>

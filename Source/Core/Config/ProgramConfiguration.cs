@@ -122,6 +122,7 @@ namespace CodeImp.DoomBuilder.Config
 		private bool doom64AnimateSky; // styd
 		private bool doom64AnimateLiquids; // styd
 		private bool doom64AnimateLights; // styd
+		private bool doom64AnimateTextures; // styd
 		private Doom64SpawnerMode doom64SpawnerThings; // styd
 		private bool doom64SpawnPreviewOnAim; // styd
 		private float doom64DisplayBrightness; // styd
@@ -249,6 +250,7 @@ namespace CodeImp.DoomBuilder.Config
 		public bool Doom64AnimateSky { get { return doom64AnimateSky; } internal set { doom64AnimateSky = value; } } // styd
 		public bool Doom64AnimateLiquids { get { return doom64AnimateLiquids; } internal set { doom64AnimateLiquids = value; } } // styd
 		public bool Doom64AnimateLights { get { return doom64AnimateLights; } internal set { doom64AnimateLights = value; } } // styd
+		public bool Doom64AnimateTextures { get { return doom64AnimateTextures; } internal set { doom64AnimateTextures = value; } } // styd
 		public Doom64SpawnerMode Doom64SpawnerThings { get { return doom64SpawnerThings; } internal set { doom64SpawnerThings = value; } } // styd
 		public bool Doom64SpawnPreviewOnAim { get { return doom64SpawnPreviewOnAim; } internal set { doom64SpawnPreviewOnAim = value; } } // styd
 		public float Doom64DisplayBrightness { get { return doom64DisplayBrightness; } internal set { doom64DisplayBrightness = value; } } // styd
@@ -386,6 +388,7 @@ namespace CodeImp.DoomBuilder.Config
 				doom64AnimateSky = cfg.ReadSetting("doom64animatesky", false); // styd
 				doom64AnimateLiquids = cfg.ReadSetting("doom64animateliquids", false); // styd
 				doom64AnimateLights = cfg.ReadSetting("doom64animatelights", false); // styd
+				doom64AnimateTextures = cfg.ReadSetting("doom64animatetextures", false); // styd
 				doom64SpawnerThings = (Doom64SpawnerMode)General.Clamp(cfg.ReadSetting("doom64spawnerthings", (int)Doom64SpawnerMode.GHOST), 0, 2); // styd
 				doom64SpawnPreviewOnAim = cfg.ReadSetting("doom64spawnpreviewonaim", true); // styd
 				doom64DisplayBrightness = General.Clamp(cfg.ReadSetting("doom64displaybrightness", 1.0f), 0.0f, 2.0f); // styd
@@ -504,6 +507,7 @@ namespace CodeImp.DoomBuilder.Config
 			cfg.WriteSetting("doom64animatesky", doom64AnimateSky); // styd
 			cfg.WriteSetting("doom64animateliquids", doom64AnimateLiquids); // styd
 			cfg.WriteSetting("doom64animatelights", doom64AnimateLights); // styd
+			cfg.WriteSetting("doom64animatetextures", doom64AnimateTextures); // styd
 			cfg.WriteSetting("doom64spawnerthings", (int)doom64SpawnerThings); // styd
 			cfg.WriteSetting("doom64spawnpreviewonaim", doom64SpawnPreviewOnAim); // styd
 			cfg.WriteSetting("doom64displaybrightness", doom64DisplayBrightness); // styd

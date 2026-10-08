@@ -182,6 +182,7 @@
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="Data\DirectoryReader.cs" />
+    <Compile Include="Data\Doom64Animations.cs" />
     <Compile Include="Data\Doom64SectorLights.cs" />
     <Compile Include="Data\Doom64Sky.cs" />
     <Compile Include="Data\FileImage.cs" />
@@ -1327,6 +1328,7 @@
     <None Include="Resources\SkyAnimated.png" />
     <None Include="Resources\LiquidAnimated.png" />
     <None Include="Resources\LightAnimated.png" />
+    <None Include="Resources\TextureAnimated.png" />
     <None Include="Resources\SpawnerGhost.png" />
     <None Include="Resources\SpawnerHidden.png" />
     <None Include="Resources\SpawnerShown.png" />

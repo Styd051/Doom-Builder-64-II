@@ -1063,6 +1063,9 @@ namespace CodeImp.DoomBuilder.Rendering
 				else
 					curtexture = General.Map.Data.Hourglass3D;
 
+				// styd. An animated texture of Doom 64 is drawn with its picture of the moment
+				if(General.Map.DOOM64) curtexture = General.Map.Data.GetDoom64AnimationFrame(curtexture);
+
 				// Create Direct3D texture if still needed
 				if((curtexture.Texture == null) || curtexture.Texture.Disposed)
 					curtexture.CreateTexture();
@@ -1388,6 +1391,9 @@ namespace CodeImp.DoomBuilder.Rendering
 						curtexture = g.Texture;
 					else
 						curtexture = General.Map.Data.Hourglass3D;
+
+					// styd. An animated texture of Doom 64 is drawn with its picture of the moment
+					if(General.Map.DOOM64) curtexture = General.Map.Data.GetDoom64AnimationFrame(curtexture);
 
 					// Create Direct3D texture if still needed
 					if((curtexture.Texture == null) || curtexture.Texture.Disposed)

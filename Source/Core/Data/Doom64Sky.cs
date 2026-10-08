@@ -426,7 +426,7 @@ namespace CodeImp.DoomBuilder.Data
 		}
 
 		// This splits the text in words, quoted names, braces and equal signs. Comments are left out.
-		private static List<string> Tokenize(string text)
+		public static List<string> Tokenize(string text)
 		{
 			List<string> tokens = new List<string>();
 			int i = 0;

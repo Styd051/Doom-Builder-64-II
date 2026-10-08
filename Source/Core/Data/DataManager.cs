@@ -144,6 +144,9 @@ namespace CodeImp.DoomBuilder.Data
 		// styd. The light effects of the sectors of Doom 64
 		private Doom64SectorLights doom64sectorlights; // What they add to the light of each sector, or null when they stand still
 
+		// styd. The animated textures of Doom 64
+		private Doom64Animations doom64animations; // The animations of the ANIMDEFS lump, or null when the resources have none
+
 		//mxd. Comment icons
 		private ImageData[] commenttextures;
 		
@@ -337,6 +340,8 @@ namespace CodeImp.DoomBuilder.Data
 				doom64nexttextures = null;
 				doom64liquidtextures = null;
 				doom64sectorlights = null;
+				if(doom64animations != null) doom64animations.Dispose();
+				doom64animations = null;
 				
 				// Done
 				isdisposed = true;
@@ -481,6 +486,7 @@ namespace CodeImp.DoomBuilder.Data
 			LoadThingPalettes(); // villsa
 			LoadDoom64Skies(); // styd
 			LoadDoom64TextureOrder(); // styd
+			LoadDoom64Animations(); // styd
 			Dictionary<string, TexturesParser> cachedparsers = new Dictionary<string, TexturesParser>(); //mxd
 			int texcount = LoadTextures(texturesonly, texturenamesshorttofull, cachedparsers);
 			int flatcount = LoadFlats(flatsonly, flatnamesshorttofull, cachedparsers);
@@ -3596,6 +3602,58 @@ namespace CodeImp.DoomBuilder.Data
 		{
 			if((doom64sectorlights == null) || !General.Settings.Doom64AnimateLights) return 0;
 			return doom64sectorlights.GetLevel(s);
+		}
+
+		// styd. This loads the animated textures of Doom 64 from the ANIMDEFS lump. The game reads
+		// one such lump: here it is the one of the resource that is loaded last.
+		private void LoadDoom64Animations()
+		{
+			doom64animations = null;
+			if(!General.Map.DOOM64) return;
+
+			for(int i = containers.Count - 1; i >= 0; i--)
+			{
+				DataReader dr = containers[i];
+				string name = Doom64Animations.LUMP_NAME;
+				if(dr is PK3StructuredReader)
+				{
+					name = ((PK3StructuredReader)dr).FindFirstFile(name, false);
+					if(string.IsNullOrEmpty(name)) continue;
+				}
+
+				if(!dr.FileExists(name)) continue;
+				MemoryStream mem = dr.LoadFile(name);
+				if(mem == null) continue;
+
+				mem.Seek(0, SeekOrigin.Begin);
+				using(StreamReader reader = new StreamReader(mem, System.Text.Encoding.ASCII))
+					doom64animations = new Doom64Animations(Doom64Animations.Parse(reader.ReadToEnd(), dr.Location.GetDisplayName()));
+				return;
+			}
+		}
+
+		// styd. The texture that follows a texture in the resources of Doom 64, or null
+		internal string GetDoom64NextTexture(string texture)
+		{
+			string next;
+			return (((doom64nexttextures != null) && doom64nexttextures.TryGetValue(texture, out next)) ? next : null);
+		}
+
+		// styd. This lets the time of the animated textures of a Doom 64 map go by, when they are
+		// set to move. Set not to move, they are put back at their start.
+		internal void AnimateDoom64Textures(long milliseconds)
+		{
+			if(doom64animations == null) return;
+			if(General.Settings.Doom64AnimateTextures) doom64animations.Advance(milliseconds);
+			else doom64animations.Reset();
+		}
+
+		// styd. The picture that a texture of Doom 64 is drawn with at this time: another one than
+		// its own when it is animated and set to move
+		internal ImageData GetDoom64AnimationFrame(ImageData texture)
+		{
+			if((doom64animations == null) || !General.Settings.Doom64AnimateTextures) return texture;
+			return doom64animations.GetFrame(texture);
 		}
 
 		// styd. This gives the fog of a Doom 64 map. The game takes it from the sky of the map,
