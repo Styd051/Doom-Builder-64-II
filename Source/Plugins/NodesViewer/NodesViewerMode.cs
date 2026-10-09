@@ -179,6 +179,11 @@ namespace CodeImp.DoomBuilder.Plugins.NodesViewer
 			BinaryReader vertsreader = new BinaryReader(vertsstream);
 			int numverts = (int)vertsstream.Length / 4;
 
+			// styd. A vertex of a Doom 64 map is two 16.16 fixed point numbers: 8 bytes, where the other
+			// formats have two 16 bits integers (mapvertex_t of the game, read by P_LoadVertexes)
+			bool doom64verts = General.Map.DOOM64;
+			if(doom64verts) numverts = (int)vertsstream.Length / 8;
+
 			//mxd. Boilerplate!
 			if(numverts < 1) 
 			{
@@ -191,6 +196,14 @@ namespace CodeImp.DoomBuilder.Plugins.NodesViewer
 			verts = new Vector2D[numverts];
 			for(int i = 0; i < verts.Length; i++)
 			{
+				if(doom64verts)
+				{
+					// styd. The fraction of a coordinate is kept
+					verts[i].x = vertsreader.ReadInt32() / 65536f;
+					verts[i].y = vertsreader.ReadInt32() / 65536f;
+					continue;
+				}
+
 				verts[i].x = vertsreader.ReadInt16();
 				verts[i].y = vertsreader.ReadInt16();
 			}
