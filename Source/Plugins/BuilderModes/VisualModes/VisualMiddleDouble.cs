@@ -168,8 +168,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			
 			if(zoffset > 0) tp.tlt.y -= zoffset; //mxd
 
-			// villsa. In Doom 64 the middle texture is repeated and always bound to the bottom
-			if(General.Map.DOOM64) tp.tlt.y = geobottom - Sidedef.Sector.CeilHeight;
+			// villsa. In Doom 64 the middle texture is repeated. styd: from the height where the game starts it
+			if(General.Map.DOOM64) tp.tlt.y = GetDoom64TextureOrigin() - Sidedef.Sector.CeilHeight;
 			tp.trb.x = tp.tlt.x + (float)Math.Round(Sidedef.Line.Length); //mxd. (G)ZDoom snaps texture coordinates to integral linedef length
 			if(General.Map.DOOM64) tp.trb.x = tp.tlt.x + Sidedef.Line.Length; // Doom 64 does not
 			tp.trb.y = tp.tlt.y + (Sidedef.Sector.CeilHeight - (Sidedef.Sector.FloorHeight + floorbias));
@@ -287,6 +287,26 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 		#region ================== Methods
 
+		// styd. Doom 64: the height at which the middle texture starts. It hangs from the top of the opening
+		// between the two sectors; with upper unpegged it is laid from height 0 of the map, and with lower
+		// unpegged it stands on the bottom of the opening (R_WallPrep, r_phase3.c of the original engine;
+		// the remaster has the same three cases). From there the texture is repeated, up and down.
+		private float GetDoom64TextureOrigin()
+		{
+			if(Sidedef.Line.IsFlagSet(General.Map.Config.LowerUnpeggedFlag)) return Math.Max(Sidedef.Sector.FloorHeight, Sidedef.Other.Sector.FloorHeight);
+			if(Sidedef.Line.IsFlagSet(General.Map.Config.UpperUnpeggedFlag)) return 0;
+			return Math.Min(Sidedef.Sector.CeilHeight, Sidedef.Other.Sector.CeilHeight);
+		}
+
+		// styd. Doom 64: the column or the row of the texture at a texel coordinate. The texture is repeated,
+		// and turned over at every other repeat when the line mirrors it
+		private static int GetDoom64Texel(float coordinate, int size, bool mirrored)
+		{
+			int repeat = (int)Math.Floor(coordinate / size);
+			int texel = General.Clamp((int)Math.Floor(coordinate - repeat * size), 0, size - 1);
+			return ((mirrored && ((repeat & 1) != 0)) ? size - 1 - texel : texel);
+		}
+
 		// villsa. Doom 64: the colors are at the top and bottom of the opening between the two sectors
 		protected override void GetDoom64Colors(out int topcolor, out int bottomcolor, out float topz, out float bottomz)
 		{
@@ -323,6 +343,14 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
             lock (image)
             {
+                // styd. Doom 64: the texel that is drawn at this place, with the mirrors of the line (see Setup)
+                if(General.Map.DOOM64)
+                {
+                    int tx = GetDoom64Texel(u * Sidedef.Line.Length + Sidedef.OffsetX, image.Width, Sidedef.Line.IsFlagSet("1073741824"));
+                    int ty = GetDoom64Texel(GetDoom64TextureOrigin() - pickintersect.z + Sidedef.OffsetY, image.Height, Sidedef.Line.IsFlagSet("2147483648"));
+                    return (image.GetPixel(tx, ty).A > 0 && base.PickAccurate(from, to, dir, ref u_ray));
+                }
+
                 // Determine texture scale...
                 Vector2D imgscale = new Vector2D((float)Texture.Width / image.Width, (float)Texture.Height / image.Height);
                 Vector2D texscale = (Texture is HiResImage) ? imgscale * Texture.Scale : Texture.Scale;
@@ -337,7 +365,6 @@ namespace CodeImp.DoomBuilder.BuilderModes
                 {
                     bool pegbottom = Sidedef.Line.IsFlagSet(General.Map.Config.LowerUnpeggedFlag);
                     float zoffset = (pegbottom ? Sidedef.Sector.FloorHeight : Sidedef.Sector.CeilHeight);
-                    if(General.Map.DOOM64) zoffset = Math.Max(Sidedef.Sector.FloorHeight, Sidedef.Other.Sector.FloorHeight); // villsa. Bound to the bottom
                     oy = (int)Math.Floor(((pickintersect.z - zoffset) * UniFields.GetFloat(Sidedef.Fields, "scaley_mid", 1.0f) / texscale.y
                         - ((Sidedef.OffsetY - UniFields.GetFloat(Sidedef.Fields, "offsety_mid")) / imgscale.y))
                         % image.Height);
