@@ -60,6 +60,21 @@ namespace CodeImp.DoomBuilder.Data
 			GC.SuppressFinalize(this);
 		}
 
+		// styd. A Doom 64 sprite that is shown with another palette (see DataManager.GetSpriteImage).
+		// It keeps the name of its lump, from which it is loaded, but it is another picture than the
+		// sprite itself: it has a long name of its own, so that nothing takes the one for the other
+		// (the 3D renderer tells the textures of translucent things apart by their long name).
+		internal SpriteImage(string name, int palindex, long longname)
+		{
+			// Initialize
+			SetName(name);
+			this.PalIndex = palindex;
+			this.longname = longname;
+
+			// We have no destructor
+			GC.SuppressFinalize(this);
+		}
+
 		#endregion
 
 		#region ================== Methods

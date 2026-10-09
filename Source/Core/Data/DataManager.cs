@@ -1869,7 +1869,8 @@ namespace CodeImp.DoomBuilder.Data
 		
 		// styd: overload that supports Doom 64 monster palette variants (e.g. the Nightmare Imp uses
 		// sprite "TROOA2A8", the same as the regular Imp, but with palette 7). Each (name, palindex)
-		// pair gets its own image, because the palette is applied when the image is loaded.
+		// pair gets its own image, because the palette is applied when the image is loaded, and that
+		// image has the long name it is kept under here.
 		public ImageData GetSpriteImage(string name, int palindex)
 		{
 			// No palette variant requested, or an internal sprite, which never has one?
@@ -1882,8 +1883,7 @@ namespace CodeImp.DoomBuilder.Data
 			ImageData original = GetSpriteImage(name);
 			if(!(original is SpriteImage)) return original;
 
-			SpriteImage image = new SpriteImage(name);
-			image.PalIndex = palindex;
+			SpriteImage image = new SpriteImage(name, palindex, longname);
 			sprites.Add(longname, image);
 			return image;
 		}
