@@ -1267,7 +1267,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.listactions.Margin = new System.Windows.Forms.Padding(8, 9, 8, 9);
 			this.listactions.MultiSelect = false;
 			this.listactions.Name = "listactions";
-			this.listactions.Size = new System.Drawing.Size(370, 475);
+			this.listactions.Size = new System.Drawing.Size(370, 451);
 			this.listactions.Sorting = System.Windows.Forms.SortOrder.Ascending;
 			this.listactions.TabIndex = 0;
 			this.listactions.TabStop = false;
