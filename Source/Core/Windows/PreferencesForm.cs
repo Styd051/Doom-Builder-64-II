@@ -300,11 +300,20 @@ namespace CodeImp.DoomBuilder.Windows
 			// villsa. The geometry in visual mode is colored with the Doom 64 light intensity
 			reloadresources |= ((General.Settings.LightIntensity != lightintensity.Value) && (General.Map != null)
 				&& General.Map.DOOM64 && (General.Editing.Mode is CodeImp.DoomBuilder.VisualModes.VisualMode));
+			bool doom64light = ((General.Settings.LightIntensity != lightintensity.Value) && (General.Map != null) && General.Map.DOOM64); // styd
 
 			// Apply interface
 			General.Settings.ImageBrightness = imagebrightness.Value;
 			General.Settings.LightIntensity = lightintensity.Value; // villsa
 			General.Settings.Doom64DisplayBrightness = (float)doom64brightness.Value; // styd
+
+			// styd. The texture views of the 2D modes fill the sectors with the light intensity
+			if(doom64light)
+			{
+				foreach(CodeImp.DoomBuilder.Map.Sector s in General.Map.Map.Sectors) s.UpdateNeeded = true;
+				General.Map.Map.Update();
+			}
+
 			General.Settings.DoubleSidedAlpha = 1.0f - (doublesidedalpha.Value * 0.1f);
 			General.Settings.ActiveThingsAlpha = 1.0f - (activethingsalpha.Value * 0.1f); //mxd
 			General.Settings.InactiveThingsAlpha = 1.0f - (inactivethingsalpha.Value * 0.1f); //mxd

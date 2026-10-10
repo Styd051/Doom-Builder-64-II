@@ -1673,11 +1673,13 @@ namespace CodeImp.DoomBuilder.Rendering
 						case ViewMode.FloorTextures:
 							surfaces.RenderSectorFloors(yviewport);
 							surfaces.RenderSectorSurfaces(graphics);
+							RenderDoom64Brightness(); // styd
 							break;
 							
 						case ViewMode.CeilingTextures:
 							surfaces.RenderSectorCeilings(yviewport);
 							surfaces.RenderSectorSurfaces(graphics);
+							RenderDoom64Brightness(); // styd
 							break;
 					}
 				}
@@ -1685,6 +1687,46 @@ namespace CodeImp.DoomBuilder.Rendering
 			
 			// Done
 			Finish();
+		}
+
+		// styd. The display brightness of Doom 64 on the sector fills of a texture view, as the
+		// visual mode has it on its view (Renderer3D.RenderDoom64Brightness): every color is
+		// multiplied by one plus this brightness, with a rectangle over the layer, and with a second
+		// one above 1. Only the colors are written: the layer keeps its transparency. Not at full
+		// brightness, where the textures are shown as they are.
+		private void RenderDoom64Brightness()
+		{
+			if(!General.Map.DOOM64 || fullbrightness) return;
+			float brightness = General.Clamp(General.Settings.Doom64DisplayBrightness, 0f, 2f);
+			if(brightness <= 0f) return;
+			if(General.Map.Data.WhiteTexture.Texture == null) General.Map.Data.WhiteTexture.CreateTexture();
+
+			graphics.Device.SetRenderState(RenderState.AlphaBlendEnable, true);
+			graphics.Device.SetRenderState(RenderState.SourceBlend, Blend.DestinationColor);
+			graphics.Device.SetRenderState(RenderState.DestinationBlend, Blend.One);
+			graphics.Device.SetRenderState(RenderState.ColorWriteEnable, ColorWriteEnable.Red | ColorWriteEnable.Green | ColorWriteEnable.Blue);
+			SetWorldTransformation(false);
+			graphics.Shaders.Display2D.Texture1 = General.Map.Data.WhiteTexture.Texture;
+			graphics.Shaders.Display2D.SetSettings(1f, 1f, 0f, 1f, false);
+
+			FlatQuad quad = new FlatQuad(PrimitiveType.TriangleStrip, 0f, 0f, windowsize.Width, windowsize.Height);
+			graphics.Shaders.Display2D.Begin();
+			graphics.Shaders.Display2D.BeginPass(1);
+			foreach(float part in new float[] { Math.Min(brightness, 1f), brightness - 1f })
+			{
+				// The game keeps this gray in a byte
+				int gray = (int)(part * 255f);
+				if(gray <= 0) continue;
+				quad.SetColors(new PixelColor(255, (byte)gray, (byte)gray, (byte)gray).ToInt());
+				quad.Render(graphics);
+			}
+			graphics.Shaders.Display2D.EndPass();
+			graphics.Shaders.Display2D.End();
+
+			// Back to what the layer is drawn with
+			graphics.Device.SetRenderState(RenderState.ColorWriteEnable, ColorWriteEnable.All);
+			graphics.Device.SetRenderState(RenderState.AlphaBlendEnable, false);
+			SetWorldTransformation(true);
 		}
 
 		#endregion

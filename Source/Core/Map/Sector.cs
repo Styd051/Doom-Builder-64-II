@@ -427,17 +427,25 @@ namespace CodeImp.DoomBuilder.Map
 					switch(General.Map.Renderer2D.ViewMode)
 					{
 						case ViewMode.FloorColor:
-						case ViewMode.FloorTextures:
 							brightint = floorcolor.color.WithAlpha(255).ToInt();
 							break;
 
 						case ViewMode.CeilingColor:
-						case ViewMode.CeilingTextures:
 							brightint = ceilcolor.color.WithAlpha(255).ToInt();
 							break;
 
 						case ViewMode.ThingColor:
 							brightint = thingcolor.color.WithAlpha(255).ToInt();
+							break;
+
+						// styd. A texture view shows a floor or a ceiling as the visual mode does: with
+						// the light intensity of the preferences
+						case ViewMode.FloorTextures:
+							brightint = PixelColor.FromInt(floorcolor.GetColor()).WithAlpha(255).ToInt();
+							break;
+
+						case ViewMode.CeilingTextures:
+							brightint = PixelColor.FromInt(ceilcolor.GetColor()).WithAlpha(255).ToInt();
 							break;
 					}
 				}
