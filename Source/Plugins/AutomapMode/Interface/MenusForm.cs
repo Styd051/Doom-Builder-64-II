@@ -20,6 +20,12 @@ namespace CodeImp.DoomBuilder.AutomapMode
 			InitializeComponent();
 		}
 
+		// styd. The preset of Doom 64 is only offered for a Doom 64 map
+		internal void AddDoom64Preset()
+		{
+			colorpreset.Items.Add("Doom 64");
+		}
+
 		public void Register()
 		{
 			General.Interface.BeginToolbarUpdate(); //mxd

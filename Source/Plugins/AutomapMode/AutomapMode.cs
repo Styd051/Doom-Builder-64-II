@@ -45,6 +45,7 @@ namespace CodeImp.DoomBuilder.AutomapMode
 			DOOM,
 			HEXEN,
 			STRIFE,
+			DOOM64, // styd. Only offered for a Doom 64 map
 		}
 
 		#endregion
@@ -52,6 +53,7 @@ namespace CodeImp.DoomBuilder.AutomapMode
 		#region ================== Constants
 
 		private const float LINE_LENGTH_SCALER = 0.001f; //mxd
+		private const string DOOM64_HIDE_SPECIAL_FLAG = "33554432"; // styd. "Hide Special In Automap"
 
 		#endregion
 
@@ -76,6 +78,11 @@ namespace CodeImp.DoomBuilder.AutomapMode
 		private PixelColor ColorHiddenFlag;
 		private PixelColor ColorInvisible;
 		private PixelColor ColorBackground;
+
+		// styd. Doom 64: a line with an action, any other line with two sides
+		private PixelColor ColorSpecial;
+		private PixelColor ColorTwoSided;
+		private bool doom64presets;
 		
 		#endregion
 
@@ -97,6 +104,14 @@ namespace CodeImp.DoomBuilder.AutomapMode
 			menusform.ShowLocks = General.Settings.ReadPluginSetting("automapmode.showlocks", true);
 			menusform.ColorPreset = (ColorPreset)General.Settings.ReadPluginSetting("automapmode.colorpreset", (int)ColorPreset.DOOM);
 
+			// styd. A Doom 64 map has the preset of its game, and remembers its own choice
+			doom64presets = ((General.Map != null) && General.Map.DOOM64);
+			if(doom64presets)
+			{
+				menusform.AddDoom64Preset();
+				menusform.ColorPreset = (ColorPreset)General.Clamp(General.Settings.ReadPluginSetting("automapmode.doom64colorpreset", (int)ColorPreset.DOOM64), (int)ColorPreset.DOOM, (int)ColorPreset.DOOM64);
+			}
+
 			// Handle events
 			menusform.OnShowHiddenLinesChanged += delegate
 			{
@@ -110,6 +125,7 @@ namespace CodeImp.DoomBuilder.AutomapMode
 			menusform.OnColorPresetChanged += delegate
 			{
 				ApplyColorPreset(menusform.ColorPreset);
+				if(doom64presets) UpdateValidLinedefs(); // styd. The preset of Doom 64 does not show the same lines
 				General.Interface.RedrawDisplay();
 			};
 
@@ -185,6 +201,17 @@ namespace CodeImp.DoomBuilder.AutomapMode
 			   (ld.Front != null && secretsectors.Contains(ld.Front.Sector) || ld.Back != null && secretsectors.Contains(ld.Back.Sector)))
 				return ColorSecret;
 
+			// styd. The automap of Doom 64 (AM_DrawLine of the game): a line shown as one-sided, then a line
+			// with an action that is not hidden, then a line with one side. Nothing depends on the heights.
+			if(menusform.ColorPreset == ColorPreset.DOOM64)
+			{
+				if(ld.IsFlagSet(BuilderPlug.Me.HiddenFlag)) return ColorHiddenFlag;
+				if(ld.IsFlagSet(BuilderPlug.Me.SecretFlag)) return ColorSingleSided;
+				if(((ld.Action != 0) || (ld.Activate != 0)) && !ld.IsFlagSet(DOOM64_HIDE_SPECIAL_FLAG)) return ColorSpecial;
+				if(!ld.IsFlagSet(General.Map.Config.DoubleSidedFlag)) return ColorSingleSided;
+				return ColorTwoSided;
+			}
+
 			if(ld.IsFlagSet(BuilderPlug.Me.HiddenFlag)) return ColorHiddenFlag;
 			if(ld.Back == null || ld.Front == null || ld.IsFlagSet(BuilderPlug.Me.SecretFlag)) return ColorSingleSided;
 			if(ld.Front.Sector.FloorHeight != ld.Back.Sector.FloorHeight) return ColorFloorDiff;
@@ -201,6 +228,7 @@ namespace CodeImp.DoomBuilder.AutomapMode
 		private bool LinedefIsValid(Linedef ld)
 		{
 			if(menusform.ShowHiddenLines ^ General.Interface.CtrlState) return true;
+			if(menusform.ColorPreset == ColorPreset.DOOM64) return !ld.IsFlagSet(BuilderPlug.Me.HiddenFlag); // styd. Every line that is not hidden
 			if(ld.IsFlagSet(BuilderPlug.Me.HiddenFlag)) return false;
 			if(ld.Back == null || ld.Front == null || ld.IsFlagSet(BuilderPlug.Me.SecretFlag)) return true;
 			if(ld.Back != null && ld.Front != null && (ld.Front.Sector.FloorHeight != ld.Back.Sector.FloorHeight || ld.Front.Sector.CeilHeight != ld.Back.Sector.CeilHeight)) return true;
@@ -211,6 +239,9 @@ namespace CodeImp.DoomBuilder.AutomapMode
 		//mxd
 		private static bool SectorIsSecret(Sector s)
 		{
+			// styd. A Doom 64 sector is secret by its flag (MS_SECRET of the game)
+			if(General.Map.DOOM64) return s.IsFlagSet("32");
+
 			SectorEffectData data = General.Map.Config.GetSectorEffectData(s.Effect);
 
 			if(General.Map.DOOM)
@@ -291,7 +322,35 @@ namespace CodeImp.DoomBuilder.AutomapMode
 					ColorMatchingHeight = new PixelColor(255, 112, 112, 160);
 					ColorBackground = new PixelColor(255, 0, 0, 0);
 					break;
+
+				// styd. The colors of the game (am_main.c), with the display brightness of the preferences as
+				// the remaster shows its automap. What only the editor shows keeps its color.
+				case ColorPreset.DOOM64:
+					ColorSingleSided = Doom64Color(164, 0, 0);
+					ColorSpecial = Doom64Color(204, 204, 0);
+					ColorTwoSided = Doom64Color(138, 92, 48);
+					ColorSecret = new PixelColor(255, 255, 0, 255);
+					ColorHiddenFlag = new PixelColor(255, 192, 192, 192);
+					ColorBackground = new PixelColor(255, 0, 0, 0);
+					break;
 			}
+		}
+
+		// styd. A color of the automap of Doom 64 with the display brightness of the preferences: the
+		// remaster draws its automap, then makes the whole picture brighter as it does for the 3D view
+		private static PixelColor Doom64Color(int r, int g, int b)
+		{
+			float brightness = General.Clamp(General.Settings.Doom64DisplayBrightness, 0f, 2f);
+			foreach(float part in new float[] { Math.Min(brightness, 1f), brightness - 1f })
+			{
+				int gray = (int)(part * 255f);
+				if(gray <= 0) continue;
+				double factor = 1.0 + gray / 255.0;
+				r = Math.Min(255, (int)Math.Round(r * factor));
+				g = Math.Min(255, (int)Math.Round(g * factor));
+				b = Math.Min(255, (int)Math.Round(b * factor));
+			}
+			return new PixelColor(255, (byte)r, (byte)g, (byte)b);
 		}
 
 		#endregion
@@ -341,7 +400,8 @@ namespace CodeImp.DoomBuilder.AutomapMode
 			General.Settings.WritePluginSetting("automapmode.showhiddenlines", menusform.ShowHiddenLines);
 			General.Settings.WritePluginSetting("automapmode.showsecretsectors", menusform.ShowSecretSectors);
 			General.Settings.WritePluginSetting("automapmode.showlocks", menusform.ShowLocks);
-			General.Settings.WritePluginSetting("automapmode.colorpreset", (int)menusform.ColorPreset);
+			if(doom64presets) General.Settings.WritePluginSetting("automapmode.doom64colorpreset", (int)menusform.ColorPreset); // styd
+			else General.Settings.WritePluginSetting("automapmode.colorpreset", (int)menusform.ColorPreset);
 
 			//mxd. Hide UI
 			menusform.Unregister();
@@ -371,6 +431,9 @@ namespace CodeImp.DoomBuilder.AutomapMode
 		// This redraws the display
 		public override void OnRedrawDisplay()
 		{
+			// styd. The display brightness of the preferences may have changed
+			if(menusform.ColorPreset == ColorPreset.DOOM64) ApplyColorPreset(ColorPreset.DOOM64);
+
 			renderer.RedrawSurface();
 			
 			// Render lines
