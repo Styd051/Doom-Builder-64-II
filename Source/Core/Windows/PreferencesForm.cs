@@ -69,7 +69,7 @@ namespace CodeImp.DoomBuilder.Windows
 			// Interface
 			imagebrightness.Value = General.Settings.ImageBrightness;
 			lightintensity.Value = General.Clamp(General.Settings.LightIntensity, lightintensity.Minimum, lightintensity.Maximum); // villsa
-			doom64brightness.Value = Math.Round((decimal)General.Clamp(General.Settings.Doom64DisplayBrightness, 0.0f, 2.0f), 1); // styd
+			doom64brightness.Value = General.Clamp((int)Math.Round(General.Settings.Doom64DisplayBrightness * 10f), doom64brightness.Minimum, doom64brightness.Maximum); // styd. In tenths
 			doublesidedalpha.Value = General.Clamp((int)((1.0f - General.Settings.DoubleSidedAlpha) * 10.0f), doublesidedalpha.Minimum, doublesidedalpha.Maximum);
 			activethingsalpha.Value = General.Clamp((int)((1.0f - General.Settings.ActiveThingsAlpha) * 10.0f), activethingsalpha.Minimum, activethingsalpha.Maximum); //mxd
 			inactivethingsalpha.Value = General.Clamp((int)((1.0f - General.Settings.InactiveThingsAlpha) * 10.0f), inactivethingsalpha.Minimum, inactivethingsalpha.Maximum); //mxd
@@ -305,7 +305,7 @@ namespace CodeImp.DoomBuilder.Windows
 			// Apply interface
 			General.Settings.ImageBrightness = imagebrightness.Value;
 			General.Settings.LightIntensity = lightintensity.Value; // villsa
-			General.Settings.Doom64DisplayBrightness = (float)doom64brightness.Value; // styd
+			General.Settings.Doom64DisplayBrightness = doom64brightness.Value / 10f; // styd
 
 			// styd. The texture views of the 2D modes fill the sectors with the light intensity
 			if(doom64light)
@@ -1002,6 +1002,12 @@ namespace CodeImp.DoomBuilder.Windows
 		private void lightintensity_ValueChanged(object sender, EventArgs e)
 		{
 			lightintensitylabel.Text = "+ " + (lightintensity.Value * 10) + "%";
+		}
+
+		// styd. The display brightness of Doom 64: the slider is in tenths
+		private void doom64brightness_ValueChanged(object sender, EventArgs e)
+		{
+			doom64brightnesslabel.Text = (doom64brightness.Value / 10f).ToString("0.0", CultureInfo.InvariantCulture);
 		}
 
 		private void doublesidedalpha_ValueChanged(object sender, EventArgs e)
