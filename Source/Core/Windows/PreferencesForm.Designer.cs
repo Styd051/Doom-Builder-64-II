@@ -705,7 +705,7 @@ namespace CodeImp.DoomBuilder.Windows
 			// apply
 			// 
 			this.apply.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-			this.apply.Location = new System.Drawing.Point(467, 593);
+			this.apply.Location = new System.Drawing.Point(467, 605);
 			this.apply.Name = "apply";
 			this.apply.Size = new System.Drawing.Size(112, 25);
 			this.apply.TabIndex = 0;
@@ -717,7 +717,7 @@ namespace CodeImp.DoomBuilder.Windows
 			// 
 			this.cancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
 			this.cancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-			this.cancel.Location = new System.Drawing.Point(585, 593);
+			this.cancel.Location = new System.Drawing.Point(585, 605);
 			this.cancel.Name = "cancel";
 			this.cancel.Size = new System.Drawing.Size(112, 25);
 			this.cancel.TabIndex = 1;
@@ -740,7 +740,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.tabs.Name = "tabs";
 			this.tabs.Padding = new System.Drawing.Point(24, 3);
 			this.tabs.SelectedIndex = 0;
-			this.tabs.Size = new System.Drawing.Size(688, 572);
+			this.tabs.Size = new System.Drawing.Size(688, 584);
 			this.tabs.TabIndex = 0;
 			this.tabs.SelectedIndexChanged += new System.EventHandler(this.tabs_SelectedIndexChanged);
 			// 
@@ -1267,7 +1267,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.listactions.Margin = new System.Windows.Forms.Padding(8, 9, 8, 9);
 			this.listactions.MultiSelect = false;
 			this.listactions.Name = "listactions";
-			this.listactions.Size = new System.Drawing.Size(370, 451);
+			this.listactions.Size = new System.Drawing.Size(351, 451);
 			this.listactions.Sorting = System.Windows.Forms.SortOrder.Ascending;
 			this.listactions.TabIndex = 0;
 			this.listactions.TabStop = false;
@@ -1302,10 +1302,10 @@ namespace CodeImp.DoomBuilder.Windows
 			this.actioncontrolpanel.Controls.Add(this.actionkey);
 			this.actioncontrolpanel.Controls.Add(label5);
 			this.actioncontrolpanel.Enabled = false;
-			this.actioncontrolpanel.Location = new System.Drawing.Point(395, 12);
+			this.actioncontrolpanel.Location = new System.Drawing.Point(376, 12);
 			this.actioncontrolpanel.Margin = new System.Windows.Forms.Padding(6);
 			this.actioncontrolpanel.Name = "actioncontrolpanel";
-			this.actioncontrolpanel.Size = new System.Drawing.Size(296, 505);
+			this.actioncontrolpanel.Size = new System.Drawing.Size(296, 481);
 			this.actioncontrolpanel.TabIndex = 9;
 			this.actioncontrolpanel.TabStop = false;
 			this.actioncontrolpanel.Text = " Action control ";
@@ -1457,7 +1457,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.appearancegroup1.Controls.Add(this.doom64brightnesslabel);
 			this.appearancegroup1.Location = new System.Drawing.Point(217, 8);
 			this.appearancegroup1.Name = "appearancegroup1";
-			this.appearancegroup1.Size = new System.Drawing.Size(475, 510);
+			this.appearancegroup1.Size = new System.Drawing.Size(455, 485);
 			this.appearancegroup1.TabIndex = 2;
 			this.appearancegroup1.TabStop = false;
 			this.appearancegroup1.Text = " Rendering ";
@@ -1762,7 +1762,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.colorsgroup1.Controls.Add(this.colorlinedefs);
 			this.colorsgroup1.Location = new System.Drawing.Point(8, 8);
 			this.colorsgroup1.Name = "colorsgroup1";
-			this.colorsgroup1.Size = new System.Drawing.Size(203, 510);
+			this.colorsgroup1.Size = new System.Drawing.Size(203, 485);
 			this.colorsgroup1.TabIndex = 0;
 			this.colorsgroup1.TabStop = false;
 			this.colorsgroup1.Text = " Colors ";
@@ -2436,7 +2436,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.AutoScaleDimensions = new System.Drawing.SizeF(96F, 96F);
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
 			this.CancelButton = this.cancel;
-			this.ClientSize = new System.Drawing.Size(709, 630);
+			this.ClientSize = new System.Drawing.Size(709, 642);
 			this.Controls.Add(this.cancel);
 			this.Controls.Add(this.apply);
 			this.Controls.Add(this.tabs);
