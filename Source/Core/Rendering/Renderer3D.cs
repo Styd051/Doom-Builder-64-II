@@ -617,8 +617,9 @@ namespace CodeImp.DoomBuilder.Rendering
             }
 
 			// styd. The remaster of Doom 64 makes its whole view brighter once it is drawn.
-			// What only the editor shows comes after.
-			if(General.Map.DOOM64) RenderDoom64Brightness();
+			// What only the editor shows comes after. At full brightness the textures are shown
+			// as they are: the view is left alone.
+			if(General.Map.DOOM64 && !fullbrightness) RenderDoom64Brightness();
 
             // THING CAGES
             if (renderthingcages)
