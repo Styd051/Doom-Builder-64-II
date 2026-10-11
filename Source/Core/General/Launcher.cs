@@ -373,11 +373,16 @@ namespace CodeImp.DoomBuilder
 			string closedtempfile = processes[process];
 			processes.Remove(process);
 
+			// styd: the Doom 64 remaster of Steam ends at once and Steam starts it again, after a question
+			// to the user: the file of the test must still be there when the game reads it. It is removed
+			// by the next test, or when the map is closed.
+			bool keeptestfile = ((General.Map != null) && General.Map.DOOM64);
+
 			//mxd. Still have running engines?..
 			if(processes.Count > 0)
 			{
 				// Remove temp file
-				if(File.Exists(closedtempfile))
+				if(!keeptestfile && File.Exists(closedtempfile))
 				{
 					try { File.Delete(closedtempfile); }
 					catch { }
@@ -388,7 +393,7 @@ namespace CodeImp.DoomBuilder
 			General.MainWindow.DisplayReady();
 
 			// Clean up temp file
-			CleanTempFile(General.Map);
+			if(!keeptestfile) CleanTempFile(General.Map);
 
 			if(General.Map != null)
 			{
