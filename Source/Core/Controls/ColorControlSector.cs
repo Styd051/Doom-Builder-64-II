@@ -70,6 +70,9 @@ namespace CodeImp.DoomBuilder.Controls
 			}
 		}
 
+		// styd. The tag that is in the box now: the one typed there, or else the tag of the light
+		public int CurrentTag { get { return tagbox.GetResult(initialtag, 1); } }
+
 		#endregion
 
 		#region ================== Constructor
@@ -228,7 +231,29 @@ namespace CodeImp.DoomBuilder.Controls
 		// styd: this finds a new (unused) tag
 		private void newtag_Click(object sender, EventArgs e)
 		{
-			tagbox.Text = General.Map.Map.GetNewTag().ToString(CultureInfo.InvariantCulture);
+			// The game looks for a colored light by its tag among the lights of the whole map
+			// (P_FindLightFromLightTag), so the tags of the lights of every sector are in use as well,
+			// and so are the tags that wait in the other boxes of this window
+			List<int> usedtags = new List<int>();
+			foreach(Sector s in General.Map.Map.Sectors)
+			{
+				usedtags.Add(s.CeilColor.tag);
+				usedtags.Add(s.TopColor.tag);
+				usedtags.Add(s.ThingColor.tag);
+				usedtags.Add(s.LowerColor.tag);
+				usedtags.Add(s.FloorColor.tag);
+			}
+
+			if(this.Parent != null)
+			{
+				foreach(Control c in this.Parent.Controls)
+				{
+					ColorControlSector other = c as ColorControlSector;
+					if((other != null) && (other != this)) usedtags.Add(other.CurrentTag);
+				}
+			}
+
+			tagbox.Text = General.Map.Map.GetNewTag(usedtags).ToString(CultureInfo.InvariantCulture);
 		}
 
 		private void brighter_Click(object sender, EventArgs e)
