@@ -513,6 +513,7 @@ namespace CodeImp.DoomBuilder.IO
 			int num = (int)lump.Stream.Length / SECTOR_SIZE;
 			BinaryReader reader = new BinaryReader(mem);
 			int[] colors = new int[Sector.NUM_COLORS];
+			bool[] lightused = new bool[lights.Length]; // styd
 
 			// Create lookup table
 			Dictionary<int, Sector> link = new Dictionary<int, Sector>(num);
@@ -527,6 +528,8 @@ namespace CodeImp.DoomBuilder.IO
 				uint tfloor = reader.ReadUInt16();
 				uint tceil = reader.ReadUInt16();
 				for(int c = 0; c < Sector.NUM_COLORS; c++) colors[c] = reader.ReadUInt16();
+				for(int c = 0; c < Sector.NUM_COLORS; c++) // styd
+					if((colors[c] >= Lights.FIRST_LIGHTS_INDEX) && (colors[c] - Lights.FIRST_LIGHTS_INDEX < lights.Length)) lightused[colors[c] - Lights.FIRST_LIGHTS_INDEX] = true;
 				int special = reader.ReadUInt16();
 				int tag = reader.ReadUInt16();
 				uint flags = reader.ReadUInt16();
@@ -545,6 +548,17 @@ namespace CodeImp.DoomBuilder.IO
 
 				// Add it to the lookup table
 				link.Add(i, s);
+			}
+
+			// styd: the entries of the LIGHTS lump that no sector uses are kept with the map, to be
+			// written back where they were (the game can still find them by their tag)
+			map.Doom64UnusedLights.Clear();
+			for(int i = 0; i < lights.Length; i++)
+			{
+				if(lightused[i]) continue;
+				Lights l = lights[i];
+				l.color.a = 255;
+				map.Doom64UnusedLights.Add(l);
 			}
 
 			// Done
@@ -820,6 +834,31 @@ namespace CodeImp.DoomBuilder.IO
 				indices[3] = AddLightGetIndex(s.TopColor);
 				indices[4] = AddLightGetIndex(s.LowerColor);
 				sectorWrittenIndices[s] = indices;
+			}
+
+			// styd: the entries that no sector used when the map was read go back into the lump, unless
+			// a sector now holds that very entry. The sort below puts each of them where it was.
+			foreach(Lights l in map.Doom64UnusedLights)
+			{
+				bool held = false;
+				for(int i = 0; i < light.Count; i++)
+				{
+					if(lightOriginalIndex[i] == l.originalIndex &&
+						light[i].color.r == l.color.r &&
+						light[i].color.g == l.color.g &&
+						light[i].color.b == l.color.b &&
+						light[i].tag == l.tag)
+					{
+						held = true;
+						break;
+					}
+				}
+
+				if(!held)
+				{
+					light.Add(l);
+					lightOriginalIndex.Add(l.originalIndex);
+				}
 			}
 
 			// styd: reorder the collected LIGHTS entries to match their original physical

@@ -233,7 +233,8 @@ namespace CodeImp.DoomBuilder.Controls
 		{
 			// The game looks for a colored light by its tag among the lights of the whole map
 			// (P_FindLightFromLightTag), so the tags of the lights of every sector are in use as well,
-			// and so are the tags that wait in the other boxes of this window
+			// and so are the tags of the entries of the lump that no sector uses, and the tags that
+			// wait in the other boxes of this window
 			List<int> usedtags = new List<int>();
 			foreach(Sector s in General.Map.Map.Sectors)
 			{
@@ -243,6 +244,8 @@ namespace CodeImp.DoomBuilder.Controls
 				usedtags.Add(s.LowerColor.tag);
 				usedtags.Add(s.FloorColor.tag);
 			}
+
+			foreach(Lights l in General.Map.Map.Doom64UnusedLights) usedtags.Add(l.tag);
 
 			if(this.Parent != null)
 			{

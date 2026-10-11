@@ -102,6 +102,10 @@ namespace CodeImp.DoomBuilder.Map
 		// Disposing
 		private bool isdisposed;
 
+		// styd. Doom 64: the entries of the LIGHTS lump that no sector used when the map was read.
+		// They are not shown anywhere; they are written back where they were.
+		private readonly List<Lights> doom64unusedlights = new List<Lights>();
+
 		#endregion
 
 		#region ================== Properties
@@ -163,6 +167,9 @@ namespace CodeImp.DoomBuilder.Map
 		internal Sidedef[] SidedefIndices { get { return sidedefindices; } }
 
 		internal bool AutoRemove { get { return autoremove; } set { autoremove = value; } }
+
+		// styd
+		internal List<Lights> Doom64UnusedLights { get { return doom64unusedlights; } }
 
 		#endregion
 
@@ -384,6 +391,9 @@ namespace CodeImp.DoomBuilder.Map
 				t.CopyPropertiesTo(nt);
 			}
 			
+			// styd. A clone is what gets written to the file: it needs the LIGHTS entries that no sector uses
+			newset.doom64unusedlights.AddRange(doom64unusedlights);
+
 			// Remove clone references
 			foreach(Vertex v in vertices) v.Clone = null;
 			foreach(Sector s in sectors) s.Clone = null;
