@@ -56,6 +56,11 @@ namespace CodeImp.DoomBuilder.Map
 		public int originalIndex;
 		public bool hasOriginalIndex;
 
+		// styd: the fourth byte of the LIGHTS entry that this value was loaded from. No engine uses
+		// it (the Nintendo 64 one overwrites it right after loading, Doom64 EX and the remaster do
+		// not read it); it is kept so that a saved map has the lump that it was read with.
+		public byte unusedByte;
+
 		#endregion
 
 		#region ================== Constructor / Disposer
@@ -72,6 +77,7 @@ namespace CodeImp.DoomBuilder.Map
 			this.isDirect = (r == g) && (g == b) && (tag == 0);
 			this.originalIndex = -1;
 			this.hasOriginalIndex = false;
+			this.unusedByte = 0;
 		}
 
 		#endregion
@@ -89,6 +95,7 @@ namespace CodeImp.DoomBuilder.Map
 			s.rwBool(ref isDirect);
 			s.rwBool(ref hasOriginalIndex);
 			s.rwInt(ref originalIndex);
+			s.rwByte(ref unusedByte);
 		}
 
 		// This returns the color as shown in the editor (with the Light Intensity setting applied)

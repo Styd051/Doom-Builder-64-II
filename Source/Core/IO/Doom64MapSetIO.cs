@@ -483,6 +483,7 @@ namespace CodeImp.DoomBuilder.IO
 				lights[i].color.g = reader.ReadByte();
 				lights[i].color.b = reader.ReadByte();
 				lights[i].color.a = reader.ReadByte();
+				lights[i].unusedByte = lights[i].color.a; // styd: written back as it is
 				lights[i].tag = reader.ReadUInt16();
 
 				// styd: remember which physical LIGHTS-lump slot this entry came from, so
@@ -868,7 +869,7 @@ namespace CodeImp.DoomBuilder.IO
 				writer.Write(l.color.r);
 				writer.Write(l.color.g);
 				writer.Write(l.color.b);
-				writer.Write((byte)0);
+				writer.Write(l.unusedByte); // styd: the byte that was read (0 for a new light)
 				writer.Write(l.tag);
 			}
 
