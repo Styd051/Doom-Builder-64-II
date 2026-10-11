@@ -24,6 +24,7 @@ using CodeImp.DoomBuilder.Config;
 using CodeImp.DoomBuilder.Map;
 using CodeImp.DoomBuilder.Rendering;
 using CodeImp.DoomBuilder.Editing;
+using CodeImp.DoomBuilder.Geometry;
 
 #endregion
 
@@ -55,6 +56,8 @@ namespace CodeImp.DoomBuilder.AutomapMode
 		private const float LINE_LENGTH_SCALER = 0.001f; //mxd
 		private const string DOOM64_HIDE_SPECIAL_FLAG = "33554432"; // styd. "Hide Special In Automap"
 		private const string DOOM64_HIDE_SECTOR_FLAG = "512"; // styd. "Hide in Automap"
+		private const string DOOM64_SECRET_THING_FLAG = "256"; // styd. "Count Secret On Pickup"
+		private const float DOOM64_THING_SIZE = 32f; // styd. How far the points of a thing are from it on the automap of the game
 
 		#endregion
 
@@ -84,6 +87,7 @@ namespace CodeImp.DoomBuilder.AutomapMode
 		private PixelColor ColorSpecial;
 		private PixelColor ColorTwoSided;
 		private bool doom64presets;
+		private List<Thing> secretthings = new List<Thing>(); // styd. Doom 64: the things that count as a secret when picked up
 		
 		#endregion
 
@@ -198,6 +202,14 @@ namespace CodeImp.DoomBuilder.AutomapMode
 			secretsectors = new HashSet<Sector>();
 			foreach(Sector s in General.Map.Map.Sectors)
 				if(SectorIsSecret(s)) secretsectors.Add(s);
+
+			// styd. A Doom 64 thing counts as a secret by its flag (MTF_SECRET of the game)
+			secretthings = new List<Thing>();
+			if(General.Map.DOOM64)
+			{
+				foreach(Thing t in General.Map.Map.Things)
+					if(t.IsFlagSet(DOOM64_SECRET_THING_FLAG)) secretthings.Add(t);
+			}
 		}
 
 		// styd. The textured automap of Doom 64 is shown: the floors of the sectors, and no line
@@ -224,6 +236,21 @@ namespace CodeImp.DoomBuilder.AutomapMode
 		{
 			return menusform.ShowSecretSectors &&
 				((ld.Front != null && secretsectors.Contains(ld.Front.Sector)) || (ld.Back != null && secretsectors.Contains(ld.Back.Sector)));
+		}
+
+		// styd. The triangle that the game draws for a thing on its automap (AM_DrawThings): three points
+		// at 32 units of the thing, at its angle, then 225 and 135 degrees further. The game keeps the
+		// angle of a thing in steps of 45 degrees.
+		private static Vector2D[] GetThingTriangle(Thing t)
+		{
+			int[] turns = { 0, 225, 135 };
+			Vector2D[] points = new Vector2D[3];
+			for(int i = 0; i < 3; i++)
+			{
+				double angle = ((t.AngleDoom / 45) * 45 + turns[i]) * Math.PI / 180.0;
+				points[i] = new Vector2D(t.Position.x + (float)(Math.Cos(angle) * DOOM64_THING_SIZE), t.Position.y + (float)(Math.Sin(angle) * DOOM64_THING_SIZE));
+			}
+			return points;
 		}
 
 		private PixelColor DetermineLinedefColor(Linedef ld)
@@ -487,6 +514,18 @@ namespace CodeImp.DoomBuilder.AutomapMode
 						renderer.PlotLine(ld.Start.Position, ld.End.Position, DetermineLinedefColor(ld), LINE_LENGTH_SCALER);
 				}
 
+				// styd. The things that count as a secret are shown with the secrets, as the game draws a
+				// thing on its automap: the outline of a triangle here, a filled one on the textured automap
+				if(!textured && menusform.ShowSecretSectors)
+				{
+					foreach(Thing t in secretthings)
+					{
+						if(t.IsDisposed) continue;
+						Vector2D[] points = GetThingTriangle(t);
+						for(int i = 0; i < 3; i++) renderer.PlotLine(points[i], points[(i + 1) % 3], ColorSecret, LINE_LENGTH_SCALER);
+					}
+				}
+
 				if((highlighted != null) && !highlighted.IsDisposed && LinedefIsValid(highlighted))
 				{
 					renderer.PlotLine(highlighted.Start.Position, highlighted.End.Position, General.Colors.InfoLine, LINE_LENGTH_SCALER);
@@ -501,6 +540,24 @@ namespace CodeImp.DoomBuilder.AutomapMode
 				RectangleF screenrect = new RectangleF(0, 0, General.Interface.Display.Width, General.Interface.Display.Height);
 				renderer.RenderRectangleFilled(screenrect, ColorBackground, false);
 				if(textured) renderer.RenderDoom64AutomapFloors(GetTexturedSectors()); // styd
+				if(textured && menusform.ShowSecretSectors)
+				{
+					// styd. Over the floors, in the color of the secrets as it is
+					foreach(Thing t in secretthings)
+					{
+						if(t.IsDisposed) continue;
+						Vector2D[] points = GetThingTriangle(t);
+						FlatVertex[] triangle = new FlatVertex[3];
+						for(int i = 0; i < 3; i++)
+						{
+							triangle[i].x = points[i].x;
+							triangle[i].y = points[i].y;
+							triangle[i].z = 1.0f;
+							triangle[i].c = ColorSecret.ToInt();
+						}
+						renderer.RenderHighlight(triangle, ColorSecret.ToInt());
+					}
+				}
 				renderer.Finish();
 			}
 
