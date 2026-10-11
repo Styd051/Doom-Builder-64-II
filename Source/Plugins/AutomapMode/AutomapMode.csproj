@@ -120,4 +120,7 @@
   <ItemGroup>
     <None Include="Resources\ShowLocks.png" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\ShowTextured.png" />
+  </ItemGroup>
 </Project>

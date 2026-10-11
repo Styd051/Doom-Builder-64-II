@@ -54,6 +54,7 @@ namespace CodeImp.DoomBuilder.AutomapMode
 
 		private const float LINE_LENGTH_SCALER = 0.001f; //mxd
 		private const string DOOM64_HIDE_SPECIAL_FLAG = "33554432"; // styd. "Hide Special In Automap"
+		private const string DOOM64_HIDE_SECTOR_FLAG = "512"; // styd. "Hide in Automap"
 
 		#endregion
 
@@ -110,6 +111,7 @@ namespace CodeImp.DoomBuilder.AutomapMode
 			{
 				menusform.AddDoom64Preset();
 				menusform.ColorPreset = (ColorPreset)General.Clamp(General.Settings.ReadPluginSetting("automapmode.doom64colorpreset", (int)ColorPreset.DOOM64), (int)ColorPreset.DOOM, (int)ColorPreset.DOOM64);
+				menusform.ShowTextured = General.Settings.ReadPluginSetting("automapmode.doom64textured", false);
 			}
 
 			// Handle events
@@ -121,6 +123,7 @@ namespace CodeImp.DoomBuilder.AutomapMode
 
 			menusform.OnShowSecretSectorsChanged += delegate { General.Interface.RedrawDisplay(); };
 			menusform.OnShowLocksChanged += delegate { General.Interface.RedrawDisplay(); };
+			menusform.OnShowTexturedChanged += delegate { General.Interface.RedrawDisplay(); }; // styd
 
 			menusform.OnColorPresetChanged += delegate
 			{
@@ -140,6 +143,16 @@ namespace CodeImp.DoomBuilder.AutomapMode
 		// This highlights a new item
 		private void Highlight(Linedef l)
 		{
+			// styd. The textured automap of Doom 64 draws no line but the highlighted one: the view is drawn again
+			if(Textured)
+			{
+				highlighted = l;
+				General.Interface.RedrawDisplay();
+				if((highlighted != null) && !highlighted.IsDisposed) General.Interface.ShowLinedefInfo(highlighted);
+				else General.Interface.HideInfo();
+				return;
+			}
+
 			// Update display
 			if(renderer.StartPlotter(false))
 			{
@@ -185,6 +198,32 @@ namespace CodeImp.DoomBuilder.AutomapMode
 			secretsectors = new HashSet<Sector>();
 			foreach(Sector s in General.Map.Map.Sectors)
 				if(SectorIsSecret(s)) secretsectors.Add(s);
+		}
+
+		// styd. The textured automap of Doom 64 is shown: the floors of the sectors, and no line
+		private bool Textured { get { return doom64presets && menusform.ShowTextured && (menusform.ColorPreset == ColorPreset.DOOM64); } }
+
+		// styd. The sectors of the textured automap of Doom 64 (AM_DrawSubsectors of the game): not the
+		// ones with "Hide in Automap", not the ones with a sky for a floor. The hidden sectors are shown
+		// along with the hidden lines.
+		private List<Sector> GetTexturedSectors()
+		{
+			bool showhidden = (menusform.ShowHiddenLines ^ General.Interface.CtrlState);
+			List<Sector> sectors = new List<Sector>(General.Map.Map.Sectors.Count);
+			foreach(Sector s in General.Map.Map.Sectors)
+			{
+				if(General.Map.Data.IsSkyFlat(s.FloorTexture)) continue;
+				if(!showhidden && s.IsFlagSet(DOOM64_HIDE_SECTOR_FLAG)) continue;
+				sectors.Add(s);
+			}
+			return sectors;
+		}
+
+		// styd. In the textured automap, the lines of the secret sectors are drawn when the secrets are shown
+		private bool IsSecretOutline(Linedef ld)
+		{
+			return menusform.ShowSecretSectors &&
+				((ld.Front != null && secretsectors.Contains(ld.Front.Sector)) || (ld.Back != null && secretsectors.Contains(ld.Back.Sector)));
 		}
 
 		private PixelColor DetermineLinedefColor(Linedef ld)
@@ -402,6 +441,7 @@ namespace CodeImp.DoomBuilder.AutomapMode
 			General.Settings.WritePluginSetting("automapmode.showlocks", menusform.ShowLocks);
 			if(doom64presets) General.Settings.WritePluginSetting("automapmode.doom64colorpreset", (int)menusform.ColorPreset); // styd
 			else General.Settings.WritePluginSetting("automapmode.colorpreset", (int)menusform.ColorPreset);
+			if(doom64presets) General.Settings.WritePluginSetting("automapmode.doom64textured", menusform.ShowTextured); // styd
 
 			//mxd. Hide UI
 			menusform.Unregister();
@@ -433,6 +473,7 @@ namespace CodeImp.DoomBuilder.AutomapMode
 		{
 			// styd. The display brightness of the preferences may have changed
 			if(menusform.ColorPreset == ColorPreset.DOOM64) ApplyColorPreset(ColorPreset.DOOM64);
+			bool textured = Textured;
 
 			renderer.RedrawSurface();
 			
@@ -441,6 +482,7 @@ namespace CodeImp.DoomBuilder.AutomapMode
 			{
 				foreach(Linedef ld in General.Map.Map.Linedefs)
 				{
+					if(textured && !IsSecretOutline(ld)) continue; // styd. The textured automap has no lines
 					if(LinedefIsValid(ld))
 						renderer.PlotLine(ld.Start.Position, ld.End.Position, DetermineLinedefColor(ld), LINE_LENGTH_SCALER);
 				}
@@ -458,6 +500,7 @@ namespace CodeImp.DoomBuilder.AutomapMode
 			{
 				RectangleF screenrect = new RectangleF(0, 0, General.Interface.Display.Width, General.Interface.Display.Height);
 				renderer.RenderRectangleFilled(screenrect, ColorBackground, false);
+				if(textured) renderer.RenderDoom64AutomapFloors(GetTexturedSectors()); // styd
 				renderer.Finish();
 			}
 

@@ -35,6 +35,7 @@
 			this.showhiddenlines = new System.Windows.Forms.ToolStripButton();
 			this.showsecretsectors = new System.Windows.Forms.ToolStripButton();
 			this.showlocks = new System.Windows.Forms.ToolStripButton();
+			this.showtextured = new System.Windows.Forms.ToolStripButton();
 			this.toolStrip1.SuspendLayout();
 			this.SuspendLayout();
 			// 
@@ -46,7 +47,8 @@
             this.showlocks,
             this.colorpresetseparator,
             this.colorpresetlabel,
-            this.colorpreset});
+            this.colorpreset,
+            this.showtextured});
 			this.toolStrip1.Location = new System.Drawing.Point(0, 0);
 			this.toolStrip1.Name = "toolStrip1";
 			this.toolStrip1.Size = new System.Drawing.Size(731, 25);
@@ -107,6 +109,17 @@
 			this.showlocks.Text = "Show locks";
 			this.showlocks.CheckedChanged += new System.EventHandler(this.showlocks_CheckedChanged);
 			// 
+			// showtextured
+			// 
+			this.showtextured.CheckOnClick = true;
+			this.showtextured.Image = global::CodeImp.DoomBuilder.AutomapMode.Properties.Resources.ShowTextured;
+			this.showtextured.Margin = new System.Windows.Forms.Padding(2, 1, 0, 2);
+			this.showtextured.Name = "showtextured";
+			this.showtextured.Size = new System.Drawing.Size(73, 22);
+			this.showtextured.Text = "Textured";
+			this.showtextured.ToolTipText = "Textured automap of Doom 64: the floors with their texture and their color, without the lines";
+			this.showtextured.CheckedChanged += new System.EventHandler(this.showtextured_CheckedChanged);
+			// 
 			// MenusForm
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -130,5 +143,6 @@
 		private System.Windows.Forms.ToolStripLabel colorpresetlabel;
 		private System.Windows.Forms.ToolStripComboBox colorpreset;
 		private System.Windows.Forms.ToolStripButton showlocks;
+		private System.Windows.Forms.ToolStripButton showtextured;
 	}
 }

@@ -1798,6 +1798,86 @@ namespace CodeImp.DoomBuilder.Rendering
 			graphics.Shaders.Things2D.End();
 		}
 
+		// styd. The floors of the textured automap of Doom 64 (AM_DrawSubsectors of the game): each of
+		// these sectors with the texture and the color of its floor, as the "Floor Textures" view shows
+		// them: with the light intensity and the display brightness of the preferences, and the
+		// textures as they are at full brightness. The transparent parts of a texture let through what
+		// is under them, as in the game. Only the colors are written: the layer keeps its transparency.
+		public void RenderDoom64AutomapFloors(ICollection<Sector> sectors)
+		{
+			if(!General.Map.DOOM64) return;
+
+			// The triangles of the sectors, by texture
+			Dictionary<ImageData, List<FlatVertex>> batches = new Dictionary<ImageData, List<FlatVertex>>();
+			foreach(Sector s in sectors)
+			{
+				if(s.IsDisposed || (s.FlatVertices == null) || (s.FlatVertices.Length < 3)) continue;
+
+				// The image and the texture coordinates that the "Floor Textures" view gives this floor
+				ImageData flat = General.Map.Data.GetFlatImage(s.LongFloorTexture);
+				bool loaded = ((flat != null) && flat.IsImageLoaded);
+				float sw = (loaded ? 1.0f / flat.ScaledWidth : 1.0f / 64f);
+				float sh = (loaded ? 1.0f / flat.ScaledHeight : 1.0f / 64f);
+				ImageData img;
+				if(s.LongFloorTexture == MapSet.EmptyLongName) img = General.Map.Data.MissingTexture3D;
+				else if(flat is UnknownImage) img = General.Map.Data.UnknownTexture3D;
+				else if(loaded && !flat.LoadFailed) img = flat;
+				else img = General.Map.Data.WhiteTexture;
+				if(img.Texture == null) img.CreateTexture();
+				if(img.Texture == null) continue;
+
+				int color = (fullbrightness ? -1 : PixelColor.FromInt(s.FloorColor.GetColor()).WithAlpha(255).ToInt());
+				List<FlatVertex> batch;
+				if(!batches.TryGetValue(img, out batch))
+				{
+					batch = new List<FlatVertex>();
+					batches.Add(img, batch);
+				}
+				foreach(FlatVertex fv in s.FlatVertices)
+				{
+					FlatVertex v = fv;
+					v.u = fv.x * sw;
+					v.v = -fv.y * sh;
+					v.c = color;
+					batch.Add(v);
+				}
+			}
+			if(batches.Count == 0) return;
+
+			// Set renderstates for rendering
+			graphics.Device.SetRenderState(RenderState.CullMode, Cull.None);
+			graphics.Device.SetRenderState(RenderState.ZEnable, false);
+			graphics.Device.SetRenderState(RenderState.AlphaTestEnable, false);
+			graphics.Device.SetRenderState(RenderState.TextureFactor, -1);
+			graphics.Device.SetRenderState(RenderState.FogEnable, false);
+			graphics.Device.SetRenderState(RenderState.AlphaBlendEnable, true);
+			graphics.Device.SetRenderState(RenderState.SourceBlend, Blend.SourceAlpha);
+			graphics.Device.SetRenderState(RenderState.DestinationBlend, Blend.InverseSourceAlpha);
+			graphics.Device.SetRenderState(RenderState.ColorWriteEnable, ColorWriteEnable.Red | ColorWriteEnable.Green | ColorWriteEnable.Blue);
+			SetWorldTransformation(true);
+			graphics.Shaders.Display2D.SetSettings(1f, 1f, 0f, 1f, General.Settings.ClassicBilinear);
+
+			// Draw
+			const int MAX_VERTICES = 30000;
+			graphics.Shaders.Display2D.Begin();
+			foreach(KeyValuePair<ImageData, List<FlatVertex>> b in batches)
+			{
+				FlatVertex[] vertices = b.Value.ToArray();
+				graphics.Shaders.Display2D.Texture1 = b.Key.Texture;
+				graphics.Shaders.Display2D.BeginPass(fullbrightness ? 2 : 1);
+				for(int i = 0; i < vertices.Length; i += MAX_VERTICES)
+					graphics.Device.DrawUserPrimitives(PrimitiveType.TriangleList, i, Math.Min(MAX_VERTICES, vertices.Length - i) / 3, vertices);
+				graphics.Shaders.Display2D.EndPass();
+			}
+			graphics.Shaders.Display2D.End();
+
+			graphics.Device.SetRenderState(RenderState.ColorWriteEnable, ColorWriteEnable.All);
+			graphics.Device.SetRenderState(RenderState.AlphaBlendEnable, false);
+
+			// The display brightness, as on the sector fills of a texture view
+			RenderDoom64Brightness();
+		}
+
 		//mxd. This renders text (DB2 compatibility)
 		[Obsolete("Method is deprecated, please use RenderText(ITextLabel label) method instead.")]
 		public void RenderText(TextLabel label){ RenderText((ITextLabel)label); }

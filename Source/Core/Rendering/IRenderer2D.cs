@@ -80,6 +80,7 @@ namespace CodeImp.DoomBuilder.Rendering
 		void RenderText(IList<ITextLabel> labels); //mxd
 		void RenderGeometry(FlatVertex[] vertices, ImageData texture, bool transformcoords);
 		void RenderHighlight(FlatVertex[] vertices, int color); //mxd
+		void RenderDoom64AutomapFloors(ICollection<Sector> sectors); // styd
 		void RedrawSurface();
 	}
 }
