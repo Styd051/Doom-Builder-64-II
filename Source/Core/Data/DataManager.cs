@@ -445,6 +445,7 @@ namespace CodeImp.DoomBuilder.Data
 						// WAD file container
 						case DataLocation.RESOURCE_WAD:
 							c = new WADReader(dl, General.Map.Options.UseResourcesInReadonlyMode || dl.notfortesting || new FileInfo(dl.location).IsReadOnly);
+							if(General.Map.DOOM64) ((WADReader)c).HoldForReading = true; // styd: the game must be able to read the file while the editor has it
 							if(((WADReader)c).WadFile.IsOfficialIWAD) //mxd
 							{
 								if(!string.IsNullOrEmpty(prevofficialiwad))

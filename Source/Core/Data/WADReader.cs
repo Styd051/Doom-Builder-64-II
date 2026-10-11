@@ -64,6 +64,7 @@ namespace CodeImp.DoomBuilder.Data
 		private WAD file;
 		private bool is_iwad;
 		private bool strictpatches;
+		private bool holdforreading; // styd
 		
 		// Lump ranges
 		private List<LumpRange> flatranges;
@@ -82,6 +83,19 @@ namespace CodeImp.DoomBuilder.Data
 		public bool IsIWAD { get { return is_iwad; } }
 		internal WAD WadFile { get { return file; } } //mxd
 		internal PK3StructuredReader ParentResource; //mxd
+
+		// styd. The Doom 64 remaster only opens a file that no other program holds open for writing.
+		// A reader that holds its file for reading keeps it open for reading only, whatever the editor
+		// may change in it: the file is opened for writing just while something is saved in it.
+		internal bool HoldForReading
+		{
+			get { return holdforreading; }
+			set
+			{
+				holdforreading = value;
+				if(!issuspended) Reload(isreadonly);
+			}
+		}
 
 		#endregion
 
@@ -226,7 +240,7 @@ namespace CodeImp.DoomBuilder.Data
         public override void Reload(bool newreadonly)
         {
             if (file != null) file.Dispose();
-            file = new WAD(location.location, newreadonly);
+            file = new WAD(location.location, newreadonly || holdforreading);
             is_iwad = file.IsIWAD;
             base.Reload(newreadonly);
         }
@@ -1197,9 +1211,19 @@ namespace CodeImp.DoomBuilder.Data
             return null;
 		}
 
+		// styd. This opens a file that is held for reading (see HoldForReading) for writing while
+		// something is saved in it, and for reading again afterwards
+		private void SetWriteAccess(bool writing)
+		{
+			if(!holdforreading) return;
+			file.Dispose();
+			file = new WAD(location.location, !writing);
+		}
+
 		internal override bool SaveFile(MemoryStream lumpdata, string lumpname)
 		{
 			if(isreadonly) return false;
+			SetWriteAccess(true); // styd
 			int insertindex = file.Lumps.Count;
 
 			// Remove the lump if it already exists
@@ -1218,6 +1242,7 @@ namespace CodeImp.DoomBuilder.Data
 			// Update WAD file
 			file.WriteHeaders();
 
+			SetWriteAccess(false); // styd
 			return true;
 		}
 
@@ -1225,6 +1250,7 @@ namespace CodeImp.DoomBuilder.Data
 		{
 			if(isreadonly || lumpindex < 0 || file.Lumps.Count <= lumpindex || file.Lumps[lumpindex].Name != lumpname.ToUpperInvariant())
 				return false;
+			SetWriteAccess(true); // styd
 
             // Remove the lump
             file.RemoveAt(lumpindex);
@@ -1237,6 +1263,7 @@ namespace CodeImp.DoomBuilder.Data
             // Update WAD file
             file.WriteHeaders();
 
+			SetWriteAccess(false); // styd
 			return true;
 		}
 
