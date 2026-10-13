@@ -1329,6 +1329,7 @@
     <None Include="Resources\LiquidAnimated.png" />
     <None Include="Resources\LightAnimated.png" />
     <None Include="Resources\TextureAnimated.png" />
+    <None Include="Resources\SwitchAnimated.png" />
     <None Include="Resources\SpawnerGhost.png" />
     <None Include="Resources\SpawnerHidden.png" />
     <None Include="Resources\SpawnerShown.png" />

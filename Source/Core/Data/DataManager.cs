@@ -53,6 +53,7 @@ namespace CodeImp.DoomBuilder.Data
 		public const int CLASIC_IMAGE_NAME_LENGTH = 8; //mxd
 		private const int MAX_SKYTEXTURE_SIZE = 2048; //mxd
 		private const int DOOM64_TICS_PER_SECOND = 30; // styd. The game goes by this many steps in a second
+		private const string DOOM64_SWITCH_PREFIX = "SWX"; // styd. The game pairs its textures from the first one with such a name
 		internal static readonly char[] CATEGORY_SPLITTER = { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }; //mxd
 
 		private long UNKNOWN_THING; //mxd
@@ -140,6 +141,12 @@ namespace CodeImp.DoomBuilder.Data
 		private Dictionary<string, string> doom64nexttextures; // The texture that follows each texture in the resources
 		private Dictionary<string, ImageData> doom64liquidtextures; // The texture that is drawn over the texture of a liquid floor
 		private long doom64liquidtime; // How long the liquid floors have been moving, in milliseconds
+
+		// styd. The switches of Doom 64
+		private List<string> doom64numberedtextures; // The textures in the order in which the game numbers them
+		private Dictionary<string, int> doom64texturenumbers; // The number of each texture
+		private int doom64firstswitch; // The number of the first texture of the switches, or -1
+		private Dictionary<string, ImageData> doom64switchtextures; // The texture that a switch shows once it is used
 
 		// styd. The light effects of the sectors of Doom 64
 		private Doom64SectorLights doom64sectorlights; // What they add to the light of each sector, or null when they stand still
@@ -339,6 +346,9 @@ namespace CodeImp.DoomBuilder.Data
 				doom64skyanimation = null;
 				doom64nexttextures = null;
 				doom64liquidtextures = null;
+				doom64numberedtextures = null;
+				doom64texturenumbers = null;
+				doom64switchtextures = null;
 				doom64sectorlights = null;
 				if(doom64animations != null) doom64animations.Dispose();
 				doom64animations = null;
@@ -3542,10 +3552,16 @@ namespace CodeImp.DoomBuilder.Data
 		// styd. This reads which texture follows each texture in the resources: Doom 64 draws a liquid
 		// floor with the texture of the floor and with the next one of its textures. The first
 		// resource that has a texture gives its order, as the textures of the game come first.
+		// This also numbers the textures as the game does: it pairs the textures of its switches by
+		// their numbers.
 		private void LoadDoom64TextureOrder()
 		{
 			doom64nexttextures = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 			doom64liquidtextures = new Dictionary<string, ImageData>(StringComparer.OrdinalIgnoreCase);
+			doom64numberedtextures = new List<string>();
+			doom64texturenumbers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+			doom64switchtextures = new Dictionary<string, ImageData>(StringComparer.OrdinalIgnoreCase);
+			doom64firstswitch = -1;
 			if(!General.Map.DOOM64) return;
 
 			foreach(DataReader dr in containers)
@@ -3556,7 +3572,58 @@ namespace CodeImp.DoomBuilder.Data
 				List<string> names = wr.GetTextureRangeNames();
 				for(int i = 0; i < names.Count; i++)
 					if(!doom64nexttextures.ContainsKey(names[i])) doom64nexttextures.Add(names[i], (i + 1 < names.Count ? names[i + 1] : null));
+
+				// The numbers. The textures of a file that is added to the game come after the ones
+				// that are there already, which lose those that the file has too (the remaster).
+				if(names.Count == 0) continue;
+				HashSet<string> again = new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
+				doom64numberedtextures.RemoveAll(delegate(string name) { return again.Contains(name); });
+				doom64numberedtextures.AddRange(names);
 			}
+
+			// A name that is there twice has its first number
+			for(int i = 0; i < doom64numberedtextures.Count; i++)
+			{
+				string name = doom64numberedtextures[i];
+				if(!doom64texturenumbers.ContainsKey(name)) doom64texturenumbers.Add(name, i);
+				if((doom64firstswitch < 0) && name.StartsWith(DOOM64_SWITCH_PREFIX, StringComparison.Ordinal)) doom64firstswitch = i;
+			}
+		}
+
+		// styd. This gives the name of the texture that a switch of Doom 64 shows once it is used, or
+		// null when the given texture has none. From the first texture of the switches on, the game
+		// takes its textures by pairs of numbers, and a switch gets the other texture of the pair of
+		// its own (P_ChangeSwitchTexture). The texture that stands for no texture is not shown.
+		public string GetDoom64SwitchTextureName(string texture)
+		{
+			int number;
+			if((doom64texturenumbers == null) || (doom64firstswitch < 0) || string.IsNullOrEmpty(texture)
+				|| !doom64texturenumbers.TryGetValue(texture, out number)) return null;
+
+			int other = ((number - doom64firstswitch) ^ 1) + doom64firstswitch;
+			if((other < 0) || (other >= doom64numberedtextures.Count)) return null;
+			return ((doom64numberedtextures[other] == Doom64MapSetIO.NO_TEXTURE_LUMP) ? null : doom64numberedtextures[other]);
+		}
+
+		// styd. This gives the picture of that texture, or null when there is none. It is kept loaded
+		// as long as the resources are.
+		public ImageData GetDoom64SwitchTexture(string texture)
+		{
+			if((doom64switchtextures == null) || string.IsNullOrEmpty(texture)) return null;
+
+			ImageData image;
+			if(doom64switchtextures.TryGetValue(texture, out image)) return image;
+
+			string other = GetDoom64SwitchTextureName(texture);
+			if(other != null)
+			{
+				image = GetTextureImage(other);
+				if((image == null) || (image is UnknownImage)) image = null;
+				else image.AddReference();
+			}
+
+			doom64switchtextures.Add(texture, image);
+			return image;
 		}
 
 		// styd. This gives the texture that Doom 64 draws over the texture of a liquid floor, or null

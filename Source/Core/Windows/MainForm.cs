@@ -2108,6 +2108,7 @@ namespace CodeImp.DoomBuilder.Windows
 			buttontoggleliquidanimation.Visible = General.Settings.GZToolbarGZDoom && maploaded && General.Map.DOOM64; // styd
 			buttontogglelightanimation.Visible = General.Settings.GZToolbarGZDoom && maploaded && General.Map.DOOM64; // styd
 			buttontoggletextureanimation.Visible = General.Settings.GZToolbarGZDoom && maploaded && General.Map.DOOM64; // styd
+			buttontoggleswitchpreview.Visible = General.Settings.GZToolbarGZDoom && maploaded && General.Map.DOOM64; // styd
 			doom64spawnermode.Visible = General.Settings.GZToolbarGZDoom && maploaded && General.Map.DOOM64; // styd
 			buttontoggleeventlines.Visible = General.Settings.GZToolbarGZDoom && maploaded;
 			buttontogglevisualvertices.Visible = General.Settings.GZToolbarGZDoom && maploaded && General.Map.UDMF;
@@ -2277,6 +2278,8 @@ namespace CodeImp.DoomBuilder.Windows
 				buttontogglelightanimation.Checked = General.Settings.Doom64AnimateLights; // styd
 				buttontoggletextureanimation.Visible = General.Map.DOOM64; // styd
 				buttontoggletextureanimation.Checked = General.Settings.Doom64AnimateTextures; // styd
+				buttontoggleswitchpreview.Visible = General.Map.DOOM64; // styd
+				buttontoggleswitchpreview.Checked = General.Settings.Doom64SwitchPreviewOnAim; // styd
 				doom64spawnermode.Visible = General.Map.DOOM64; // styd
 				foreach(ToolStripItem spawneritem in doom64spawnermode.DropDownItems) // styd
 				{
@@ -3086,6 +3089,8 @@ namespace CodeImp.DoomBuilder.Windows
 			itemtogglelightanimation.Checked = General.Settings.Doom64AnimateLights; // styd
 			itemtoggletextureanimation.Visible = (General.Map != null && General.Map.DOOM64); // styd
 			itemtoggletextureanimation.Checked = General.Settings.Doom64AnimateTextures; // styd
+			itemtoggleswitchpreview.Visible = (General.Map != null && General.Map.DOOM64); // styd
+			itemtoggleswitchpreview.Checked = General.Settings.Doom64SwitchPreviewOnAim; // styd
 			itemdoom64spawnermodes.Visible = (General.Map != null && General.Map.DOOM64); // styd
 			foreach(ToolStripItem spawneritem in itemdoom64spawnermodes.DropDownItems) // styd
 			{
@@ -3226,6 +3231,20 @@ namespace CodeImp.DoomBuilder.Windows
 
 			General.MainWindow.DisplayStatus(StatusType.Action, "Texture animation is " + (General.Settings.Doom64AnimateTextures ? "ENABLED" : "DISABLED"));
 			General.MainWindow.RedrawDisplay();
+			General.MainWindow.UpdateGZDoomPanel();
+		}
+
+		// styd. In visual mode a switch of Doom 64 that is aimed at shows the other texture of its
+		// pair for a while, as when it is used in the game; or only when its own action is run
+		[BeginAction("doom64toggleswitchpreviewonaim")]
+		internal void ToggleSwitchPreviewOnAim()
+		{
+			General.Settings.Doom64SwitchPreviewOnAim = !General.Settings.Doom64SwitchPreviewOnAim;
+
+			itemtoggleswitchpreview.Checked = General.Settings.Doom64SwitchPreviewOnAim;
+			buttontoggleswitchpreview.Checked = General.Settings.Doom64SwitchPreviewOnAim;
+
+			General.MainWindow.DisplayStatus(StatusType.Action, "Switch animation on aim is " + (General.Settings.Doom64SwitchPreviewOnAim ? "ENABLED" : "DISABLED"));
 			General.MainWindow.UpdateGZDoomPanel();
 		}
 

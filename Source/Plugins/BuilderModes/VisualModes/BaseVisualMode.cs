@@ -63,7 +63,15 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		private const int DOOM64_SPAWN_PREVIEW_TICS = DOOM64_SPAWN_FADE_TICS + 2 * DOOM64_TICRATE;
 
 		// styd. For how long, in milliseconds, a target is aimed at before its preview begins by itself
-		private const int DOOM64_SPAWN_AIM_TIME = 500;
+		private const int DOOM64_AIM_TIME = 500;
+
+		// styd. Doom 64: for how many tics a switch that is shown used keeps its other texture. The
+		// game gives 15 tics to the switch of a line that can be used again (BUTTONTIME); the switch
+		// of a line that is used once keeps it in the game, and here for two seconds. And the
+		// activation of a line that can be used again.
+		private const int DOOM64_SWITCH_TICS = 15;
+		private const int DOOM64_SWITCH_ONCE_TICS = 2 * DOOM64_TICRATE;
+		private const int DOOM64_REPEATABLE_ACTIVATION = 32768;
 		
 		#endregion
 		
@@ -116,6 +124,10 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		private IVisualPickable doom64aimtarget;
 		private long doom64aimtime;
 		private bool doom64aimdone;
+
+		// styd. The Doom 64 switches that are shown as the game shows them once they are used: for
+		// each of their lines, for how long in milliseconds
+		private readonly Dictionary<Linedef, long> doom64switches = new Dictionary<Linedef, long>();
 		
 		//mxd. Used in Cut/PasteSelection actions
 		private readonly List<ThingCopyData> copybuffer;
@@ -1185,6 +1197,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// When returning to another mode
 		public override void OnDisengage()
 		{
+			doom64switches.Clear(); // styd
 			base.OnDisengage();
 
 			//mxd
@@ -1345,12 +1358,13 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			return true;
 		}
 
-		// styd. With its option, the preview of a Thing Spawn action begins by itself when the target
-		// has been a Doom 64 thing with the Spawner flag, or a line with that action, for a while.
-		// A target gets one preview: it has to change and to come back for another one.
-		private void ProcessDoom64SpawnPreviewOnAim(long deltatime)
+		// styd. With their options, the previews of Doom 64 begin by themselves when their target has
+		// been aimed at for a while: the one of a Thing Spawn action for a thing with the Spawner flag
+		// or a line with that action, the one of a switch for that switch or the front of its line.
+		// A target gets them once: it has to change and to come back for more.
+		private void ProcessDoom64PreviewsOnAim(long deltatime)
 		{
-			if(!General.Map.DOOM64 || !General.Settings.Doom64SpawnPreviewOnAim)
+			if(!General.Map.DOOM64 || !(General.Settings.Doom64SpawnPreviewOnAim || General.Settings.Doom64SwitchPreviewOnAim))
 			{
 				doom64aimtarget = null;
 				return;
@@ -1367,22 +1381,137 @@ namespace CodeImp.DoomBuilder.BuilderModes
 
 			if(doom64aimdone) return;
 			doom64aimtime += deltatime;
-			if(doom64aimtime < DOOM64_SPAWN_AIM_TIME) return;
+			if(doom64aimtime < DOOM64_AIM_TIME) return;
 			doom64aimdone = true;
 
-			// (a preview of this tag that is going on is not begun again)
-			int tag;
-			string problem;
-			if(GetDoom64SpawnPreviewTag(out tag, out problem) && ((doom64spawntime < 0) || (tag != doom64spawntag))) StartDoom64SpawnPreview(tag);
+			if(General.Settings.Doom64SpawnPreviewOnAim)
+			{
+				// (a preview of this tag that is going on is not begun again)
+				int tag;
+				string problem;
+				if(GetDoom64SpawnPreviewTag(out tag, out problem) && ((doom64spawntime < 0) || (tag != doom64spawntag))) StartDoom64SpawnPreview(tag);
+			}
+
+			if(General.Settings.Doom64SwitchPreviewOnAim)
+			{
+				Linedef line;
+				string problem;
+				if(GetDoom64SwitchPreviewLine(out line, out problem)) StartDoom64SwitchPreview(line);
+			}
 		}
 
 		// styd. This gives what the renderer highlights: the target, unless it is a Doom 64 thing that
-		// appears in the preview of a Thing Spawn action, as a highlighted thing is never faint
+		// appears in the preview of a Thing Spawn action, as a highlighted thing is never faint, or
+		// a switch that is shown used, whose other texture is to be seen as it is
 		private IVisualPickable GetHighlightedTarget()
 		{
 			BaseVisualThing vt = target.picked as BaseVisualThing;
 			if((vt != null) && (GetDoom64SpawnPreviewTics(vt.Thing) >= 0)) return null;
+			VisualSwitchDecal decal = target.picked as VisualSwitchDecal;
+			if((decal != null) && decal.IsPressed) return null;
 			return target.picked;
+		}
+
+		// styd. This tells whether the switch of the given Doom 64 line is shown used
+		internal bool IsDoom64SwitchPressed(Linedef l)
+		{
+			return doom64switches.ContainsKey(l);
+		}
+
+		// styd. This gives the decal of the switch on the front of a line, or null
+		private VisualSwitchDecal GetDoom64SwitchDecal(Linedef l)
+		{
+			if((l == null) || l.IsDisposed || (l.Front == null) || (l.Front.Sector == null) || !VisualSectorExists(l.Front.Sector)) return null;
+			return ((BaseVisualSector)GetVisualSector(l.Front.Sector)).GetSidedefParts(l.Front).switchdecal;
+		}
+
+		// styd. This finds the Doom 64 line whose switch the target is to show used: the line of the
+		// targeted switch, or of the targeted wall part on the front of a line with a switch. As the
+		// game, this is for the switch on the front of a line, whose texture has another one.
+		// Returns false, with what to tell, when the target is not that.
+		private bool GetDoom64SwitchPreviewLine(out Linedef line, out string problem)
+		{
+			line = null;
+			problem = null;
+
+			BaseVisualGeometrySidedef side = target.picked as BaseVisualGeometrySidedef;
+			if(side == null)
+			{
+				problem = "Target a switch, or the front of its line!";
+				return false;
+			}
+
+			VisualSwitchDecal decal = (side.Sidedef.IsFront ? GetDoom64SwitchDecal(side.Sidedef.Line) : null);
+			if((decal == null) || (decal.Triangles == 0))
+			{
+				if(!side.Sidedef.IsFront && VisualSwitchDecal.IsNeeded(side.Sidedef)) problem = "The game changes the switch on the front of a line only!";
+				else problem = "This line shows no switch on its front!";
+			}
+			else if(!decal.CanBePressed) problem = "The texture of this switch has no other texture to change to!";
+			else line = side.Sidedef.Line;
+
+			return (line != null);
+		}
+
+		// styd. For how many tics the switch of a Doom 64 line is shown used
+		private static int GetDoom64SwitchTics(Linedef l)
+		{
+			return (((l.Activate & DOOM64_REPEATABLE_ACTIVATION) != 0) ? DOOM64_SWITCH_TICS : DOOM64_SWITCH_ONCE_TICS);
+		}
+
+		// styd. This shows the switch of a Doom 64 line as the game shows it once it is used. As in
+		// the game (P_StartButton), nothing begins again for a switch that is shown so already.
+		private void StartDoom64SwitchPreview(Linedef line)
+		{
+			if(doom64switches.ContainsKey(line)) return;
+
+			doom64switches.Add(line, 0);
+			VisualSwitchDecal decal = GetDoom64SwitchDecal(line);
+			if(decal == null) return;
+			decal.Setup();
+
+			string texture = decal.GetTextureName();
+			General.Interface.DisplayStatus(StatusType.Action, "Switch preview: " + texture + " becomes " + General.Map.Data.GetDoom64SwitchTextureName(texture)
+				+ ((GetDoom64SwitchTics(line) == DOOM64_SWITCH_TICS) ? " for half a second, as in the game." : " for two seconds (in the game it stays)."));
+		}
+
+		// styd. This makes the time of the Doom 64 switches that are shown used go by. When it is
+		// over, a switch is shown with the texture of the map again.
+		private void ProcessDoom64SwitchPreviews(long deltatime)
+		{
+			if(doom64switches.Count == 0) return;
+
+			foreach(Linedef l in new List<Linedef>(doom64switches.Keys))
+			{
+				long time = doom64switches[l] + deltatime;
+				VisualSwitchDecal decal = GetDoom64SwitchDecal(l);
+				if(l.IsDisposed || (time * DOOM64_TICRATE / 1000 >= GetDoom64SwitchTics(l)))
+				{
+					doom64switches.Remove(l);
+					if(decal != null) decal.Setup();
+				}
+				else
+				{
+					doom64switches[l] = time;
+
+					// (the other texture was not loaded yet when the switch was to show it)
+					if((decal != null) && decal.CanBePressed && !decal.IsPressed) decal.Setup();
+				}
+			}
+		}
+
+		// styd. This ends the previews of the Doom 64 switches
+		private void ClearDoom64SwitchPreviews()
+		{
+			if(doom64switches.Count == 0) return;
+
+			List<Linedef> lines = new List<Linedef>(doom64switches.Keys);
+			doom64switches.Clear();
+			foreach(Linedef l in lines)
+			{
+				VisualSwitchDecal decal = GetDoom64SwitchDecal(l);
+				if(decal != null) decal.Setup();
+			}
 		}
 
 		// styd. This makes the preview of a Thing Spawn action go on. The things change at each tic
@@ -1418,7 +1547,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			// has changed
 			if(General.Map.DOOM64 && (doom64spawnermode != General.Settings.Doom64SpawnerThings)) UpdateDoom64SpawnerThings();
 			ProcessDoom64SpawnPreview(deltatime);
-			ProcessDoom64SpawnPreviewOnAim(deltatime);
+			ProcessDoom64SwitchPreviews(deltatime);
+			ProcessDoom64PreviewsOnAim(deltatime);
 
 			// Process things?
 			base.ProcessThings = (BuilderPlug.Me.ShowVisualThings != 0);
@@ -1574,6 +1704,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		// After resources were reloaded
 		protected override void ResourcesReloaded()
 		{
+			doom64switches.Clear(); // styd
 			base.ResourcesReloaded();
 			RebuildElementData();
 			UpdateChangedObjects(); //mxd
@@ -1762,6 +1893,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				if(vs != null) vs.Rebuild();
 			}
 
+			ClearDoom64SwitchPreviews(); // styd
 			RebuildSelectedObjectsList();
 			
 			// We can't group with this undo level anymore
@@ -1783,6 +1915,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				if(vs != null) vs.Rebuild();
 			}
 
+			ClearDoom64SwitchPreviews(); // styd
 			RebuildSelectedObjectsList();
 		}
 
@@ -3143,6 +3276,30 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			{
 				General.Interface.DisplayStatus(StatusType.Warning, "No thing with the Spawner flag has the tag " + tag + "!");
 			}
+		}
+
+		// styd. Doom 64: the targeted switch is shown as the game shows it once it is used, with the
+		// other texture of its pair, for a while. Nothing is changed in the map.
+		[BeginAction("doom64pressswitch")]
+		public void PressDoom64Switch()
+		{
+			if(!General.Map.DOOM64)
+			{
+				General.Interface.DisplayStatus(StatusType.Warning, "Switches can only be previewed in the Doom 64 map format!");
+				return;
+			}
+
+			PickTargetUnlocked();
+
+			Linedef line;
+			string problem;
+			if(!GetDoom64SwitchPreviewLine(out line, out problem))
+			{
+				General.Interface.DisplayStatus(StatusType.Warning, problem);
+				return;
+			}
+
+			StartDoom64SwitchPreview(line);
 		}
 
 		//mxd

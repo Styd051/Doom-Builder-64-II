@@ -53,6 +53,19 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		private Vector2D pickdir;
 		private float pickhalfwidth;
 
+		// styd. The mode can show the switch as the game shows it once it is used: with the other
+		// texture of its pair. The picture of that texture (null when the game does not change the
+		// texture that this decal draws, or when it has no pair), and whether it is drawn now.
+		private ImageData pressedtexture;
+		private bool pressed;
+
+		#endregion
+
+		#region ================== Properties
+
+		internal bool CanBePressed { get { return (pressedtexture != null); } }
+		internal bool IsPressed { get { return pressed; } }
+
 		#endregion
 
 		#region ================== Constructor / Setup
@@ -102,6 +115,10 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			bool hasswitchtex = false;
 			float switchz = 0f;
 			bool foundcase = false;
+			int part = 0;
+
+			pressedtexture = null;
+			pressed = false;
 
 			if(hasback)
 			{
@@ -111,7 +128,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				// Case A: on the upper part (near the ceiling step)
 				if((back.CeilHeight < front.CeilHeight) && displayupper && !checkfloorheight)
 				{
-					GetSidedefTexture((texturemask == Linedef.SWITCH_TEXTURE_LOWER) ? 2 : 0, out switchtex, out hasswitchtex);
+					part = ((texturemask == Linedef.SWITCH_TEXTURE_LOWER) ? 2 : 0);
+					GetSidedefTexture(part, out switchtex, out hasswitchtex);
 					switchz = back.CeilHeight + Sidedef.OffsetY + 48f;
 					foundcase = true;
 				}
@@ -119,7 +137,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				// Case B: on the lower part (near the floor step)
 				if(!foundcase && (front.FloorHeight < back.FloorHeight) && checkfloorheight && !displayupper)
 				{
-					GetSidedefTexture((texturemask == Linedef.SWITCH_TEXTURE_UPPER) ? 1 : 0, out switchtex, out hasswitchtex);
+					part = ((texturemask == Linedef.SWITCH_TEXTURE_UPPER) ? 1 : 0);
+					GetSidedefTexture(part, out switchtex, out hasswitchtex);
 					switchz = back.FloorHeight + Sidedef.OffsetY - 16f;
 					foundcase = true;
 				}
@@ -128,7 +147,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				if(!foundcase && Sidedef.Line.IsFlagSet("512") && checkfloorheight && displayupper)
 				{
 					float mbottom = Math.Max(front.FloorHeight, back.FloorHeight);
-					GetSidedefTexture((texturemask == Linedef.SWITCH_TEXTURE_UPPER) ? 1 : 2, out switchtex, out hasswitchtex);
+					part = ((texturemask == Linedef.SWITCH_TEXTURE_UPPER) ? 1 : 2);
+					GetSidedefTexture(part, out switchtex, out hasswitchtex);
 					switchz = mbottom + Sidedef.OffsetY + 48f;
 					foundcase = true;
 				}
@@ -138,7 +158,8 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				// Single sided: always case C
 				if(checkfloorheight && displayupper)
 				{
-					GetSidedefTexture((texturemask == Linedef.SWITCH_TEXTURE_UPPER) ? 1 : 2, out switchtex, out hasswitchtex);
+					part = ((texturemask == Linedef.SWITCH_TEXTURE_UPPER) ? 1 : 2);
+					GetSidedefTexture(part, out switchtex, out hasswitchtex);
 					switchz = Sidedef.Sector.FloorHeight + Sidedef.OffsetY + 48f;
 					foundcase = true;
 				}
@@ -151,16 +172,30 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				return false;
 			}
 
+			// styd. When the switch is used, the game changes the upper, lower or middle texture of the
+			// front side, by the texture flags of the line, to the other texture of its pair
+			// (P_ChangeSwitchTexture). When that is the texture of this decal, the mode can show it.
+			int changedpart = ((texturemask == Linedef.SWITCH_TEXTURE_UPPER) ? 1 : ((texturemask == Linedef.SWITCH_TEXTURE_LOWER) ? 2 : 0));
+			if(Sidedef.IsFront && (part == changedpart)) pressedtexture = General.Map.Data.GetDoom64SwitchTexture(GetTextureName());
+			pressed = ((pressedtexture != null) && pressedtexture.IsImageLoaded && mode.IsDoom64SwitchPressed(Sidedef.Line));
+
 			// Load the switch texture
-			base.Texture = General.Map.Data.GetTextureImage(switchtex);
-			if(base.Texture == null || base.Texture is UnknownImage)
+			if(pressed)
 			{
-				base.Texture = General.Map.Data.UnknownTexture3D;
-				setuponloadedtexture = switchtex;
+				base.Texture = pressedtexture;
 			}
-			else if(!base.Texture.IsImageLoaded)
+			else
 			{
-				setuponloadedtexture = switchtex;
+				base.Texture = General.Map.Data.GetTextureImage(switchtex);
+				if(base.Texture == null || base.Texture is UnknownImage)
+				{
+					base.Texture = General.Map.Data.UnknownTexture3D;
+					setuponloadedtexture = switchtex;
+				}
+				else if(!base.Texture.IsImageLoaded)
+				{
+					setuponloadedtexture = switchtex;
+				}
 			}
 
 			float topz = switchz;

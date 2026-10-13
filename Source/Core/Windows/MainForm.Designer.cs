@@ -197,6 +197,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemtoggleliquidanimation = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemtogglelightanimation = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemtoggletextureanimation = new System.Windows.Forms.ToolStripMenuItem();
+			this.itemtoggleswitchpreview = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemdoom64spawnermodes = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemspawnerghost = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemspawnerhidden = new System.Windows.Forms.ToolStripMenuItem();
@@ -243,6 +244,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.buttontoggleliquidanimation = new System.Windows.Forms.ToolStripButton();
 			this.buttontogglelightanimation = new System.Windows.Forms.ToolStripButton();
 			this.buttontoggletextureanimation = new System.Windows.Forms.ToolStripButton();
+			this.buttontoggleswitchpreview = new System.Windows.Forms.ToolStripButton();
 			this.doom64spawnermode = new System.Windows.Forms.ToolStripSplitButton();
 			this.spawnerghost = new System.Windows.Forms.ToolStripMenuItem();
 			this.spawnerhidden = new System.Windows.Forms.ToolStripMenuItem();
@@ -830,6 +832,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemtoggleliquidanimation,
 			this.itemtogglelightanimation,
 			this.itemtoggletextureanimation,
+			this.itemtoggleswitchpreview,
 			this.itemdoom64spawnermodes,
 			this.itemtoggleeventlines,
 			this.itemtogglevisualverts,
@@ -1453,6 +1456,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.buttontoggleliquidanimation,
 			this.buttontogglelightanimation,
 			this.buttontoggletextureanimation,
+			this.buttontoggleswitchpreview,
 			this.doom64spawnermode,
 			this.buttontoggleeventlines,
 			this.buttontogglevisualvertices,
@@ -1895,6 +1899,16 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemtoggletextureanimation.Tag = "builder_doom64toggletextureanimation";
 			this.itemtoggletextureanimation.Text = "Animate textures (Visual mode)";
 			this.itemtoggletextureanimation.Click += new System.EventHandler(this.InvokeTaggedAction);
+			//
+			// itemtoggleswitchpreview
+			//
+			this.itemtoggleswitchpreview.CheckOnClick = true;
+			this.itemtoggleswitchpreview.Image = global::CodeImp.DoomBuilder.Properties.Resources.SwitchAnimated;
+			this.itemtoggleswitchpreview.Name = "itemtoggleswitchpreview";
+			this.itemtoggleswitchpreview.Size = new System.Drawing.Size(273, 22);
+			this.itemtoggleswitchpreview.Tag = "builder_doom64toggleswitchpreviewonaim";
+			this.itemtoggleswitchpreview.Text = "Animate switches when aiming (Visual mode)";
+			this.itemtoggleswitchpreview.Click += new System.EventHandler(this.InvokeTaggedAction);
 			//
 			// itemdoom64spawnermodes
 			//
@@ -2408,6 +2422,18 @@ namespace CodeImp.DoomBuilder.Windows
 			this.buttontoggletextureanimation.Tag = "builder_doom64toggletextureanimation";
 			this.buttontoggletextureanimation.Text = "Animate Textures (Visual mode)";
 			this.buttontoggletextureanimation.Click += new System.EventHandler(this.InvokeTaggedAction);
+			//
+			// buttontoggleswitchpreview
+			//
+			this.buttontoggleswitchpreview.CheckOnClick = true;
+			this.buttontoggleswitchpreview.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+			this.buttontoggleswitchpreview.Image = global::CodeImp.DoomBuilder.Properties.Resources.SwitchAnimated;
+			this.buttontoggleswitchpreview.ImageTransparentColor = System.Drawing.Color.Magenta;
+			this.buttontoggleswitchpreview.Name = "buttontoggleswitchpreview";
+			this.buttontoggleswitchpreview.Size = new System.Drawing.Size(23, 20);
+			this.buttontoggleswitchpreview.Tag = "builder_doom64toggleswitchpreviewonaim";
+			this.buttontoggleswitchpreview.Text = "Animate Switches when aiming (Visual mode)";
+			this.buttontoggleswitchpreview.Click += new System.EventHandler(this.InvokeTaggedAction);
 			//
 			// doom64spawnermode
 			//
@@ -3321,6 +3347,7 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.ToolStripButton buttontoggleliquidanimation;
 		private System.Windows.Forms.ToolStripButton buttontogglelightanimation;
 		private System.Windows.Forms.ToolStripButton buttontoggletextureanimation;
+		private System.Windows.Forms.ToolStripButton buttontoggleswitchpreview;
 		private System.Windows.Forms.ToolStripSplitButton doom64spawnermode;
 		private System.Windows.Forms.ToolStripMenuItem spawnerghost;
 		private System.Windows.Forms.ToolStripMenuItem spawnerhidden;
@@ -3390,6 +3417,7 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.ToolStripMenuItem itemtoggleliquidanimation;
 		private System.Windows.Forms.ToolStripMenuItem itemtogglelightanimation;
 		private System.Windows.Forms.ToolStripMenuItem itemtoggletextureanimation;
+		private System.Windows.Forms.ToolStripMenuItem itemtoggleswitchpreview;
 		private System.Windows.Forms.ToolStripMenuItem itemdoom64spawnermodes;
 		private System.Windows.Forms.ToolStripMenuItem itemspawnerghost;
 		private System.Windows.Forms.ToolStripMenuItem itemspawnerhidden;

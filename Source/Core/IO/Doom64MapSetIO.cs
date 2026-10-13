@@ -54,7 +54,7 @@ namespace CodeImp.DoomBuilder.IO
 		internal const int SWITCH_MASK = Linedef.SWITCH_MASK;
 
 		// The texture that stands for "no texture"
-		private const string NO_TEXTURE_LUMP = "?";
+		internal const string NO_TEXTURE_LUMP = "?";
 
 		// Textures are stored as a hash of their name. A hash that matches no loaded
 		// texture is shown under this kind of name, so that it is kept when saving.
