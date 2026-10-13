@@ -126,6 +126,9 @@ namespace CodeImp.DoomBuilder.Controls
 
 		//mxd. Event propagation
 		private bool preventchanges;
+
+		// styd. The text had Unix line ends only when it was loaded (see ClearUndoRedo)
+		private bool unixlineends;
 		
 		#endregion
 
@@ -140,6 +143,7 @@ namespace CodeImp.DoomBuilder.Controls
 		public bool WrapLongLines { get { return scriptedit.WrapMode != WrapMode.None; } set { scriptedit.WrapMode = (value ? WrapMode.Char : WrapMode.None); } }
 		internal Scintilla Scintilla { get { return scriptedit; } } //mxd
 		internal static Encoding Encoding { get { return encoding; } } //mxd
+		internal bool UnixLineEnds { get { return unixlineends; } } // styd
 
 		#endregion
 
@@ -552,6 +556,11 @@ namespace CodeImp.DoomBuilder.Controls
 		public void ClearUndoRedo()
 		{
 			scriptedit.EmptyUndoBuffer();
+
+			// styd. This is called for a text that has just been loaded, and then only: what its line ends
+			// are is noted here (see ScriptDocumentTab.RemoveTrailingWhitespace)
+			string text = scriptedit.Text;
+			unixlineends = ((text.IndexOf('\n') != -1) && (text.IndexOf('\r') == -1));
 		}
 
 		//mxd. This marks the current document as unmodified

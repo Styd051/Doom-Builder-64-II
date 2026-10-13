@@ -206,9 +206,72 @@ namespace CodeImp.DoomBuilder.Controls
 		// This compiles the script
 		public virtual void Compile() { }
 
+		// styd. This removes the spaces and the tabs at the end of every line, and leaves every line the
+		// line end it has. The method of the base editor (below) ends every line with a line feed alone
+		// when it does this, which changes a text with Windows line ends, as the lumps of Doom 64 are.
+		private void RemoveTrailingWhitespaceKeepLineEnds()
+		{
+			string text = editor.Text;
+			int selectionstart = editor.SelectionStart;
+			int selectionend = editor.SelectionEnd;
+			int newselectionstart = selectionstart;
+			int newselectionend = selectionend;
+			StringBuilder result = new StringBuilder(text.Length);
+
+			int pos = 0;
+			while(true)
+			{
+				// What the line holds, and where the next line starts
+				int linefeed = text.IndexOf('\n', pos);
+				bool lastline = (linefeed == -1);
+				int next = (lastline ? text.Length : linefeed + 1);
+				int contentend = (lastline ? text.Length : linefeed);
+				if((contentend > pos) && (text[contentend - 1] == '\r')) contentend--;
+				string content = text.Substring(pos, contentend - pos);
+				string trimmed = content.TrimEnd();
+
+				// A place of the selection in this line stays at its letter; in what is removed, it goes to the end of the line
+				if((selectionstart >= pos) && ((selectionstart < next) || lastline))
+					newselectionstart = result.Length + PlaceInTrimmedLine(selectionstart - pos, trimmed.Length, content.Length);
+				if((selectionend >= pos) && ((selectionend < next) || lastline))
+					newselectionend = result.Length + PlaceInTrimmedLine(selectionend - pos, trimmed.Length, content.Length);
+
+				// The line, with the line end it had
+				result.Append(trimmed);
+				result.Append(text, contentend, next - contentend);
+				if(lastline) break;
+				pos = next;
+			}
+
+			// Nothing to remove: the text is left alone
+			if(result.Length == text.Length) return;
+
+			int vscroll = editor.Scintilla.FirstVisibleLine;
+			editor.Text = result.ToString();
+			editor.SelectionStart = newselectionstart;
+			editor.SelectionEnd = newselectionend;
+			editor.Scintilla.FirstVisibleLine = vscroll;
+		}
+
+		// styd. Where a place of a line is once the end of what the line holds is removed
+		private static int PlaceInTrimmedLine(int place, int trimmedlength, int contentlength)
+		{
+			if(place <= trimmedlength) return place;
+			if(place <= contentlength) return trimmedlength;
+			return trimmedlength + (place - contentlength);
+		}
+
 		// [ZZ] this removes trailing whitespace from every line
 		protected void RemoveTrailingWhitespace()
 		{
+			// styd. A text of a Doom 64 map keeps its line ends. One that had Unix line ends only when it
+			// was loaded goes on below, which leaves it with Unix line ends only.
+			if((General.Map != null) && General.Map.DOOM64 && !editor.UnixLineEnds)
+			{
+				RemoveTrailingWhitespaceKeepLineEnds();
+				return;
+			}
+
 			// after changing the contents, selection should stay on the same line, and just move to the end of that line if it was on the trailing space.
 			int vscroll = editor.Scintilla.FirstVisibleLine;
 			int selectionStart = editor.SelectionStart;
