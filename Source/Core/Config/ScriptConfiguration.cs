@@ -53,6 +53,7 @@ namespace CodeImp.DoomBuilder.Config
 		KEYCONF,
 		FONTDEFS,
         ZSCRIPT,
+		SKYDEFS, // styd. The sky definitions of Doom 64. The last one: these numbers are written in the settings of a map
 	}
 	
 	internal class ScriptConfiguration : IComparable<ScriptConfiguration>

@@ -3157,6 +3157,14 @@ namespace CodeImp.DoomBuilder.Data
 				//TODO: load/create SCRIPTS and DIALOG here?
 			};
 
+			// styd. The lumps of Doom 64 that the editor reads in its own way (see LoadDoom64Skies and
+			// LoadDoom64Animations) are listed here, each one of them, to be read and changed in the Script Editor
+			if(General.Map.DOOM64)
+			{
+				extralumptypes.Add(ScriptType.SKYDEFS, false);
+				extralumptypes.Add(ScriptType.ANIMDEFS, false);
+			}
+
 			foreach(KeyValuePair<ScriptType, bool> group in extralumptypes)
 			{
 				HashSet<ScriptResource> resources = new HashSet<ScriptResource>();

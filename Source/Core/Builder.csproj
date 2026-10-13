@@ -1332,6 +1332,9 @@
     <None Include="Resources\SpawnerGhost.png" />
     <None Include="Resources\SpawnerHidden.png" />
     <None Include="Resources\SpawnerShown.png" />
+    <None Include="Resources\ScriptSKYDEFS.png" />
+    <None Include="Resources\GroupSKYDEFS.png" />
+    <None Include="Resources\OpenGroupSKYDEFS.png" />
     <None Include="Resources\Update.png" />
     <None Include="Resources\Reload.png" />
     <None Include="Resources\Preferences.png" />
