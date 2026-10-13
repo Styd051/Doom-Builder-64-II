@@ -524,6 +524,26 @@ namespace CodeImp.DoomBuilder.Rendering
 				RenderSky(skygeo);
 			}
 
+			// styd. Doom 64: a sky that is aimed at or selected is drawn once more. The parts that only
+			// hide what is behind a wall were drawn over it without its color, and the sky of another
+			// surface may have been. It shows again wherever it is not behind such a part or behind a
+			// wall that is drawn as sky.
+			if(General.Map.DOOM64 && (skybackgeo.Count > 0))
+			{
+				List<VisualGeometry> markedsky = new List<VisualGeometry>();
+				foreach(VisualGeometry g in skybackgeo)
+					if(g.RenderAsSky && (((g == highlighted) && showhighlight) || (g.Selected && showselection))) markedsky.Add(g);
+
+				if(markedsky.Count > 0)
+				{
+					world = Matrix.Identity;
+					ApplyMatrices3D();
+					graphics.Device.SetRenderState(RenderState.ZWriteEnable, false);
+					RenderSky(markedsky);
+					graphics.Device.SetRenderState(RenderState.ZWriteEnable, true);
+				}
+			}
+
 			if(skywithoutfog) graphics.Device.SetRenderState(RenderState.FogEnable, true); // styd
 
 			// SOLID PASS
