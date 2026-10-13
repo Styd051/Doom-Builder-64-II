@@ -2122,6 +2122,15 @@ namespace CodeImp.DoomBuilder
 			}
 			else
 			{
+				// styd. Doom 64 writes some of these lumps in its own way, with a script configuration of its
+				// own (a file named Doom64_...). A Doom 64 map takes that one; any other map takes the first
+				// one that is not of Doom 64, which is the one it had before those files were there.
+				bool doom64map = ((Map != null) && Map.DOOM64);
+				foreach(KeyValuePair<string, ScriptConfiguration> group in scriptconfigs)
+				{
+					if((group.Value.ScriptType == type) && (group.Key.StartsWith("doom64_", StringComparison.Ordinal) == doom64map)) return group.Value;
+				}
+
 				// Just pick the first one from the list
 				foreach(ScriptConfiguration cfg in scriptconfigs.Values)
 				{
