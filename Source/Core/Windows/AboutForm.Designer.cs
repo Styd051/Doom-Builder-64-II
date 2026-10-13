@@ -47,7 +47,6 @@ namespace CodeImp.DoomBuilder.Windows
             this.tabPage0 = new System.Windows.Forms.TabPage();
             this.logo64 = new System.Windows.Forms.PictureBox();
             this.label3 = new System.Windows.Forms.Label();
-            this.basedon = new System.Windows.Forms.Label();
             this.db64link = new System.Windows.Forms.LinkLabel();
             label1 = new System.Windows.Forms.Label();
             pictureBox1 = new System.Windows.Forms.PictureBox();
@@ -98,7 +97,7 @@ namespace CodeImp.DoomBuilder.Windows
             // 
             this.close.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.close.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-            this.close.Location = new System.Drawing.Point(285, 245);
+            this.close.Location = new System.Drawing.Point(317, 245);
             this.close.Name = "close";
             this.close.Size = new System.Drawing.Size(116, 25);
             this.close.TabIndex = 5;
@@ -151,7 +150,7 @@ namespace CodeImp.DoomBuilder.Windows
             this.tabControl1.Name = "tabControl1";
             this.tabControl1.Padding = new System.Drawing.Point(12, 3);
             this.tabControl1.SelectedIndex = 0;
-            this.tabControl1.Size = new System.Drawing.Size(391, 227);
+            this.tabControl1.Size = new System.Drawing.Size(423, 227);
             this.tabControl1.TabIndex = 11;
             // 
             // tabPage1
@@ -239,14 +238,13 @@ namespace CodeImp.DoomBuilder.Windows
             this.tabPage0.Controls.Add(this.logo64);
             this.tabPage0.Controls.Add(this.version);
             this.tabPage0.Controls.Add(this.label3);
-            this.tabPage0.Controls.Add(this.basedon);
             this.tabPage0.Controls.Add(this.copyversion);
             this.tabPage0.Controls.Add(this.db64link);
             this.tabPage0.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(204)));
             this.tabPage0.Location = new System.Drawing.Point(4, 22);
             this.tabPage0.Name = "tabPage0";
             this.tabPage0.Padding = new System.Windows.Forms.Padding(3);
-            this.tabPage0.Size = new System.Drawing.Size(383, 201);
+            this.tabPage0.Size = new System.Drawing.Size(415, 201);
             this.tabPage0.TabIndex = 2;
             this.tabPage0.Text = "Doom Builder 64 II";
             this.tabPage0.UseVisualStyleBackColor = true;
@@ -263,20 +261,12 @@ namespace CodeImp.DoomBuilder.Windows
             // 
             // label3
             // 
+            this.label3.AutoSize = true;
             this.label3.Location = new System.Drawing.Point(115, 36);
             this.label3.Name = "label3";
-            this.label3.Size = new System.Drawing.Size(262, 45);
+            this.label3.Size = new System.Drawing.Size(265, 65);
             this.label3.TabIndex = 20;
-            this.label3.Text = "Modified and maintained by Styd051.\r\nDoom Builder 64 by Kaiser (villsa).\r\nDoom Builder 2 by Pascal vd Heiden (CodeImp).";
-            // 
-            // basedon
-            // 
-            this.basedon.AutoSize = true;
-            this.basedon.Location = new System.Drawing.Point(115, 88);
-            this.basedon.Name = "basedon";
-            this.basedon.Size = new System.Drawing.Size(200, 13);
-            this.basedon.TabIndex = 21;
-            this.basedon.Text = "Base: GZDoom Builder (Bugfix)";
+            this.label3.Text = "Modified and maintained by Styd051\r\nBased on Doom Builder 64 by Samuel Villarreal (Kaiser)\r\nBased on GZDoom Builder Bugfix\r\n\r\nLogo and background image by Hieronymus";
             // 
             // db64link
             // 
@@ -312,7 +302,7 @@ namespace CodeImp.DoomBuilder.Windows
             this.AutoScaleDimensions = new System.Drawing.SizeF(96F, 96F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
             this.CancelButton = this.close;
-            this.ClientSize = new System.Drawing.Size(413, 277);
+            this.ClientSize = new System.Drawing.Size(445, 277);
             this.Controls.Add(this.tabControl1);
             this.Controls.Add(this.close);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
@@ -358,7 +348,6 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.TabPage tabPage0;
 		private System.Windows.Forms.PictureBox logo64;
 		private System.Windows.Forms.Label label3;
-		private System.Windows.Forms.Label basedon;
 		private System.Windows.Forms.LinkLabel db64link;
 	}
 }

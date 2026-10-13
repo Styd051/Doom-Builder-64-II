@@ -40,8 +40,13 @@ namespace CodeImp.DoomBuilder.Windows
 			version.Text = Application.ProductName + " R" + General.ThisAssembly.GetName().Version.Revision;
 #endif
 
-			// styd: the base this editor is built on
-			basedon.Text = "Base: GZDoom Builder (Bugfix) R" + General.ThisAssembly.GetName().Version.Revision + " (" + General.CommitHash + ")";
+#if !DEBUG
+			// styd: the title is the name of the editor alone; the revision is that of its base, named in the credits
+			version.Text = Application.ProductName;
+#endif
+
+			// styd: the base this editor is built on, with its revision
+			label3.Text = label3.Text.Replace("GZDoom Builder Bugfix", "GZDoom Builder Bugfix R" + General.ThisAssembly.GetName().Version.Revision);
 		}
 
 		// Launch Doom Builder website
