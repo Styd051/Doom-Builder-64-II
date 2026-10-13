@@ -84,6 +84,13 @@ namespace CodeImp.DoomBuilder.Controls
 		{
 			if(OnKeyReleased != null) OnKeyReleased(this, e);
 		}
+
+		// styd. The splash logo follows the size of the display
+		protected override void OnResize(System.EventArgs e)
+		{
+			base.OnResize(e);
+			UpdateSplashLogoLayout();
+		}
 		
 		#endregion
 
@@ -103,8 +110,20 @@ namespace CodeImp.DoomBuilder.Controls
 			this.BackColor = Color.Black; // villsa
 			this.BackgroundImage = Properties.Resources.Splash3_trans;
 			this.BackgroundImageLayout = ImageLayout.Center;
+			UpdateSplashLogoLayout(); // styd
 		}
 		
+		// styd. The splash logo is shown at its own size, in the middle of the display, when the display can
+		// hold it whole. When it cannot, the logo is made smaller to fit instead of being cut.
+		private void UpdateSplashLogoLayout()
+		{
+			if(this.BackgroundImage == null) return;
+			Size logo = this.BackgroundImage.Size;
+			Size room = this.ClientSize;
+			ImageLayout layout = ((logo.Width <= room.Width) && (logo.Height <= room.Height)) ? ImageLayout.Center : ImageLayout.Zoom;
+			if(this.BackgroundImageLayout != layout) this.BackgroundImageLayout = layout;
+		}
+
 		// This sets up the control for manual rendering
 		public void SetManualRendering()
 		{
