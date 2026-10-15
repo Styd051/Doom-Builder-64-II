@@ -524,26 +524,6 @@ namespace CodeImp.DoomBuilder.Rendering
 				RenderSky(skygeo);
 			}
 
-			// styd. Doom 64: a sky that is aimed at or selected is drawn once more. The parts that only
-			// hide what is behind a wall were drawn over it without its color, and the sky of another
-			// surface may have been. It shows again wherever it is not behind such a part or behind a
-			// wall that is drawn as sky. (A wall drawn as sky is tinted all over at the end.)
-			if(General.Map.DOOM64 && (skybackgeo.Count > 0))
-			{
-				List<VisualGeometry> markedsky = new List<VisualGeometry>();
-				foreach(VisualGeometry g in skybackgeo)
-					if(g.RenderAsSky && !IsDoom64SkyWall(g) && (((g == highlighted) && showhighlight) || (g.Selected && showselection))) markedsky.Add(g);
-
-				if(markedsky.Count > 0)
-				{
-					world = Matrix.Identity;
-					ApplyMatrices3D();
-					graphics.Device.SetRenderState(RenderState.ZWriteEnable, false);
-					RenderSky(markedsky);
-					graphics.Device.SetRenderState(RenderState.ZWriteEnable, true);
-				}
-			}
-
 			if(skywithoutfog) graphics.Device.SetRenderState(RenderState.FogEnable, true); // styd
 
 			// SOLID PASS
@@ -636,8 +616,8 @@ namespace CodeImp.DoomBuilder.Rendering
                 graphics.Shaders.World3D.IgnoreNormals = false;
             }
 
-			// styd. Doom 64: a wall drawn as sky that is aimed at or selected is tinted all over
-			if(General.Map.DOOM64) RenderDoom64SkyWallMarks();
+			// styd. Doom 64: what is drawn as sky behind the map, aimed at or selected, is tinted all over
+			if(General.Map.DOOM64) RenderDoom64SkyMarks();
 
 			// styd. The remaster of Doom 64 makes its whole view brighter once it is drawn.
 			// What only the editor shows comes after. At full brightness the textures are shown
@@ -797,23 +777,17 @@ namespace CodeImp.DoomBuilder.Rendering
 			new WorldVertex(1f, -1f, 0f, -1, 0f, 0f), new WorldVertex(1f, 1f, 0f, -1, 0f, 0f)
 		};
 
-		// styd. Doom 64: an upper or a lower part of a wall that is drawn as sky behind the map. The game
-		// does not draw it: what is behind it shows through it.
-		private static bool IsDoom64SkyWall(VisualGeometry g)
-		{
-			return g.RenderAsSkyBackground && ((g.GeometryType == VisualGeometryType.WALL_UPPER) || (g.GeometryType == VisualGeometryType.WALL_LOWER));
-		}
-
-		// styd. Doom 64: a wall drawn as sky that is aimed at or selected takes the color of the highlight
-		// or of the selection over the whole of it, over what is seen through it, as any other surface
-		// takes it over its texture (world3d.fx: the color times its alpha, plus what is there, less 0.4
-		// times the alpha). It is done in two steps: what the color adds, then what it takes away.
-		// What is in front of the wall hides it.
-		private void RenderDoom64SkyWallMarks()
+		// styd. Doom 64: a floor, a ceiling or a part of a wall that is drawn as sky behind the map is not
+		// drawn by the game: what is behind it shows through it. Aimed at or selected, it takes the color of
+		// the highlight or of the selection over the whole of it, over what is seen through it, as any other
+		// surface takes it over its texture (world3d.fx: the color times its alpha, plus what is there, less
+		// 0.4 times the alpha). It is done in two steps: what the color adds, then what it takes away. What
+		// is in front of it hides it; the sky that is seen through it takes the same color as before.
+		private void RenderDoom64SkyMarks()
 		{
 			List<VisualGeometry> marked = new List<VisualGeometry>();
 			foreach(VisualGeometry g in skybackgeo)
-				if(IsDoom64SkyWall(g) && (((g == highlighted) && showhighlight) || (g.Selected && showselection))) marked.Add(g);
+				if(g.RenderAsSkyBackground && (((g == highlighted) && showhighlight) || (g.Selected && showselection))) marked.Add(g);
 			if(marked.Count == 0) return;
 
 			world = Matrix.Identity;
@@ -2383,9 +2357,9 @@ namespace CodeImp.DoomBuilder.Rendering
 
 					if(sector != null)
 					{
-						// The sky behind a texture with holes is not highlighted: the texture is. Nor is the
-						// sky of a wall drawn as sky: the whole of the wall is tinted at the end.
-						graphics.Shaders.World3D.HighlightColor = ((g.RenderAsSky && !IsDoom64SkyWall(g)) ? CalculateHighlightColor((g == highlighted) && showhighlight, (g.Selected && showselection)) : new Color4());
+						// The sky behind a texture with holes is not highlighted: the texture is. Nor is what is
+						// drawn as sky behind the map: the whole of it is tinted at the end.
+						graphics.Shaders.World3D.HighlightColor = ((g.RenderAsSky && !g.RenderAsSkyBackground) ? CalculateHighlightColor((g == highlighted) && showhighlight, (g.Selected && showselection)) : new Color4());
 						graphics.Shaders.World3D.ApplySettings();
 						graphics.Device.DrawPrimitives(PrimitiveType.TriangleList, g.VertexOffset, g.Triangles);
 					}
