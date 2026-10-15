@@ -193,6 +193,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 			SetDoom64TextureHoles(); // styd
 			SetDoom64Liquid(level.sector); // styd
 			SetDoom64Scroll(level.sector, false); // styd
+			if(extrafloor == null) VisualWallOcclusion.SetupFacingParts(mode, level.sector); // styd. When this floor is a sky, the neighbours' lines hide nothing
 			
 			// Apply vertices
 			base.SetVertices(verts);

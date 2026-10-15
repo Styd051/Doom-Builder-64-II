@@ -36,10 +36,10 @@ namespace CodeImp.DoomBuilder.BuilderModes
 		public readonly VisualWallOcclusion occlusion; // styd. Doom 64: what a wall without another side hides
 		
 		// Constructor
-		public VisualSidedefParts(VisualUpper u, VisualLower l, VisualMiddleDouble m, VisualFogBoundary f, List<VisualMiddle3D> e, List<VisualMiddleBack> eb, VisualSwitchDecal sw)
+		public VisualSidedefParts(VisualUpper u, VisualLower l, VisualMiddleDouble m, VisualFogBoundary f, List<VisualMiddle3D> e, List<VisualMiddleBack> eb, VisualSwitchDecal sw, VisualWallOcclusion o)
 		{
 			this.switchdecal = sw; // styd
-			this.occlusion = null; // styd
+			this.occlusion = o; // styd
 			this.upper = u;
 			this.lower = l;
 			this.middledouble = m;

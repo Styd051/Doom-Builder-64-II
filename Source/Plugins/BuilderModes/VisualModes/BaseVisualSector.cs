@@ -372,8 +372,18 @@ namespace CodeImp.DoomBuilder.BuilderModes
 						}
 					}
 					
+					// styd: Doom 64. What this wall hides above and below it when the line is closed. It is
+					// kept also when it is empty: an undo that changes the other sector only makes it again.
+					VisualWallOcclusion vo = null;
+					if(VisualWallOcclusion.IsNeeded(sd))
+					{
+						vo = parts.occlusion ?? new VisualWallOcclusion(mode, this, sd);
+						vo.Setup();
+						base.AddGeometry(vo);
+					}
+
 					// Store
-					sides.Add(sd, new VisualSidedefParts(vu, vl, vm, vb, middles, middlebacks, vsw));
+					sides.Add(sd, new VisualSidedefParts(vu, vl, vm, vb, middles, middlebacks, vsw, vo));
 				}
 				else
 				{
