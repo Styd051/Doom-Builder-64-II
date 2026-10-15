@@ -527,12 +527,12 @@ namespace CodeImp.DoomBuilder.Rendering
 			// styd. Doom 64: a sky that is aimed at or selected is drawn once more. The parts that only
 			// hide what is behind a wall were drawn over it without its color, and the sky of another
 			// surface may have been. It shows again wherever it is not behind such a part or behind a
-			// wall that is drawn as sky.
+			// wall that is drawn as sky. (A wall drawn as sky is tinted all over at the end.)
 			if(General.Map.DOOM64 && (skybackgeo.Count > 0))
 			{
 				List<VisualGeometry> markedsky = new List<VisualGeometry>();
 				foreach(VisualGeometry g in skybackgeo)
-					if(g.RenderAsSky && (((g == highlighted) && showhighlight) || (g.Selected && showselection))) markedsky.Add(g);
+					if(g.RenderAsSky && !IsDoom64SkyWall(g) && (((g == highlighted) && showhighlight) || (g.Selected && showselection))) markedsky.Add(g);
 
 				if(markedsky.Count > 0)
 				{
@@ -635,6 +635,9 @@ namespace CodeImp.DoomBuilder.Rendering
                 RenderModels(true, true);
                 graphics.Shaders.World3D.IgnoreNormals = false;
             }
+
+			// styd. Doom 64: a wall drawn as sky that is aimed at or selected is tinted all over
+			if(General.Map.DOOM64) RenderDoom64SkyWallMarks();
 
 			// styd. The remaster of Doom 64 makes its whole view brighter once it is drawn.
 			// What only the editor shows comes after. At full brightness the textures are shown
@@ -793,6 +796,78 @@ namespace CodeImp.DoomBuilder.Rendering
 			new WorldVertex(-1f, -1f, 0f, -1, 0f, 0f), new WorldVertex(-1f, 1f, 0f, -1, 0f, 0f),
 			new WorldVertex(1f, -1f, 0f, -1, 0f, 0f), new WorldVertex(1f, 1f, 0f, -1, 0f, 0f)
 		};
+
+		// styd. Doom 64: an upper or a lower part of a wall that is drawn as sky behind the map. The game
+		// does not draw it: what is behind it shows through it.
+		private static bool IsDoom64SkyWall(VisualGeometry g)
+		{
+			return g.RenderAsSkyBackground && ((g.GeometryType == VisualGeometryType.WALL_UPPER) || (g.GeometryType == VisualGeometryType.WALL_LOWER));
+		}
+
+		// styd. Doom 64: a wall drawn as sky that is aimed at or selected takes the color of the highlight
+		// or of the selection over the whole of it, over what is seen through it, as any other surface
+		// takes it over its texture (world3d.fx: the color times its alpha, plus what is there, less 0.4
+		// times the alpha). It is done in two steps: what the color adds, then what it takes away.
+		// What is in front of the wall hides it.
+		private void RenderDoom64SkyWallMarks()
+		{
+			List<VisualGeometry> marked = new List<VisualGeometry>();
+			foreach(VisualGeometry g in skybackgeo)
+				if(IsDoom64SkyWall(g) && (((g == highlighted) && showhighlight) || (g.Selected && showselection))) marked.Add(g);
+			if(marked.Count == 0) return;
+
+			world = Matrix.Identity;
+			ApplyMatrices3D();
+			graphics.Device.SetRenderState(RenderState.CullMode, Cull.Counterclockwise);
+			graphics.Device.SetRenderState(RenderState.ZEnable, true);
+			graphics.Device.SetRenderState(RenderState.ZWriteEnable, false);
+			graphics.Device.SetRenderState(RenderState.FogEnable, false);
+			graphics.Device.SetRenderState(RenderState.AlphaTestEnable, false);
+			graphics.Device.SetRenderState(RenderState.AlphaBlendEnable, true);
+			graphics.Device.SetRenderState(RenderState.SourceBlend, Blend.One);
+			graphics.Device.SetRenderState(RenderState.DestinationBlend, Blend.One);
+
+			graphics.Shaders.World3D.BeginPass(16);
+			foreach(bool adds in new bool[] { true, false })
+			{
+				graphics.Device.SetRenderState(RenderState.BlendOperation, (adds ? BlendOperation.Add : BlendOperation.ReverseSubtract));
+				VisualSector sector = null;
+				foreach(VisualGeometry g in marked)
+				{
+					// Changing sector?
+					if(!object.ReferenceEquals(g.Sector, sector))
+					{
+						if(g.Sector.NeedsUpdateGeo) g.Sector.Update();
+						if(g.Sector.GeometryBuffer != null && g.Sector.Sector.Map != null)
+						{
+							sector = g.Sector;
+							graphics.Device.SetStreamSource(0, sector.GeometryBuffer, 0, WorldVertex.Stride);
+						}
+						else
+						{
+							sector = null;
+						}
+					}
+
+					if(sector != null)
+					{
+						Color4 c = CalculateHighlightColor((g == highlighted) && showhighlight, (g.Selected && showselection));
+						float s = (adds ? c.Alpha : -c.Alpha);
+						graphics.Shaders.World3D.VertexColor = new Color4(1f, Math.Max((c.Red - 0.4f) * s, 0f), Math.Max((c.Green - 0.4f) * s, 0f), Math.Max((c.Blue - 0.4f) * s, 0f));
+						graphics.Shaders.World3D.ApplySettings();
+						graphics.Device.DrawPrimitives(PrimitiveType.TriangleList, g.VertexOffset, g.Triangles);
+					}
+				}
+			}
+			graphics.Shaders.World3D.EndPass();
+
+			// Back to what the rest of the view is drawn with
+			graphics.Device.SetRenderState(RenderState.BlendOperation, BlendOperation.Add);
+			graphics.Device.SetRenderState(RenderState.AlphaBlendEnable, false);
+			graphics.Device.SetRenderState(RenderState.FogEnable, fogenabled);
+			graphics.Device.SetRenderState(RenderState.SourceBlend, Blend.SourceAlpha);
+			graphics.Device.SetRenderState(RenderState.DestinationBlend, Blend.InverseSourceAlpha);
+		}
 
 		// styd. The display brightness of the remaster of Doom 64: every color of the view is
 		// multiplied by one plus this brightness, which is 1 unless the player changes it. The
@@ -2308,8 +2383,9 @@ namespace CodeImp.DoomBuilder.Rendering
 
 					if(sector != null)
 					{
-						// The sky behind a texture with holes is not highlighted: the texture is
-						graphics.Shaders.World3D.HighlightColor = (g.RenderAsSky ? CalculateHighlightColor((g == highlighted) && showhighlight, (g.Selected && showselection)) : new Color4());
+						// The sky behind a texture with holes is not highlighted: the texture is. Nor is the
+						// sky of a wall drawn as sky: the whole of the wall is tinted at the end.
+						graphics.Shaders.World3D.HighlightColor = ((g.RenderAsSky && !IsDoom64SkyWall(g)) ? CalculateHighlightColor((g == highlighted) && showhighlight, (g.Selected && showselection)) : new Color4());
 						graphics.Shaders.World3D.ApplySettings();
 						graphics.Device.DrawPrimitives(PrimitiveType.TriangleList, g.VertexOffset, g.Triangles);
 					}

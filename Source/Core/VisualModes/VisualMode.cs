@@ -828,7 +828,9 @@ namespace CodeImp.DoomBuilder.VisualModes
 			// Now we do an accurate intersection test for all resulting geometry
 			// We keep only the closest hit!
 			// styd. In Doom 64 the sky is drawn behind the map and shows what is behind it,
-			// so the closest hit on such a sky is kept apart
+			// so the closest hit on a floor or a ceiling drawn as sky is kept apart. A wall drawn as
+			// sky, which the game does not draw, is aimed at as any wall where it is met first:
+			// it can be changed as when the sky is not drawn.
 			bool skybehind = General.Map.DOOM64 && General.Settings.GZDrawSky;
 			bool wallocclusion = skybehind && General.Map.VisualCamera.IsInsideSector;
 			IVisualPickable skypicked = null;
@@ -841,7 +843,7 @@ namespace CodeImp.DoomBuilder.VisualModes
 					// What is not drawn cannot be aimed at
 					if((pg.GeometryType == VisualGeometryType.WALL_OCCLUSION) && !wallocclusion) continue;
 
-					if(skybehind && pg.RenderAsSkyBackground)
+					if(skybehind && pg.RenderAsSkyBackground && ((pg.GeometryType == VisualGeometryType.FLOOR) || (pg.GeometryType == VisualGeometryType.CEILING)))
 					{
 						float su = skyu;
 						if(p.PickAccurate(from, to, direction, ref su) && (su > 0.0f) && (su < skyu))
