@@ -69,6 +69,7 @@ namespace CodeImp.DoomBuilder.AutomapMode
 
 		// Highlighted item
 		private Linedef highlighted;
+		private Sector highlightedsector; // styd. The textured automap of Doom 64 highlights a sector
 
 		//mxd. UI
 		private MenusForm menusform;
@@ -93,7 +94,7 @@ namespace CodeImp.DoomBuilder.AutomapMode
 
 		#region ================== Properties
 
-		public override object HighlightedObject { get { return highlighted; } }
+		public override object HighlightedObject { get { return (Textured ? (object)highlightedsector : highlighted); } } // styd
 		
 		#endregion
 
@@ -127,12 +128,12 @@ namespace CodeImp.DoomBuilder.AutomapMode
 
 			menusform.OnShowSecretSectorsChanged += delegate { General.Interface.RedrawDisplay(); };
 			menusform.OnShowLocksChanged += delegate { General.Interface.RedrawDisplay(); };
-			menusform.OnShowTexturedChanged += delegate { General.Interface.RedrawDisplay(); }; // styd
+			menusform.OnShowTexturedChanged += delegate { ClearHighlights(); General.Interface.RedrawDisplay(); }; // styd
 
 			menusform.OnColorPresetChanged += delegate
 			{
 				ApplyColorPreset(menusform.ColorPreset);
-				if(doom64presets) UpdateValidLinedefs(); // styd. The preset of Doom 64 does not show the same lines
+				if(doom64presets) { UpdateValidLinedefs(); ClearHighlights(); } // styd. The preset of Doom 64 does not show the same lines, nor the same view
 				General.Interface.RedrawDisplay();
 			};
 
@@ -186,6 +187,32 @@ namespace CodeImp.DoomBuilder.AutomapMode
 				General.Interface.ShowLinedefInfo(highlighted);
 			else
 				General.Interface.HideInfo();
+		}
+
+		// styd. The textured automap of Doom 64 highlights the sector under the mouse, hidden or not
+		private void HighlightSector(Sector s)
+		{
+			highlightedsector = s;
+			General.Interface.RedrawDisplay();
+			if((highlightedsector != null) && !highlightedsector.IsDisposed) General.Interface.ShowSectorInfo(highlightedsector);
+			else General.Interface.HideInfo();
+		}
+
+		// styd. Nothing highlighted any more: the textured automap and the lines do not highlight the same
+		private void ClearHighlights()
+		{
+			highlighted = null;
+			highlightedsector = null;
+			General.Interface.HideInfo();
+		}
+
+		// styd. After an undo or a redo, the sector under the mouse is highlighted again
+		private void UpdateHighlightedSector()
+		{
+			if(!Textured) return;
+			highlightedsector = (mouseinside ? General.Map.Map.GetSectorByCoordinates(mousemappos) : null);
+			if(highlightedsector != null) General.Interface.ShowSectorInfo(highlightedsector);
+			else General.Interface.HideInfo();
 		}
 
 		//mxd
@@ -482,6 +509,7 @@ namespace CodeImp.DoomBuilder.AutomapMode
 		{
 			UpdateValidLinedefs();
 			UpdateSecretSectors();
+			UpdateHighlightedSector(); // styd
 
 			base.OnUndoEnd();
 		}
@@ -491,6 +519,7 @@ namespace CodeImp.DoomBuilder.AutomapMode
 		{
 			UpdateValidLinedefs();
 			UpdateSecretSectors();
+			UpdateHighlightedSector(); // styd
 
 			base.OnRedoEnd();
 		}
@@ -507,6 +536,17 @@ namespace CodeImp.DoomBuilder.AutomapMode
 			// Render lines
 			if(renderer.StartPlotter(true))
 			{
+				// styd. When the textured automap shows the hidden sectors, their lines are gray as the hidden
+				// lines are
+				if(textured && (menusform.ShowHiddenLines ^ General.Interface.CtrlState))
+				{
+					foreach(Sector s in General.Map.Map.Sectors)
+					{
+						if(!s.IsFlagSet(DOOM64_HIDE_SECTOR_FLAG)) continue;
+						foreach(Sidedef sd in s.Sidedefs) renderer.PlotLine(sd.Line.Start.Position, sd.Line.End.Position, ColorHiddenFlag, LINE_LENGTH_SCALER);
+					}
+				}
+
 				foreach(Linedef ld in General.Map.Map.Linedefs)
 				{
 					if(textured && !IsSecretOutline(ld)) continue; // styd. The textured automap has no lines
@@ -529,6 +569,13 @@ namespace CodeImp.DoomBuilder.AutomapMode
 				if((highlighted != null) && !highlighted.IsDisposed && LinedefIsValid(highlighted))
 				{
 					renderer.PlotLine(highlighted.Start.Position, highlighted.End.Position, General.Colors.InfoLine, LINE_LENGTH_SCALER);
+				}
+
+				// styd. The lines of the highlighted sector of the textured automap, also when it is hidden
+				if(textured && (highlightedsector != null) && !highlightedsector.IsDisposed)
+				{
+					foreach(Sidedef sd in highlightedsector.Sidedefs)
+						renderer.PlotLine(sd.Line.Start.Position, sd.Line.End.Position, General.Colors.InfoLine, LINE_LENGTH_SCALER);
 				}
 
 				renderer.Finish();
@@ -581,6 +628,16 @@ namespace CodeImp.DoomBuilder.AutomapMode
 		
 		protected override void OnEditEnd()
 		{
+			// styd. In the textured automap of Doom 64, the highlighted sector is hidden or shown again
+			// ("Hide in Automap": the game does not draw it there, AM_DrawSubsectors)
+			if(Textured && (highlightedsector != null) && !highlightedsector.IsDisposed)
+			{
+				General.Map.UndoRedo.CreateUndo("Toggle \"Hide in Automap\" sector flag");
+				highlightedsector.SetFlag(DOOM64_HIDE_SECTOR_FLAG, !highlightedsector.IsFlagSet(DOOM64_HIDE_SECTOR_FLAG));
+				General.Interface.RedrawDisplay();
+				General.Interface.ShowSectorInfo(highlightedsector);
+			}
+
 			// Item highlighted?
 			if((highlighted != null) && !highlighted.IsDisposed)
 			{
@@ -603,6 +660,14 @@ namespace CodeImp.DoomBuilder.AutomapMode
 			// Not holding any buttons?
 			if(e.Button == MouseButtons.None)
 			{
+				// styd. The textured automap of Doom 64 highlights the sector under the mouse, no line
+				if(Textured)
+				{
+					Sector s = General.Map.Map.GetSectorByCoordinates(mousemappos);
+					if(s != highlightedsector) HighlightSector(s);
+					return;
+				}
+
 				// Find the nearest linedef within highlight range
 				Linedef l = MapSet.NearestLinedefRange(validlinedefs, mousemappos, BuilderPlug.Me.HighlightRange / renderer.Scale);
 
@@ -616,6 +681,7 @@ namespace CodeImp.DoomBuilder.AutomapMode
 		{
 			base.OnMouseLeave(e);
 
+			highlightedsector = null; // styd
 			// Highlight nothing
 			Highlight(null);
 		}
