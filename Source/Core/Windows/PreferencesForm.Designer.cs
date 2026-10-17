@@ -49,6 +49,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.label22 = new System.Windows.Forms.Label();
 			this.vertexScale = new CodeImp.DoomBuilder.Controls.TransparentTrackBar();
 			this.cbSynchCameras = new System.Windows.Forms.CheckBox();
+			this.darktheme = new System.Windows.Forms.CheckBox();
 			this.showtexturesizes = new System.Windows.Forms.CheckBox();
 			this.scriptontop = new System.Windows.Forms.CheckBox();
 			this.zoomfactor = new CodeImp.DoomBuilder.Controls.TransparentTrackBar();
@@ -276,6 +277,7 @@ namespace CodeImp.DoomBuilder.Windows
 			groupBox1.Controls.Add(this.label22);
 			groupBox1.Controls.Add(this.vertexScale);
 			groupBox1.Controls.Add(this.cbSynchCameras);
+			groupBox1.Controls.Add(this.darktheme);
 			groupBox1.Controls.Add(this.showtexturesizes);
 			groupBox1.Controls.Add(this.scriptontop);
 			groupBox1.Controls.Add(this.zoomfactor);
@@ -409,6 +411,16 @@ namespace CodeImp.DoomBuilder.Windows
 			this.cbSynchCameras.TabIndex = 12;
 			this.cbSynchCameras.Text = "Synchronize camera position between 2D and 3D modes";
 			this.cbSynchCameras.UseVisualStyleBackColor = true;
+			//
+			// darktheme
+			//
+			this.darktheme.AutoSize = true;
+			this.darktheme.Location = new System.Drawing.Point(16, 369);
+			this.darktheme.Name = "darktheme";
+			this.darktheme.Size = new System.Drawing.Size(146, 17);
+			this.darktheme.TabIndex = 55;
+			this.darktheme.Text = "Dark theme (main window)";
+			this.darktheme.UseVisualStyleBackColor = true;
 			// 
 			// showtexturesizes
 			// 
@@ -2597,6 +2609,7 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.Label labelDynLightCount;
 		private CodeImp.DoomBuilder.Controls.TransparentTrackBar tbDynLightCount;
 		private System.Windows.Forms.CheckBox cbSynchCameras;
+		private System.Windows.Forms.CheckBox darktheme;
 		private System.Windows.Forms.CheckBox cbStretchView;
 		private System.Windows.Forms.ToolTip toolTip1;
 		private CodeImp.DoomBuilder.Controls.TransparentTrackBar vertexScale;

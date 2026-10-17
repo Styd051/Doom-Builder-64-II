@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Windows.Forms;
+using CodeImp.DoomBuilder.Windows;
 
 namespace CodeImp.DoomBuilder.Controls
 {
@@ -9,6 +10,7 @@ namespace CodeImp.DoomBuilder.Controls
 		{
 			InitializeComponent();
 			hints.Clear();
+			hints.ForeColorChanged += delegate { SetTextColor(); }; // styd
 		}
 
 		//hints should be in rtf markup!
@@ -16,6 +18,15 @@ namespace CodeImp.DoomBuilder.Controls
 		{
 			hints.Clear();
 			hints.SelectedRtf = hintsText;
+			if(DarkTheme.Active) SetTextColor(); // styd
+		}
+
+		// styd. The hints have no color of their own: with the dark theme they take the color of the text
+		private void SetTextColor()
+		{
+			hints.SelectAll();
+			hints.SelectionColor = hints.ForeColor;
+			hints.Select(0, 0);
 		}
 
 		internal void ClearHints() 

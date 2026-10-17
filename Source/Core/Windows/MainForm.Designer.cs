@@ -121,6 +121,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemgotocoords = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemfittoscreen = new System.Windows.Forms.ToolStripMenuItem();
 			this.itemtoggleinfo = new System.Windows.Forms.ToolStripMenuItem();
+			this.itemtoggledarktheme = new System.Windows.Forms.ToolStripMenuItem();
 			this.seperatorviewzoom = new System.Windows.Forms.ToolStripSeparator();
 			this.itemscripteditor = new System.Windows.Forms.ToolStripMenuItem();
 			this.menumode = new System.Windows.Forms.ToolStripMenuItem();
@@ -841,6 +842,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemgotocoords,
 			this.itemfittoscreen,
 			this.itemtoggleinfo,
+			this.itemtoggledarktheme,
 			this.seperatorviewzoom,
 			this.itemscripteditor});
 			this.menuview.Name = "menuview";
@@ -1131,6 +1133,14 @@ namespace CodeImp.DoomBuilder.Windows
 			this.itemtoggleinfo.Tag = "builder_toggleinfopanel";
 			this.itemtoggleinfo.Text = "&Expanded Info Panel";
 			this.itemtoggleinfo.Click += new System.EventHandler(this.InvokeTaggedAction);
+			//
+			// itemtoggledarktheme
+			//
+			this.itemtoggledarktheme.Name = "itemtoggledarktheme";
+			this.itemtoggledarktheme.Size = new System.Drawing.Size(215, 22);
+			this.itemtoggledarktheme.Tag = "builder_toggledarktheme";
+			this.itemtoggledarktheme.Text = "Dark Theme";
+			this.itemtoggledarktheme.Click += new System.EventHandler(this.InvokeTaggedAction);
 			// 
 			// seperatorviewzoom
 			// 
@@ -3326,6 +3336,7 @@ namespace CodeImp.DoomBuilder.Windows
 		private System.Windows.Forms.ToolStripSeparator seperatorhelpmanual;
 		private System.Windows.Forms.ToolStripMenuItem itemhelpeditmode;
 		private System.Windows.Forms.ToolStripMenuItem itemtoggleinfo;
+		private System.Windows.Forms.ToolStripMenuItem itemtoggledarktheme;
 		private System.Windows.Forms.ToolStripMenuItem itempastespecial;
 		private System.Windows.Forms.Panel heightpanel1;
 		private System.Windows.Forms.Panel dockersspace;

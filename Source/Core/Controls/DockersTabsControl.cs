@@ -22,6 +22,7 @@ using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.Windows.Forms;
 using System.Windows.Forms.VisualStyles;
+using CodeImp.DoomBuilder.Windows;
 
 #endregion
 
@@ -126,6 +127,13 @@ namespace CodeImp.DoomBuilder.Controls
 					g.FillRectangle(SystemBrushes.Highlight, bgbounds);
 					g.DrawString(this.TabPages[index].Text, this.Font, SystemBrushes.ControlLightLight, new RectangleF(bgbounds.Location, bounds.Size), stringformat);
 				}
+				else if(DarkTheme.Active) // styd. The dark theme
+				{
+					using(SolidBrush back = new SolidBrush(selected ? DarkTheme.Back : (index == highlighttab ? DarkTheme.Hover : DarkTheme.MenuBack)))
+						g.FillRectangle(back, bgbounds);
+					using(SolidBrush text = new SolidBrush(DarkTheme.Text))
+						g.DrawString(this.TabPages[index].Text, this.Font, text, new RectangleF(bgbounds.Location, bounds.Size), stringformat);
+				}
 				else
 				{
 					renderer.DrawBackground(g, bgbounds);
@@ -191,6 +199,19 @@ namespace CodeImp.DoomBuilder.Controls
 			}
 		}
 		
+		// styd. With the dark theme the room around the tabs is dark too (a TabControl keeps the color of the system)
+		protected override void OnPaintBackground(PaintEventArgs e)
+		{
+			if(DarkTheme.Active)
+			{
+				using(SolidBrush back = new SolidBrush(DarkTheme.Back)) e.Graphics.FillRectangle(back, this.ClientRectangle);
+			}
+			else
+			{
+				base.OnPaintBackground(e);
+			}
+		}
+
 		// Mouse moves
 		protected override void OnMouseMove(MouseEventArgs e)
 		{

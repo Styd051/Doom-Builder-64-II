@@ -608,6 +608,9 @@ namespace CodeImp.DoomBuilder.Windows
 			// Info panel state?
 			bool expandedpanel = General.Settings.ReadSetting("windows." + configname + ".expandedinfopanel", true);
 			if(expandedpanel != IsInfoPanelExpanded) ToggleInfoPanel();
+
+			// styd. The dark theme, when it is chosen
+			if(General.Settings.DarkTheme) DarkTheme.Set(this, true);
 		}
 
 		// Window receives focus
@@ -3071,6 +3074,7 @@ namespace CodeImp.DoomBuilder.Windows
 			itemfullbrightness.Checked = Renderer.FullBrightness; //mxd
 			itemtogglegrid.Checked = General.Settings.RenderGrid; //mxd
 			itemtoggleinfo.Checked = IsInfoPanelExpanded;
+			itemtoggledarktheme.Checked = General.Settings.DarkTheme; // styd
 			itemtogglecomments.Visible = (General.Map != null && General.Map.UDMF); //mxd
 			itemtogglecomments.Checked = General.Settings.RenderComments; //mxd
 			itemtogglefixedthingsscale.Visible = (General.Map != null); //mxd
@@ -3595,6 +3599,7 @@ namespace CodeImp.DoomBuilder.Windows
 				SetupInterface();
 				UpdateInterface();
 				ApplyShortcutKeys();
+				if(General.Settings.DarkTheme != DarkTheme.Active) DarkTheme.Set(this, General.Settings.DarkTheme); // styd
 				General.Colors.CreateCorrectionTable();
 				General.Plugins.ProgramReconfigure();
 				
@@ -3819,6 +3824,16 @@ namespace CodeImp.DoomBuilder.Windows
 		#endregion
 
 		#region ================== Info Panels
+
+		// styd. The dark theme of the main window, or the colors of the system
+		[BeginAction("toggledarktheme")]
+		internal void ToggleDarkTheme()
+		{
+			General.Settings.DarkTheme = !General.Settings.DarkTheme;
+			DarkTheme.Set(this, General.Settings.DarkTheme);
+			itemtoggledarktheme.Checked = General.Settings.DarkTheme;
+			DisplayStatus(StatusType.Action, "Dark theme is " + (General.Settings.DarkTheme ? "ON" : "OFF"));
+		}
 
 		// This toggles the panel expanded / collapsed
 		[BeginAction("toggleinfopanel")]
