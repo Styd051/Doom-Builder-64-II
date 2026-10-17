@@ -351,13 +351,80 @@ namespace CodeImp.DoomBuilder.Map
 			return color;
 		}
 
-		// This applies the Light Intensity setting from the preferences
+		// This applies the Light Intensity setting from the preferences. styd. It is the brightness of the
+		// remaster divided by 10 (g_brightness), and it is applied as the remaster does (0x140160a00): a gray
+		// of the table (written as an index below 256) is that index times the factor; a color of the
+		// LIGHTS lump goes to hue, saturation and value kept as fractions, its value is multiplied by the
+		// factor and kept at 1 at most, and it comes back to red, green and blue. The Nintendo 64 rounds
+		// hue, saturation and value to bytes on the way (LightGetHSV), which puts most colors a few
+		// levels off: the remaster does not.
 		private static PixelColor GetFactor(Lights light)
 		{
-			float factor = 1.0f + (General.Settings.LightIntensity / 10.0f);
-			int[] hsv = GetHSV(light.color);
-			hsv[2] = Math.Min((int)(hsv[2] * factor), 255);
-			return GetRGB(hsv);
+			float factor = (General.Settings.LightIntensity * 10 + 100) / 100f;
+			PixelColor c = light.color;
+			if(light.isDirect && (c.r == c.g) && (c.r == c.b) && (light.tag == 0))
+			{
+				byte gray = (byte)Math.Min((int)(float)(c.r * factor), 255);
+				return new PixelColor(255, gray, gray, gray);
+			}
+
+			float h, s, v;
+			GetHSVFraction(c, out h, out s, out v);
+			v = (float)(v * factor);
+			if(v >= 1f) v = 1f;
+			return GetRGBFraction(h, s, v);
+		}
+
+		// styd. Hue, saturation and value of a color, as fractions, as the remaster has them (0x14006f460)
+		private static void GetHSVFraction(PixelColor color, out float h, out float s, out float v)
+		{
+			const float epsilon = 0.00001f;
+			float min = Math.Min(color.r, Math.Min(color.g, color.b)) / 255f;
+			float max = Math.Max(color.r, Math.Max(color.g, color.b)) / 255f;
+			float r = color.r / 255f, g = color.g / 255f, b = color.b / 255f;
+			h = 0f; s = 0f; v = max;
+			if(Math.Abs(max) >= epsilon) s = (float)((float)(max - min) / max);
+			else v = 0f;
+			if(Math.Abs(s) < epsilon)
+			{
+				s = 0f;
+				return;
+			}
+
+			float range = (float)(max - min);
+			float hue = 0f;
+			if(Math.Abs((float)(r - max)) < epsilon)
+				hue = (float)((float)((float)(max - b) / range) - (float)((float)(max - g) / range));
+			else if(Math.Abs((float)(g - max)) < epsilon)
+				hue = (float)((float)((float)((float)(max - r) / range) + 2f) - (float)((float)(max - b) / range));
+			else if(Math.Abs((float)(b - max)) < epsilon)
+				hue = (float)((float)((float)((float)(max - g) / range) + 4f) - (float)((float)(max - r) / range));
+			hue = (float)(hue * 60f);
+			if(hue < 0f) hue = (float)(hue + 360f);
+			h = (float)(hue / 360f);
+		}
+
+		// styd. A color from hue, saturation and value as fractions, as the remaster makes it (0x14006f6a0)
+		private static PixelColor GetRGBFraction(float h, float s, float v)
+		{
+			float r = v, g = v, b = v;
+			float t = (float)(h * 360f);
+			if(t >= 360f) t = (float)(t - 360f);
+			if(Math.Abs(s) >= 0.00001f)
+			{
+				t = (float)(t / 60f);
+				r = g = b = 0f;
+				switch((int)t)
+				{
+					case 0: r = v; g = (float)((float)(1f - (float)((float)(1f - t) * s)) * v); b = (float)((float)(1f - s) * v); break;
+					case 1: r = (float)((float)(1f - (float)((float)(t - 1f) * s)) * v); g = v; b = (float)((float)(1f - s) * v); break;
+					case 2: r = (float)((float)(1f - s) * v); g = v; b = (float)((float)(1f - (float)((float)(1f - (float)(t - 2f)) * s)) * v); break;
+					case 3: r = (float)((float)(1f - s) * v); g = (float)((float)(1f - (float)((float)(t - 3f) * s)) * v); b = v; break;
+					case 4: r = (float)((float)(1f - (float)((float)(1f - (float)(t - 4f)) * s)) * v); g = (float)((float)(1f - s) * v); b = v; break;
+					case 5: r = v; g = (float)((float)(1f - s) * v); b = (float)((float)(1f - (float)((float)(t - 5f) * s)) * v); break;
+				}
+			}
+			return new PixelColor(255, (byte)(int)(float)(r * 255f), (byte)(int)(float)(g * 255f), (byte)(int)(float)(b * 255f));
 		}
 
 		public void SetIntensity(float value)
