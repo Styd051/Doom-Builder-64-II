@@ -30,7 +30,7 @@ edited: Doom 64 is one more map format.
 - [DirectX 9.0 Runtime](https://www.microsoft.com/en-us/download/details.aspx?id=35&44F86079-8679-400C-BFF2-9CA5F2BCBDFC=1)
 
 **Getting started:**
-- Open or create a map with the game configuration "Doom 64: Doom64 EX (Doom 64 format)" and add your
+- Open or create a map with the game configuration "Doom 64: Doom64 (Doom 64 format)" and add your
   `DOOM64.WAD` as a resource.
 - The settings are stored in `%LOCALAPPDATA%\Doom Builder 64 II\Builder64II.cfg`. They are separate from the
   settings of the first Doom Builder 64 II and of GZDoom Builder, so these editors can be installed side by side.

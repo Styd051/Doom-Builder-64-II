@@ -445,7 +445,7 @@ namespace CodeImp.DoomBuilder.Windows
 		//mxd
 		private void UpdateTitle()
 		{
-			string programname = this.Text = Application.ProductName + " R" + General.ThisAssembly.GetName().Version.Revision;
+			string programname = this.Text = Application.ProductName + " Based on GZDoom Builder Bugfix R" + General.ThisAssembly.GetName().Version.Revision; // styd
 			if (Environment.Is64BitProcess)
 				programname += " (64-bit)";
 
