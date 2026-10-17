@@ -10,6 +10,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 using CodeImp.DoomBuilder.Geometry;
+using CodeImp.DoomBuilder.Windows; // styd
 
 #endregion
 
@@ -122,21 +123,22 @@ namespace CodeImp.DoomBuilder.Controls
 			SolidBrush fill;
 			Brush center;
 
+			// styd. DarkTheme.Map: the dark colors while the theme is dark
 			if(this.Enabled) 
 			{
-				outline = new Pen(outlineColor, 2.0f);
-				fill = new SolidBrush(fillColor);
-				needle = new Pen(needleColor);
-				center = new SolidBrush(needleColor);
-				marks = new Pen(marksColor);
+				outline = new Pen(DarkTheme.Map(outlineColor), 2.0f);
+				fill = new SolidBrush(DarkTheme.Map(fillColor));
+				needle = new Pen(DarkTheme.Map(needleColor));
+				center = new SolidBrush(DarkTheme.Map(needleColor));
+				marks = new Pen(DarkTheme.Map(marksColor));
 			} 
 			else 
 			{
-				outline = new Pen(outlineInactiveColor, 2.0f);
-				fill = new SolidBrush(fillInactiveColor);
-				needle = new Pen(needleInactiveColor);
-				center = new SolidBrush(needleInactiveColor);
-				marks = new Pen(marksInactiveColor);
+				outline = new Pen(DarkTheme.Map(outlineInactiveColor), 2.0f);
+				fill = new SolidBrush(DarkTheme.Map(fillInactiveColor));
+				needle = new Pen(DarkTheme.Map(needleInactiveColor));
+				center = new SolidBrush(DarkTheme.Map(needleInactiveColor));
+				marks = new Pen(DarkTheme.Map(marksInactiveColor));
 			}
 
 			Rectangle originSquare = new Rectangle(origin.X - 1, origin.Y - 1, 3, 3);

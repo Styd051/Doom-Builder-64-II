@@ -67,6 +67,9 @@ namespace CodeImp.DoomBuilder.Windows
 			base.OnLoad(e);
 
 			if(this.DesignMode) return;
+
+			// styd. The window takes the theme of the interface (the main window takes it itself)
+			if(!(this is MainForm)) DarkTheme.Follow(this);
 			
 			// Restore location and size
 			this.SuspendLayout();

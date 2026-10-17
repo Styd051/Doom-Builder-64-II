@@ -134,7 +134,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 				labelfind.ForeColor = SystemColors.HotTrack;
 				labelfind.Cursor = Cursors.Hand;
 			}
-			else if(labelfind.ForeColor == SystemColors.HotTrack)
+			else if(labelfind.Font == hintfont) // styd. (its color is another one with the dark theme)
 			{
 				tooltip.SetToolTip(labelfind, string.Empty);
 				labelfind.Font = this.Font;

@@ -1,5 +1,6 @@
 ﻿using System.Windows.Forms;
 using System.Drawing;
+using CodeImp.DoomBuilder.Windows; // styd
 
 namespace CodeImp.DoomBuilder.Controls
 {
@@ -24,7 +25,7 @@ namespace CodeImp.DoomBuilder.Controls
 			base.OnDrawItem(e);
 			e.DrawBackground();
 			ColoredComboBoxItem item = (ColoredComboBoxItem)this.Items[e.Index];
-			using(Brush brush = new SolidBrush(((e.State & DrawItemState.Selected) == DrawItemState.Selected) ? Color.White : item.ForeColor))
+			using(Brush brush = new SolidBrush(((e.State & DrawItemState.Selected) == DrawItemState.Selected) ? Color.White : DarkTheme.Map(item.ForeColor))) // styd. DarkTheme.Map: the dark color while the theme is dark
 			{
 				e.Graphics.DrawString(item.Text, this.Font, brush, e.Bounds.X, e.Bounds.Y);
 			}

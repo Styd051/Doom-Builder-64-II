@@ -21,6 +21,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 using CodeImp.DoomBuilder.Config;
+using CodeImp.DoomBuilder.Windows; // styd
 
 #endregion
 
@@ -110,8 +111,8 @@ namespace CodeImp.DoomBuilder.Controls
 				if(e.Index < 0)
 				{
 					// Grayed
-					displaybrush = new SolidBrush(SystemColors.GrayText);
-					backbrush = new SolidBrush(SystemColors.Window);
+					displaybrush = new SolidBrush(DarkTheme.Map(SystemColors.GrayText)); // styd. DarkTheme.Map: the dark color while the theme is dark
+					backbrush = new SolidBrush(DarkTheme.Map(SystemColors.Window));
 
 					// Try getting integral number
 					int intnumber;
@@ -140,14 +141,14 @@ namespace CodeImp.DoomBuilder.Controls
 					if(item.Index == 0)
 					{
 						// Grayed
-						displaybrush = new SolidBrush(SystemColors.GrayText);
-						backbrush = new SolidBrush(SystemColors.Window);
+						displaybrush = new SolidBrush(DarkTheme.Map(SystemColors.GrayText));
+						backbrush = new SolidBrush(DarkTheme.Map(SystemColors.Window));
 					}
 					else
 					{
 						// Normal color
 						displaybrush = new SolidBrush(list.ForeColor);
-						backbrush = new SolidBrush(SystemColors.Window);
+						backbrush = new SolidBrush(DarkTheme.Map(SystemColors.Window));
 					}
 				}
 				else
@@ -165,7 +166,7 @@ namespace CodeImp.DoomBuilder.Controls
 					else
 					{
 						displaybrush = new SolidBrush(list.ForeColor);
-						backbrush = new SolidBrush(SystemColors.Window);
+						backbrush = new SolidBrush(DarkTheme.Map(SystemColors.Window));
 					}
 				}
 			}

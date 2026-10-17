@@ -18,6 +18,7 @@ namespace CodeImp.DoomBuilder.ThreeDFloorMode
 			this.csa = csa;
 
 			InitializeComponent();
+			CodeImp.DoomBuilder.Windows.DarkTheme.Follow(this); // styd. The theme of the interface
 
 			useTagRange.Checked = csa.UseCustomTagRnage;
 			firstTag.Text = csa.FirstTag.ToString();

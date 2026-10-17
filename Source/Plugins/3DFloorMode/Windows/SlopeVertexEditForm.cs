@@ -22,6 +22,7 @@ namespace CodeImp.DoomBuilder.ThreeDFloorMode
 		public SlopeVertexEditForm()
 		{
 			InitializeComponent();
+			CodeImp.DoomBuilder.Windows.DarkTheme.Follow(this); // styd. The theme of the interface
 		}
 
 		public void Setup(List<SlopeVertex> vertices)

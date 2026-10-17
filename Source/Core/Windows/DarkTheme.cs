@@ -2,6 +2,7 @@
 #region ================== Namespaces
 
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -17,8 +18,9 @@ namespace CodeImp.DoomBuilder.Windows
 	// the colors that a control takes from the system a dark gray, gives the toolstrips and their menus
 	// a renderer of their own, and keeps what it changed to put it back when the theme is turned off.
 	// A color that a control chose itself is kept. A control added later to a dark window gets the
-	// theme when it is added.
-	internal static class DarkTheme
+	// theme when it is added. Every window of the editor and of its plugins follows the theme, but the
+	// script editor (which comes later) and the window of a crash.
+	public static class DarkTheme
 	{
 		#region ================== Colors (a dark gray, as Visual Studio and the dark mode of Windows)
 
@@ -30,6 +32,8 @@ namespace CodeImp.DoomBuilder.Windows
 		internal static readonly Color Text = Color.FromArgb(241, 241, 241);
 		internal static readonly Color DimText = Color.FromArgb(153, 153, 153);
 		internal static readonly Color Link = Color.FromArgb(86, 156, 214);
+		internal static readonly Color Warning = Color.FromArgb(244, 71, 71);
+		internal static readonly Color VisitedLink = Color.FromArgb(197, 134, 192);
 		internal static readonly Color Accent = Color.FromArgb(0, 122, 204);
 		internal static readonly Color Pressed = Color.FromArgb(0, 84, 153);
 		internal static readonly Color Checked = Color.FromArgb(0, 62, 112);
@@ -47,9 +51,34 @@ namespace CodeImp.DoomBuilder.Windows
 		[DllImport("user32.dll")]
 		private static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr wparam, IntPtr lparam);
 
+		[DllImport("user32.dll", CharSet = CharSet.Unicode)]
+		private static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string classname, string windowname);
+
 		private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
 		private const int DWMWA_USE_IMMERSIVE_DARK_MODE_OLD = 19;
 		private const int WM_NCACTIVATE = 0x0086;
+		private const int WM_REFLECT_NOTIFY = 0x2000 + 0x004E;
+		private const int NM_CUSTOMDRAW = -12;
+		private const int CDDS_ITEMPREPAINT = 0x00010001;
+		private const int CDIS_SELECTED = 0x0001;
+		private const int LVM_GETHEADER = 0x1000 + 31;
+
+		// (the notification with which a list asks the colors of an item, as Windows lays it out)
+		[StructLayout(LayoutKind.Sequential)]
+		private struct NMHDR { public IntPtr hwndFrom; public IntPtr idFrom; public int code; }
+
+		[StructLayout(LayoutKind.Sequential)]
+		private struct NMCUSTOMDRAW { public NMHDR hdr; public int dwDrawStage; public IntPtr hdc; public int left, top, right, bottom; public IntPtr dwItemSpec; public int uItemState; public IntPtr lItemlParam; }
+
+		[StructLayout(LayoutKind.Sequential)]
+		private struct NMLVCUSTOMDRAW { public NMCUSTOMDRAW nmcd; public int clrText; public int clrTextBk; }
+
+		private static readonly int codeoffset = Marshal.OffsetOf(typeof(NMHDR), "code").ToInt32();
+		private static readonly int stageoffset = Marshal.OffsetOf(typeof(NMCUSTOMDRAW), "dwDrawStage").ToInt32();
+		private static readonly int stateoffset = Marshal.OffsetOf(typeof(NMCUSTOMDRAW), "uItemState").ToInt32();
+		private static readonly int itemoffset = Marshal.OffsetOf(typeof(NMCUSTOMDRAW), "dwItemSpec").ToInt32();
+		private static readonly int textoffset = Marshal.OffsetOf(typeof(NMLVCUSTOMDRAW), "clrText").ToInt32();
+		private static readonly int textbackoffset = Marshal.OffsetOf(typeof(NMLVCUSTOMDRAW), "clrTextBk").ToInt32();
 
 		#endregion
 
@@ -65,41 +94,105 @@ namespace CodeImp.DoomBuilder.Windows
 			public bool combo;
 			public FlatStyle comboflat;
 			public bool tabpage;
+			public bool tabs;
+			public bool[] tabstyles;
+			public int hottab = -1;
+			public IntPtr updown;
+			public bool link;
+			public Color linkcolor, visitedcolor;
 			public bool strip;
 			public ToolStripRenderMode rendermode;
 			public ToolStripRenderer renderer;
-			public bool wintheme;
-			public bool grid, gridheaders;
-			public Color gridback, gridcolor, cellback, cellfore, cellselback, headerback, headerfore;
+			public string wintheme;
+			public ListPainter painter;
+			public bool grid;
+			public Color gridback, gridcolor;
+		}
+
+		// The colors of the cells of a grid
+		private class GridColors
+		{
+			public bool headers;
+			public Color cellback, cellfore, cellselback, headerback, headerfore, rowheaderback, rowheaderfore;
 		}
 
 		private static ConditionalWeakTable<object, Saved> saved = new ConditionalWeakTable<object, Saved>();
 		private static readonly ConditionalWeakTable<object, object> hooked = new ConditionalWeakTable<object, object>();
+		private static readonly ConditionalWeakTable<object, object> loadhooked = new ConditionalWeakTable<object, object>();
+		private static readonly ConditionalWeakTable<object, GridColors> grids = new ConditionalWeakTable<object, GridColors>();
+		private static readonly Dictionary<int, SolidBrush> brushes = new Dictionary<int, SolidBrush>();
+		private static readonly Dictionary<int, Pen> pens = new Dictionary<int, Pen>();
 		private static ToolStripRenderer renderer;
 		private static bool active;
 		private static bool changing;
 
 		private static readonly MethodInfo serializeback = typeof(Control).GetMethod("ShouldSerializeBackColor", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
 		private static readonly MethodInfo serializefore = typeof(Control).GetMethod("ShouldSerializeForeColor", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+		private static readonly MethodInfo getstyle = typeof(Control).GetMethod("GetStyle", BindingFlags.Instance | BindingFlags.NonPublic);
+		private static readonly MethodInfo setstyle = typeof(Control).GetMethod("SetStyle", BindingFlags.Instance | BindingFlags.NonPublic);
+		private static readonly ControlStyles[] tabstyles = { ControlStyles.UserPaint, ControlStyles.AllPaintingInWmPaint, ControlStyles.OptimizedDoubleBuffer, ControlStyles.ResizeRedraw };
 
 		#endregion
 
 		#region ================== Properties
 
 		// True while the theme is dark
-		internal static bool Active { get { return active; } }
+		public static bool Active { get { return active; } }
 
 		#endregion
 
-		#region ================== Methods
+		#region ================== Windows
 
 		// The dark theme on a window, or off
 		internal static void Set(Form form, bool dark)
 		{
 			if(dark) Apply(form); else Revert(form);
 			active = dark;
-			SetTitleBar(form, dark);
+			if(form.IsHandleCreated) SetTitleBar(form, dark); // (otherwise when its handle is made)
 			form.Invalidate(true);
+		}
+
+		// The dark theme on every open window that follows it, or off (the main window always; the others
+		// are listed by Windows Forms once their handle is made, and take the theme when they are loaded)
+		internal static void SetAll(bool dark)
+		{
+			List<Form> forms = new List<Form>();
+			if(General.MainWindow != null) forms.Add(General.MainWindow);
+			foreach(Form f in Application.OpenForms) if(Follows(f) && !forms.Contains(f)) forms.Add(f);
+			foreach(Form f in forms) Set(f, dark);
+			active = dark;
+		}
+
+		// A window takes the theme of the interface now, and again when it is loaded. The delayed forms do
+		// it when they are loaded; another window of a plugin can do it when it is made.
+		public static void Follow(Form form)
+		{
+			if((form == null) || !Follows(form)) return;
+			object dummy;
+			if(!loadhooked.TryGetValue(form, out dummy))
+			{
+				loadhooked.Add(form, form);
+				form.Load += OnFormLoad;
+			}
+			FollowNow(form);
+		}
+
+		private static void OnFormLoad(object sender, EventArgs e)
+		{
+			FollowNow((Form)sender);
+		}
+
+		private static void FollowNow(Form form)
+		{
+			Saved s;
+			if(saved.TryGetValue(form, out s) != active) Set(form, active);
+		}
+
+		// The windows that follow the theme (the script editor comes later; the window of a crash only
+		// shows what went wrong)
+		private static bool Follows(Form form)
+		{
+			return !(form is ScriptEditorForm) && !(form is ExceptionDialog);
 		}
 
 		// The title bar of a window dark or light (Windows 10 version 2004 and later; earlier versions
@@ -112,7 +205,9 @@ namespace CodeImp.DoomBuilder.Windows
 				if(DwmSetWindowAttribute(form.Handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref value, 4) != 0)
 					DwmSetWindowAttribute(form.Handle, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, ref value, 4);
 
-				// Windows draws the title bar again only when it is activated or deactivated
+				// Windows draws the title bar again only when it is activated or deactivated (a window that
+				// is not shown yet takes the attribute when it is)
+				if(!form.Visible) return;
 				bool isactive = (Form.ActiveForm == form);
 				SendMessage(form.Handle, WM_NCACTIVATE, new IntPtr(isactive ? 0 : 1), IntPtr.Zero);
 				SendMessage(form.Handle, WM_NCACTIVATE, new IntPtr(isactive ? 1 : 0), IntPtr.Zero);
@@ -121,10 +216,15 @@ namespace CodeImp.DoomBuilder.Windows
 			catch(EntryPointNotFoundException) { }
 		}
 
+		#endregion
+
+		#region ================== Controls
+
 		// This gives a control and all that it holds the dark theme
 		internal static void Apply(Control c)
 		{
 			active = true;
+			KeepGrids(c);
 			ApplyControl(c);
 		}
 
@@ -133,6 +233,7 @@ namespace CodeImp.DoomBuilder.Windows
 		{
 			active = false;
 			RevertControl(c);
+			PutBackGrids(c);
 		}
 
 		private static void ApplyControl(Control c)
@@ -207,7 +308,16 @@ namespace CodeImp.DoomBuilder.Windows
 		{
 			Saved s;
 			if(!saved.TryGetValue(sender, out s) && active) return; // (what holds it does not have the theme)
-			if(active) ApplyControl(e.Control); else RevertControl(e.Control);
+			if(active)
+			{
+				KeepGrids(e.Control);
+				ApplyControl(e.Control);
+			}
+			else
+			{
+				RevertControl(e.Control);
+				PutBackGrids(e.Control);
+			}
 		}
 
 		private static void OnItemAdded(object sender, ToolStripItemEventArgs e)
@@ -299,15 +409,28 @@ namespace CodeImp.DoomBuilder.Windows
 			TextRenderer.DrawText(e.Graphics, c.Text, c.Font, text, DimText, flags);
 		}
 
+		// What Windows keeps in the window of a control (its theme, the title bar of a window, how a
+		// list draws its items) is given again when that window is made again
 		private static void OnHandleCreated(object sender, EventArgs e)
 		{
 			Saved s;
-			if(active && saved.TryGetValue(sender, out s) && s.wintheme) SetWindowTheme(((Control)sender).Handle, "DarkMode_Explorer", null);
+			if(!active || !saved.TryGetValue(sender, out s)) return;
+			Control c = (Control)sender;
+			if(s.wintheme != null) SetWindowTheme(c.Handle, s.wintheme, null);
+			if(s.painter != null) s.painter.Attach((ListView)c);
+			Form form = c as Form;
+			if(form != null) SetTitleBar(form, true);
 		}
 
 		// The color that the theme gives to a background color of the system
 		private static Color MapBack(Control c, Color color)
 		{
+			// (Windows draws a track bar with a transparent background white: it gets the one of what holds it)
+			if((c is TrackBar) && (color.A != 255))
+			{
+				for(Control p = c.Parent; p != null; p = p.Parent) if(p.BackColor.A == 255) return p.BackColor;
+				return Back;
+			}
 			if(!color.IsSystemColor) return color;
 			switch(color.ToKnownColor())
 			{
@@ -321,6 +444,7 @@ namespace CodeImp.DoomBuilder.Windows
 				case KnownColor.Window:
 				case KnownColor.AppWorkspace:
 				case KnownColor.Info:
+				case KnownColor.ControlLightLight:
 					return Field;
 				default:
 					return color;
@@ -330,6 +454,7 @@ namespace CodeImp.DoomBuilder.Windows
 		// The color that the theme gives to a text color of the system
 		private static Color MapFore(Color color)
 		{
+			if(color.IsKnownColor && (color.ToKnownColor() == KnownColor.DarkRed)) return Warning; // (the warnings of the editor)
 			if(!color.IsSystemColor) return color;
 			switch(color.ToKnownColor())
 			{
@@ -340,12 +465,53 @@ namespace CodeImp.DoomBuilder.Windows
 					return Text;
 				case KnownColor.GrayText:
 				case KnownColor.ControlDark:
+				case KnownColor.InactiveCaptionText:
 					return DimText;
 				case KnownColor.HotTrack:
 					return Link;
 				default:
 					return color;
 			}
+		}
+
+		// The color with which a control that draws itself paints what it gives a color of the system:
+		// the dark one while the theme is dark, the same otherwise
+		internal static Color Map(Color color)
+		{
+			if(!active) return color;
+			Color fore = MapFore(color);
+			if(fore != color) return fore;
+			if(!color.IsSystemColor) return color;
+			if(color.ToKnownColor() == KnownColor.WindowFrame) return DimText;
+			return MapBack(null, color);
+		}
+
+		// The same as a brush or a pen (a brush or a pen of the system when the color is not changed;
+		// the others are kept for later)
+		internal static Brush BrushOf(Color color)
+		{
+			Color c = Map(color);
+			if(c.IsSystemColor) return SystemBrushes.FromSystemColor(c);
+			SolidBrush brush;
+			if(!brushes.TryGetValue(c.ToArgb(), out brush))
+			{
+				brush = new SolidBrush(c);
+				brushes.Add(c.ToArgb(), brush);
+			}
+			return brush;
+		}
+
+		internal static Pen PenOf(Color color)
+		{
+			Color c = Map(color);
+			if(c.IsSystemColor) return SystemPens.FromSystemColor(c);
+			Pen pen;
+			if(!pens.TryGetValue(c.ToArgb(), out pen))
+			{
+				pen = new Pen(c);
+				pens.Add(c.ToArgb(), pen);
+			}
+			return pen;
 		}
 
 		private static bool IsSet(MethodInfo serialize, Control c)
@@ -355,9 +521,41 @@ namespace CodeImp.DoomBuilder.Windows
 			catch(Exception) { return true; }
 		}
 
+		private static bool GetStyle(Control c, ControlStyles style) { return (bool)getstyle.Invoke(c, new object[] { style }); }
+		private static void SetStyle(Control c, ControlStyles style, bool value) { setstyle.Invoke(c, new object[] { style, value }); }
+
+		// (the color of a link that the label did not choose is empty)
+		private static Color RawLinkColor(LinkLabel link, string field, Color color)
+		{
+			FieldInfo f = typeof(LinkLabel).GetField(field, BindingFlags.Instance | BindingFlags.NonPublic);
+			return (f != null ? (Color)f.GetValue(link) : color);
+		}
+
 		// This changes a control and keeps what it was
 		private static void Change(Control c, Saved s)
 		{
+			// (first the grids: the color of a grid sets the one of its cells, which are kept apart)
+			DataGridView grid = c as DataGridView;
+			if(grid != null)
+			{
+				s.grid = true;
+				s.gridback = grid.BackgroundColor;
+				s.gridcolor = grid.GridColor;
+				grid.BackgroundColor = Field;
+				grid.GridColor = Border;
+				grid.DefaultCellStyle.BackColor = Field;
+				grid.DefaultCellStyle.ForeColor = Text;
+				grid.DefaultCellStyle.SelectionBackColor = Checked;
+				grid.EnableHeadersVisualStyles = false;
+				grid.ColumnHeadersDefaultCellStyle.BackColor = Back;
+				grid.ColumnHeadersDefaultCellStyle.ForeColor = Text;
+				grid.RowHeadersDefaultCellStyle.BackColor = Back;
+				grid.RowHeadersDefaultCellStyle.ForeColor = Text;
+
+				// (the rows and cells that the code gives a color of the system are shown with the dark one)
+				grid.CellFormatting += OnGridCellFormatting;
+			}
+
 			Color back = c.BackColor;
 			Color newback = MapBack(c, back);
 			if(newback != back)
@@ -389,9 +587,10 @@ namespace CodeImp.DoomBuilder.Windows
 			}
 
 			// Buttons are flat, with a border (not the check boxes and radio buttons, nor the
-			// transparent ones laid over a picture)
+			// transparent ones laid over a picture: a button transparent because what holds it is
+			// transparent is a button as the others)
 			ButtonBase button = c as ButtonBase;
-			if((button != null) && !(c is CheckBox) && !(c is RadioButton) && (button.BackColor.A == 255))
+			if((button != null) && !(c is CheckBox) && !(c is RadioButton) && ((button.BackColor.A == 255) || !IsSet(serializeback, c)))
 			{
 				s.button = true;
 				s.buttonflat = button.FlatStyle;
@@ -401,20 +600,23 @@ namespace CodeImp.DoomBuilder.Windows
 				button.UseVisualStyleBackColor = false;
 				button.FlatAppearance.BorderColor = Border;
 
-				// (a button with the background of the window is a little lighter)
-				if(button.BackColor == Back)
+				// (a button with the background of the window, or with the transparent one of what holds
+				// it, is a little lighter)
+				if((button.BackColor == Back) || (button.BackColor.A != 255))
 				{
 					if(!s.back) { s.back = true; s.backset = IsSet(serializeback, c); s.backcolor = button.BackColor; }
 					button.BackColor = Hover;
 				}
 			}
 
+			// Combo boxes are flat, with the dark look of Windows for the part that it draws
 			ComboBox combo = c as ComboBox;
 			if(combo != null)
 			{
 				s.combo = true;
 				s.comboflat = combo.FlatStyle;
 				combo.FlatStyle = FlatStyle.Flat;
+				s.wintheme = "DarkMode_CFD";
 			}
 
 			TabPage page = c as TabPage;
@@ -424,6 +626,35 @@ namespace CodeImp.DoomBuilder.Windows
 				page.UseVisualStyleBackColor = false;
 				if(!s.back) { s.back = true; s.backset = IsSet(serializeback, c); s.backcolor = page.BackColor; }
 				page.BackColor = Back;
+			}
+
+			// The tabs of a window are drawn here (Windows draws them light whatever their colors; the
+			// side panels and the script editor draw theirs)
+			TabControl tabs = c as TabControl;
+			if((tabs != null) && !(tabs is DockersTabsControl) && !(tabs is VSTabControl) && (tabs.Alignment == TabAlignment.Top) && (tabs.Appearance == TabAppearance.Normal) && (getstyle != null) && (setstyle != null))
+			{
+				s.tabs = true;
+				s.tabstyles = new bool[tabstyles.Length];
+				for(int i = 0; i < tabstyles.Length; i++)
+				{
+					s.tabstyles[i] = GetStyle(tabs, tabstyles[i]);
+					SetStyle(tabs, tabstyles[i], true);
+				}
+				tabs.Paint += OnTabsPaint;
+				tabs.MouseMove += OnTabsMouseMove;
+				tabs.MouseLeave += OnTabsMouseLeave;
+			}
+
+			// Links that did not choose their color get a light blue (the blue of Windows cannot be read on
+			// a dark background)
+			LinkLabel link = c as LinkLabel;
+			if(link != null)
+			{
+				s.link = true;
+				s.linkcolor = RawLinkColor(link, "linkColor", link.LinkColor);
+				s.visitedcolor = RawLinkColor(link, "visitedLinkColor", link.VisitedLinkColor);
+				if(s.linkcolor.IsEmpty || s.linkcolor.IsSystemColor) link.LinkColor = Link;
+				if(s.visitedcolor.IsEmpty || s.visitedcolor.IsSystemColor) link.VisitedLinkColor = VisitedLink;
 			}
 
 			ToolStrip strip = c as ToolStrip;
@@ -436,33 +667,16 @@ namespace CodeImp.DoomBuilder.Windows
 				strip.Renderer = renderer;
 			}
 
-			DataGridView grid = c as DataGridView;
-			if(grid != null)
-			{
-				s.grid = true;
-				s.gridback = grid.BackgroundColor;
-				s.gridcolor = grid.GridColor;
-				s.cellback = grid.DefaultCellStyle.BackColor;
-				s.cellfore = grid.DefaultCellStyle.ForeColor;
-				s.cellselback = grid.DefaultCellStyle.SelectionBackColor;
-				s.gridheaders = grid.EnableHeadersVisualStyles;
-				s.headerback = grid.ColumnHeadersDefaultCellStyle.BackColor;
-				s.headerfore = grid.ColumnHeadersDefaultCellStyle.ForeColor;
-				grid.BackgroundColor = Field;
-				grid.GridColor = Border;
-				grid.DefaultCellStyle.BackColor = Field;
-				grid.DefaultCellStyle.ForeColor = Text;
-				grid.DefaultCellStyle.SelectionBackColor = Checked;
-				grid.EnableHeadersVisualStyles = false;
-				grid.ColumnHeadersDefaultCellStyle.BackColor = Back;
-				grid.ColumnHeadersDefaultCellStyle.ForeColor = Text;
-			}
-
 			// Lists, trees, text boxes and scroll bars get the dark scroll bars of Windows
-			if((c is TreeView) || (c is ListView) || (c is TextBoxBase) || (c is ListBox) || (c is ScrollBar) || (c is DataGridView))
+			if((c is TreeView) || (c is ListView) || (c is TextBoxBase) || (c is ListBox) || (c is ScrollBar) || (c is DataGridView)) s.wintheme = "DarkMode_Explorer";
+			if((s.wintheme != null) && c.IsHandleCreated) SetWindowTheme(c.Handle, s.wintheme, null);
+
+			// A list shows the items to which its code gives a color of the system with the dark one
+			ListView list = c as ListView;
+			if(list != null)
 			{
-				s.wintheme = true;
-				if(c.IsHandleCreated) SetWindowTheme(c.Handle, "DarkMode_Explorer", null);
+				s.painter = new ListPainter();
+				if(list.IsHandleCreated) s.painter.Attach(list);
 			}
 		}
 
@@ -479,19 +693,6 @@ namespace CodeImp.DoomBuilder.Windows
 				else strip.RenderMode = s.rendermode;
 			}
 
-			DataGridView grid = c as DataGridView;
-			if(s.grid && (grid != null))
-			{
-				grid.BackgroundColor = s.gridback;
-				grid.GridColor = s.gridcolor;
-				grid.DefaultCellStyle.BackColor = s.cellback;
-				grid.DefaultCellStyle.ForeColor = s.cellfore;
-				grid.DefaultCellStyle.SelectionBackColor = s.cellselback;
-				grid.EnableHeadersVisualStyles = s.gridheaders;
-				grid.ColumnHeadersDefaultCellStyle.BackColor = s.headerback;
-				grid.ColumnHeadersDefaultCellStyle.ForeColor = s.headerfore;
-			}
-
 			ComboBox combo = c as ComboBox;
 			if(s.combo && (combo != null)) combo.FlatStyle = s.comboflat;
 
@@ -503,8 +704,23 @@ namespace CodeImp.DoomBuilder.Windows
 				button.UseVisualStyleBackColor = s.buttonvisualback;
 			}
 
-			TabPage page = c as TabPage;
-			if(s.tabpage && (page != null)) page.UseVisualStyleBackColor = true;
+			TabControl tabs = c as TabControl;
+			if(s.tabs && (tabs != null))
+			{
+				tabs.Paint -= OnTabsPaint;
+				tabs.MouseMove -= OnTabsMouseMove;
+				tabs.MouseLeave -= OnTabsMouseLeave;
+				for(int i = 0; i < tabstyles.Length; i++) SetStyle(tabs, tabstyles[i], s.tabstyles[i]);
+				if(s.updown != IntPtr.Zero) SetWindowTheme(s.updown, null, null);
+				tabs.Invalidate();
+			}
+
+			LinkLabel link = c as LinkLabel;
+			if(s.link && (link != null))
+			{
+				link.LinkColor = s.linkcolor;
+				link.VisitedLinkColor = s.visitedcolor;
+			}
 
 			if(s.back)
 			{
@@ -517,10 +733,227 @@ namespace CodeImp.DoomBuilder.Windows
 				else c.ResetForeColor();
 			}
 
-			// (a button that took its background from the theme of Windows takes it again)
+			// (a button that took its background from the theme of Windows takes it again, and so does a
+			// tab page: setting its color has made it forget that)
 			if(s.button && (button != null) && s.buttonvisualback) button.UseVisualStyleBackColor = true;
+			TabPage page = c as TabPage;
+			if(s.tabpage && (page != null)) page.UseVisualStyleBackColor = true;
 
-			if(s.wintheme && c.IsHandleCreated) SetWindowTheme(c.Handle, null, null);
+			// (the cells of the grids are put back when all the window is)
+			DataGridView grid = c as DataGridView;
+			if(s.grid && (grid != null))
+			{
+				grid.CellFormatting -= OnGridCellFormatting;
+				grid.BackgroundColor = s.gridback;
+				grid.GridColor = s.gridcolor;
+			}
+
+			if(s.painter != null) s.painter.Detach();
+			if((s.wintheme != null) && c.IsHandleCreated) SetWindowTheme(c.Handle, null, null);
+		}
+
+		#endregion
+
+		#region ================== Tabs
+
+		private static void OnTabsPaint(object sender, PaintEventArgs e)
+		{
+			TabControl tabs = (TabControl)sender;
+			Saved s;
+			if(!saved.TryGetValue(tabs, out s)) return;
+			Graphics g = e.Graphics;
+
+			// Around the tabs: the background of what holds them
+			Color around = Back;
+			for(Control p = tabs.Parent; p != null; p = p.Parent) if(p.BackColor.A == 255) { around = p.BackColor; break; }
+			using(SolidBrush brush = new SolidBrush(around)) g.FillRectangle(brush, tabs.ClientRectangle);
+
+			// The frame of the pages, under the rows of tabs
+			int top = 0;
+			for(int i = 0; i < tabs.TabCount; i++) top = Math.Max(top, tabs.GetTabRect(i).Bottom);
+			Rectangle frame = new Rectangle(0, top, tabs.Width, tabs.Height - top);
+			using(SolidBrush brush = new SolidBrush(Back)) g.FillRectangle(brush, frame);
+			using(Pen pen = new Pen(Border)) g.DrawRectangle(pen, frame.X, frame.Y, frame.Width - 1, frame.Height - 1);
+
+			// The tabs, the selected one last, a little larger and open on its page
+			for(int i = 0; i < tabs.TabCount; i++) if(i != tabs.SelectedIndex) DrawTab(g, tabs, s, i, false);
+			if((tabs.SelectedIndex >= 0) && (tabs.SelectedIndex < tabs.TabCount)) DrawTab(g, tabs, s, tabs.SelectedIndex, true);
+
+			// The arrows that scroll the tabs when they do not fit get the dark look of Windows
+			if(tabs.IsHandleCreated)
+			{
+				IntPtr updown = FindWindowEx(tabs.Handle, IntPtr.Zero, "msctls_updown32", null);
+				if((updown != IntPtr.Zero) && (updown != s.updown))
+				{
+					s.updown = updown;
+					SetWindowTheme(updown, "DarkMode_Explorer", null);
+				}
+			}
+		}
+
+		private static void DrawTab(Graphics g, TabControl tabs, Saved s, int index, bool selected)
+		{
+			Rectangle r = tabs.GetTabRect(index);
+			if(selected) { r.Inflate(2, 0); r.Y -= 2; r.Height += 3; }
+			Color back = (selected ? Back : (index == s.hottab ? Hover : MenuBack));
+			using(SolidBrush brush = new SolidBrush(back)) g.FillRectangle(brush, r);
+			using(Pen pen = new Pen(Border))
+			{
+				g.DrawLine(pen, r.Left, r.Bottom - 1, r.Left, r.Top);
+				g.DrawLine(pen, r.Left, r.Top, r.Right - 1, r.Top);
+				g.DrawLine(pen, r.Right - 1, r.Top, r.Right - 1, r.Bottom - 1);
+			}
+
+			// Picture and text
+			TabPage page = tabs.TabPages[index];
+			Rectangle text = r;
+			Image image = null;
+			if(tabs.ImageList != null)
+			{
+				if((page.ImageIndex >= 0) && (page.ImageIndex < tabs.ImageList.Images.Count)) image = tabs.ImageList.Images[page.ImageIndex];
+				else if(!string.IsNullOrEmpty(page.ImageKey) && tabs.ImageList.Images.ContainsKey(page.ImageKey)) image = tabs.ImageList.Images[page.ImageKey];
+			}
+			if(image != null)
+			{
+				g.DrawImage(image, r.X + 6, r.Y + (r.Height - image.Height) / 2, image.Width, image.Height);
+				text = new Rectangle(r.X + 6 + image.Width, r.Y, r.Width - 6 - image.Width, r.Height);
+			}
+			TextRenderer.DrawText(g, page.Text, tabs.Font, text, (tabs.Enabled ? Text : DimText),
+				TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
+		}
+
+		private static void OnTabsMouseMove(object sender, MouseEventArgs e)
+		{
+			TabControl tabs = (TabControl)sender;
+			Saved s;
+			if(!saved.TryGetValue(tabs, out s)) return;
+			int hot = -1;
+			for(int i = 0; i < tabs.TabCount; i++) if(tabs.GetTabRect(i).Contains(e.Location)) hot = i;
+			if(hot != s.hottab) { s.hottab = hot; tabs.Invalidate(); }
+		}
+
+		private static void OnTabsMouseLeave(object sender, EventArgs e)
+		{
+			TabControl tabs = (TabControl)sender;
+			Saved s;
+			if(saved.TryGetValue(tabs, out s) && (s.hottab != -1)) { s.hottab = -1; tabs.Invalidate(); }
+		}
+
+		#endregion
+
+		#region ================== Lists and grids
+
+		// A list asks the colors of each item before drawing it, and Windows Forms answers with the colors
+		// that the code gave the item. This changes the answer when it is a color of the system to the dark
+		// one, without changing the items (some code reads their colors back).
+		internal class ListPainter : NativeWindow
+		{
+			private ListView list;
+
+			internal void Attach(ListView list)
+			{
+				this.list = list;
+				if(this.Handle == IntPtr.Zero) AssignHandle(list.Handle);
+				IntPtr header = SendMessage(list.Handle, LVM_GETHEADER, IntPtr.Zero, IntPtr.Zero);
+				if(header != IntPtr.Zero) SetWindowTheme(header, "DarkMode_ItemsView", null);
+			}
+
+			internal void Detach()
+			{
+				if(this.Handle != IntPtr.Zero) ReleaseHandle();
+				if((list != null) && list.IsHandleCreated)
+				{
+					IntPtr header = SendMessage(list.Handle, LVM_GETHEADER, IntPtr.Zero, IntPtr.Zero);
+					if(header != IntPtr.Zero) SetWindowTheme(header, null, null);
+					list.Invalidate();
+				}
+			}
+
+			protected override void WndProc(ref Message m)
+			{
+				base.WndProc(ref m);
+				if((m.Msg != WM_REFLECT_NOTIFY) || !active || (m.LParam == IntPtr.Zero)) return;
+				if(Marshal.ReadInt32(m.LParam, codeoffset) != NM_CUSTOMDRAW) return;
+				if((Marshal.ReadInt32(m.LParam, stageoffset) & CDDS_ITEMPREPAINT) != CDDS_ITEMPREPAINT) return;
+				int text = Marshal.ReadInt32(m.LParam, textoffset);
+				int back = Marshal.ReadInt32(m.LParam, textbackoffset);
+				int newtext = MapColorRef(text, true);
+				int newback = MapColorRef(back, false);
+				if(newtext != text) Marshal.WriteInt32(m.LParam, textoffset, newtext);
+				if(newback != back) Marshal.WriteInt32(m.LParam, textbackoffset, newback);
+
+				// (Windows draws the selected item of a list that shows its selection without the focus in a
+				// light gray: it is drawn here in a dark blue. The state given with the notification is not
+				// reliable for that: the item tells.)
+				if((list == null) || list.Focused || list.HideSelection || list.VirtualMode) return;
+				int index = Marshal.ReadIntPtr(m.LParam, itemoffset).ToInt32();
+				if((index < 0) || (index >= list.Items.Count) || !list.Items[index].Selected) return;
+				int state = Marshal.ReadInt32(m.LParam, stateoffset);
+				Marshal.WriteInt32(m.LParam, stateoffset, state & ~CDIS_SELECTED);
+				Marshal.WriteInt32(m.LParam, textoffset, ColorTranslator.ToWin32(Text));
+				Marshal.WriteInt32(m.LParam, textbackoffset, ColorTranslator.ToWin32(Checked));
+			}
+
+			private static int MapColorRef(int colorref, bool text)
+			{
+				KnownColor[] colors = (text ? new[] { KnownColor.WindowText, KnownColor.ControlText, KnownColor.GrayText, KnownColor.InactiveCaptionText, KnownColor.HotTrack }
+											: new[] { KnownColor.Window, KnownColor.Control, KnownColor.InactiveBorder });
+				foreach(KnownColor k in colors)
+				{
+					Color system = Color.FromKnownColor(k);
+					if(ColorTranslator.ToWin32(system) == colorref)
+						return ColorTranslator.ToWin32(text ? MapFore(system) : (k == KnownColor.Window ? Field : Back));
+				}
+				return colorref;
+			}
+		}
+
+		// The cells of a grid take the text color of the grid when it changes, and the grid the one of what
+		// holds it: the colors of the cells are kept before anything of a window changes, and put back after
+		private static void KeepGrids(Control c)
+		{
+			DataGridView grid = c as DataGridView;
+			GridColors k;
+			if((grid != null) && !grids.TryGetValue(grid, out k))
+			{
+				k = new GridColors();
+				k.cellback = grid.DefaultCellStyle.BackColor;
+				k.cellfore = grid.DefaultCellStyle.ForeColor;
+				k.cellselback = grid.DefaultCellStyle.SelectionBackColor;
+				k.headers = grid.EnableHeadersVisualStyles;
+				k.headerback = grid.ColumnHeadersDefaultCellStyle.BackColor;
+				k.headerfore = grid.ColumnHeadersDefaultCellStyle.ForeColor;
+				k.rowheaderback = grid.RowHeadersDefaultCellStyle.BackColor;
+				k.rowheaderfore = grid.RowHeadersDefaultCellStyle.ForeColor;
+				grids.Add(grid, k);
+			}
+			foreach(Control child in c.Controls) KeepGrids(child);
+		}
+
+		private static void PutBackGrids(Control c)
+		{
+			DataGridView grid = c as DataGridView;
+			GridColors k;
+			if((grid != null) && grids.TryGetValue(grid, out k))
+			{
+				grid.DefaultCellStyle.BackColor = k.cellback;
+				grid.DefaultCellStyle.ForeColor = k.cellfore;
+				grid.DefaultCellStyle.SelectionBackColor = k.cellselback;
+				grid.EnableHeadersVisualStyles = k.headers;
+				grid.ColumnHeadersDefaultCellStyle.BackColor = k.headerback;
+				grid.ColumnHeadersDefaultCellStyle.ForeColor = k.headerfore;
+				grid.RowHeadersDefaultCellStyle.BackColor = k.rowheaderback;
+				grid.RowHeadersDefaultCellStyle.ForeColor = k.rowheaderfore;
+				grids.Remove(grid);
+			}
+			foreach(Control child in c.Controls) PutBackGrids(child);
+		}
+
+		private static void OnGridCellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+		{
+			if(!active || (e.CellStyle == null)) return;
+			e.CellStyle.ForeColor = MapFore(e.CellStyle.ForeColor);
+			if(e.CellStyle.BackColor.IsSystemColor) e.CellStyle.BackColor = MapBack(null, e.CellStyle.BackColor);
 		}
 
 		#endregion

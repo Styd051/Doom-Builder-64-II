@@ -37,6 +37,7 @@ namespace CodeImp.DoomBuilder.ThreeDFloorMode
 			this.Location = new Point(Screen.PrimaryScreen.WorkingArea.Width/2, Screen.PrimaryScreen.WorkingArea.Height/2);
 			controlpool = new List<ThreeDFloorHelperControl>();
 			InitializeComponent();
+			DarkTheme.Follow(this); // styd. The theme of the interface
 		}
 
 		private void ThreeDFloorEditorWindow_Load(object sender, EventArgs e)

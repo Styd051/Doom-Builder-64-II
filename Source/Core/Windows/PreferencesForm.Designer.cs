@@ -417,9 +417,9 @@ namespace CodeImp.DoomBuilder.Windows
 			this.darktheme.AutoSize = true;
 			this.darktheme.Location = new System.Drawing.Point(16, 369);
 			this.darktheme.Name = "darktheme";
-			this.darktheme.Size = new System.Drawing.Size(146, 17);
+			this.darktheme.Size = new System.Drawing.Size(77, 17);
 			this.darktheme.TabIndex = 55;
-			this.darktheme.Text = "Dark theme (main window)";
+			this.darktheme.Text = "Dark theme";
 			this.darktheme.UseVisualStyleBackColor = true;
 			// 
 			// showtexturesizes

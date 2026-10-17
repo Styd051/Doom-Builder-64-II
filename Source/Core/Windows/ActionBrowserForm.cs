@@ -165,9 +165,9 @@ namespace CodeImp.DoomBuilder.Windows
             {
                 // fill non selected bg (winforms does weird things here)
                 // never understood the fact that "Window" color is actually white, but actual window background is counted as "3D element".
-                e.Graphics.FillRectangle(SystemBrushes.Window, nodeRect);
+                e.Graphics.FillRectangle(DarkTheme.BrushOf(SystemColors.Window), nodeRect); // styd. DarkTheme.BrushOf: the dark color while the theme is dark
                 //
-                fgBrush = SystemBrushes.WindowText;
+                fgBrush = DarkTheme.BrushOf(SystemColors.WindowText);
             }
 
             StringFormat nodeStringFmt = new StringFormat

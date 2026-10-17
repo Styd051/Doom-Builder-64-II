@@ -107,7 +107,7 @@ namespace CodeImp.DoomBuilder.Controls
             // list
             // 
             this.list.AutoScroll = true;
-            this.list.BackColor = System.Drawing.Color.White;
+            this.list.BackColor = System.Drawing.SystemColors.Window;
             this.list.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.list.ClassicView = false;
             this.list.ContentType = "Textures";

@@ -62,6 +62,7 @@ namespace CodeImp.DoomBuilder.Windows
 			preventchanges = true;
 			
 			InitializeComponent();
+			DarkTheme.Follow(this); // styd. The theme of the interface
 
 			// Fill filters list
 			foreach(LinedefColorPreset preset in General.Map.ConfigSettings.LinedefColorPresets)

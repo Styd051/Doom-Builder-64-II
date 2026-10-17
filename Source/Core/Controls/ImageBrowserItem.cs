@@ -5,6 +5,7 @@ using System.Drawing;
 using CodeImp.DoomBuilder.Data;
 using System.Drawing.Drawing2D;
 using System.Text;
+using CodeImp.DoomBuilder.Windows; // styd
 #endregion
 
 namespace CodeImp.DoomBuilder.Controls
@@ -112,10 +113,11 @@ namespace CodeImp.DoomBuilder.Controls
             }
             else
             {
-                bgcolor = SystemColors.Window;
-                bgbrush = SystemBrushes.Window;
-                fgbrush_used = SystemBrushes.HotTrack;
-                fgbrush_unused = SystemBrushes.ControlText;
+                // styd. DarkTheme.Map, BrushOf, PenOf: the dark colors while the theme is dark
+                bgcolor = DarkTheme.Map(SystemColors.Window);
+                bgbrush = DarkTheme.BrushOf(SystemColors.Window);
+                fgbrush_used = DarkTheme.BrushOf(SystemColors.HotTrack);
+                fgbrush_unused = DarkTheme.BrushOf(SystemColors.ControlText);
 
                 if (!classicview)
                 {
@@ -126,11 +128,11 @@ namespace CodeImp.DoomBuilder.Controls
                     selectedbgbrush = null;
                 }
 
-                frame_used = SystemPens.HotTrack;
+                frame_used = DarkTheme.PenOf(SystemColors.HotTrack);
                 frame_unused = SystemPens.ActiveBorder;
-                selection = SystemPens.HotTrack;
-                selectionbrush = SystemBrushes.HotTrack;
-                selectiontextbrush = SystemBrushes.Window;
+                selection = DarkTheme.PenOf(SystemColors.HotTrack);
+                selectionbrush = DarkTheme.BrushOf(SystemColors.HotTrack);
+                selectiontextbrush = DarkTheme.BrushOf(SystemColors.Window);
             }
 
             bgbrush_alpha = new SolidBrush(Color.FromArgb(192, bgcolor));

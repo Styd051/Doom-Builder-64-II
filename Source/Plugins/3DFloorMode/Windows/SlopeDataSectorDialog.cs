@@ -17,6 +17,7 @@ namespace CodeImp.DoomBuilder.ThreeDFloorMode
 		public SlopeDataSectorDialog()
 		{
 			InitializeComponent();
+			DarkTheme.Follow(this); // styd. The theme of the interface
 		}
 
 		private void button1_Click(object sender, EventArgs e)

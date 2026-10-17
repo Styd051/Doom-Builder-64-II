@@ -7,6 +7,7 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Linq;
 using System.Windows.Forms;
+using CodeImp.DoomBuilder.Windows; // styd
 
 #endregion
 
@@ -585,7 +586,7 @@ namespace CodeImp.DoomBuilder.Controls
             if (background)
             {
                 // Draw group name bg
-                Color bgcolor = (blackbrowsers ? Color.Gray : SystemColors.Control);
+                Color bgcolor = (blackbrowsers ? Color.Gray : DarkTheme.Map(SystemColors.Control)); // styd. DarkTheme.Map: the dark color while the theme is dark
                 using (Brush bg = new SolidBrush(Color.FromArgb(192, bgcolor)))
                 {
                     g.FillRectangle(bg, rec.X, rec.Y, rec.Width, rec.Height);
@@ -594,12 +595,12 @@ namespace CodeImp.DoomBuilder.Controls
             else
             {
                 // Draw underline
-                Color underlinecolor = blackbrowsers ? Color.FromArgb(0x7FFFFFFF) : Color.FromArgb((SystemColors.ControlText.ToArgb()&0xFFFFFF)|0x7F000000);
+                Color underlinecolor = blackbrowsers ? Color.FromArgb(0x7FFFFFFF) : Color.FromArgb((DarkTheme.Map(SystemColors.ControlText).ToArgb()&0xFFFFFF)|0x7F000000);
                 g.DrawLine(new Pen(underlinecolor), rec.Left, rec.Bottom, rec.Right - 2, rec.Bottom);
             }
 
             // Draw group name
-            Brush fgbrush = (blackbrowsers ? Brushes.White : SystemBrushes.ControlText);
+            Brush fgbrush = (blackbrowsers ? Brushes.White : DarkTheme.BrushOf(SystemColors.ControlText));
             Font bf = new Font(SystemFonts.MessageBoxFont, FontStyle.Bold);
             g.DrawString(text, bf, fgbrush, rec.X, rec.Y);
         }

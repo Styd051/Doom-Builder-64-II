@@ -3599,7 +3599,7 @@ namespace CodeImp.DoomBuilder.Windows
 				SetupInterface();
 				UpdateInterface();
 				ApplyShortcutKeys();
-				if(General.Settings.DarkTheme != DarkTheme.Active) DarkTheme.Set(this, General.Settings.DarkTheme); // styd
+				if(General.Settings.DarkTheme != DarkTheme.Active) DarkTheme.SetAll(General.Settings.DarkTheme); // styd
 				General.Colors.CreateCorrectionTable();
 				General.Plugins.ProgramReconfigure();
 				
@@ -3830,7 +3830,7 @@ namespace CodeImp.DoomBuilder.Windows
 		internal void ToggleDarkTheme()
 		{
 			General.Settings.DarkTheme = !General.Settings.DarkTheme;
-			DarkTheme.Set(this, General.Settings.DarkTheme);
+			DarkTheme.SetAll(General.Settings.DarkTheme);
 			itemtoggledarktheme.Checked = General.Settings.DarkTheme;
 			DisplayStatus(StatusType.Action, "Dark theme is " + (General.Settings.DarkTheme ? "ON" : "OFF"));
 		}
