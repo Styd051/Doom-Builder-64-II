@@ -394,10 +394,10 @@ namespace CodeImp.DoomBuilder.Controls
 			scriptedit.Styles[Style.Default].Italic = false;
 			scriptedit.Styles[Style.Default].Underline = false;
 			scriptedit.Styles[Style.Default].Case = StyleCase.Mixed;
-			scriptedit.Styles[Style.Default].ForeColor = General.Colors.PlainText.ToColor();
-			scriptedit.Styles[Style.Default].BackColor = General.Colors.ScriptBackground.ToColor();
+			scriptedit.Styles[Style.Default].ForeColor = DarkTheme.ScriptColor(ColorCollection.PLAINTEXT).ToColor(); // styd. DarkTheme.ScriptColor: the dark colors while the theme is dark
+			scriptedit.Styles[Style.Default].BackColor = DarkTheme.ScriptColor(ColorCollection.SCRIPTBACKGROUND).ToColor();
 			scriptedit.CaretPeriod = SystemInformation.CaretBlinkTime;
-			scriptedit.CaretForeColor = General.Colors.ScriptBackground.Inverse().ToColor();
+			scriptedit.CaretForeColor = DarkTheme.ScriptColor(ColorCollection.SCRIPTBACKGROUND).Inverse().ToColor();
 			
 			// Set tabulation settings
 			scriptedit.UseTabs = General.Settings.ScriptUseTabs;
@@ -422,25 +422,25 @@ namespace CodeImp.DoomBuilder.Controls
 			//scriptedit.Styles[Style.Default].Size = (int)Math.Round(this.Font.SizeInPoints);
 
 			// Set style for linenumbers and margins
-			scriptedit.Styles[Style.LineNumber].BackColor = General.Colors.ScriptBackground.ToColor();
-			scriptedit.SetFoldMarginColor(true, General.Colors.ScriptFoldBackColor.ToColor());
-			scriptedit.SetFoldMarginHighlightColor(true, General.Colors.ScriptFoldBackColor.ToColor());
+			scriptedit.Styles[Style.LineNumber].BackColor = DarkTheme.ScriptColor(ColorCollection.SCRIPTBACKGROUND).ToColor();
+			scriptedit.SetFoldMarginColor(true, DarkTheme.ScriptColor(ColorCollection.SCRIPTFOLDBACK).ToColor());
+			scriptedit.SetFoldMarginHighlightColor(true, DarkTheme.ScriptColor(ColorCollection.SCRIPTFOLDBACK).ToColor());
 			for(int i = 25; i < 32; i++)
 			{
-				scriptedit.Markers[i].SetForeColor(General.Colors.ScriptFoldBackColor.ToColor());
-				scriptedit.Markers[i].SetBackColor(General.Colors.ScriptFoldForeColor.ToColor());
+				scriptedit.Markers[i].SetForeColor(DarkTheme.ScriptColor(ColorCollection.SCRIPTFOLDBACK).ToColor());
+				scriptedit.Markers[i].SetBackColor(DarkTheme.ScriptColor(ColorCollection.SCRIPTFOLDFORE).ToColor());
 			}
  
 			//mxd. Set style for (mis)matching braces
-			scriptedit.Styles[Style.BraceLight].BackColor = General.Colors.ScriptBraceHighlight.ToColor();
-			scriptedit.Styles[Style.BraceBad].BackColor = General.Colors.ScriptBadBraceHighlight.ToColor();
+			scriptedit.Styles[Style.BraceLight].BackColor = DarkTheme.ScriptColor(ColorCollection.SCRIPTBRACEHIGHLIGHT).ToColor();
+			scriptedit.Styles[Style.BraceBad].BackColor = DarkTheme.ScriptColor(ColorCollection.SCRIPTBADBRACEHIGHLIGHT).ToColor();
 
 			//mxd. Set whitespace color
-			scriptedit.SetWhitespaceForeColor(true, General.Colors.ScriptWhitespace.ToColor());
+			scriptedit.SetWhitespaceForeColor(true, DarkTheme.ScriptColor(ColorCollection.SCRIPTWHITESPACE).ToColor());
 
 			//mxd. Set selection colors
-			scriptedit.SetSelectionForeColor(true, General.Colors.ScriptSelectionForeColor.ToColor());
-			scriptedit.SetSelectionBackColor(true, General.Colors.ScriptSelectionBackColor.ToColor());
+			scriptedit.SetSelectionForeColor(true, DarkTheme.ScriptColor(ColorCollection.SCRIPTSELECTIONFORE).ToColor());
+			scriptedit.SetSelectionBackColor(true, DarkTheme.ScriptColor(ColorCollection.SCRIPTSELECTIONBACK).ToColor());
 
 			// Clear all keywords
 			for(int i = 0; i < 9; i++) scriptedit.SetKeywords(i, null);
@@ -475,7 +475,7 @@ namespace CodeImp.DoomBuilder.Controls
 						default: colorindex = ColorCollection.PLAINTEXT; break;
 					}
 
-					scriptedit.Styles[stylenum].ForeColor = General.Colors.Colors[colorindex].ToColor();
+					scriptedit.Styles[stylenum].ForeColor = DarkTheme.ScriptColor(colorindex).ToColor();
 				}
 			}
 
@@ -909,7 +909,7 @@ namespace CodeImp.DoomBuilder.Controls
 			// Update indicator appearance
 			scriptedit.Indicators[HIGHLIGHT_INDICATOR].Style = IndicatorStyle.RoundBox;
 			scriptedit.Indicators[HIGHLIGHT_INDICATOR].Under = true;
-			scriptedit.Indicators[HIGHLIGHT_INDICATOR].ForeColor = General.Colors.ScriptIndicator.ToColor();
+			scriptedit.Indicators[HIGHLIGHT_INDICATOR].ForeColor = DarkTheme.ScriptColor(ColorCollection.SCRIPTINDICATOR).ToColor();
 			scriptedit.Indicators[HIGHLIGHT_INDICATOR].OutlineAlpha = 50;
 			scriptedit.Indicators[HIGHLIGHT_INDICATOR].Alpha = 30;
 

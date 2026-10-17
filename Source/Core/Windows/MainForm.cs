@@ -3831,6 +3831,7 @@ namespace CodeImp.DoomBuilder.Windows
 		{
 			General.Settings.DarkTheme = !General.Settings.DarkTheme;
 			DarkTheme.SetAll(General.Settings.DarkTheme);
+			if((General.Map != null) && General.Map.IsScriptsWindowOpen) General.Map.ScriptEditor.Editor.RefreshSettings(); // (the colors of its text)
 			itemtoggledarktheme.Checked = General.Settings.DarkTheme;
 			DisplayStatus(StatusType.Action, "Dark theme is " + (General.Settings.DarkTheme ? "ON" : "OFF"));
 		}

@@ -4,11 +4,13 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using CodeImp.DoomBuilder.Controls;
+using CodeImp.DoomBuilder.Rendering;
 
 #endregion
 
@@ -19,7 +21,8 @@ namespace CodeImp.DoomBuilder.Windows
 	// a renderer of their own, and keeps what it changed to put it back when the theme is turned off.
 	// A color that a control chose itself is kept. A control added later to a dark window gets the
 	// theme when it is added. Every window of the editor and of its plugins follows the theme, but the
-	// script editor (which comes later) and the window of a crash.
+	// window of a crash; the text of the script editor takes the colors of the preset "Dark theme" of the
+	// preferences.
 	public static class DarkTheme
 	{
 		#region ================== Colors (a dark gray, as Visual Studio and the dark mode of Windows)
@@ -54,14 +57,37 @@ namespace CodeImp.DoomBuilder.Windows
 		[DllImport("user32.dll", CharSet = CharSet.Unicode)]
 		private static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string classname, string windowname);
 
+		[DllImport("user32.dll")]
+		private static extern IntPtr BeginPaint(IntPtr hwnd, out PAINTSTRUCT paint);
+
+		[DllImport("user32.dll")]
+		private static extern bool EndPaint(IntPtr hwnd, ref PAINTSTRUCT paint);
+
+		[DllImport("user32.dll")]
+		private static extern bool GetClientRect(IntPtr hwnd, out RECT rect);
+
+		[DllImport("user32.dll")]
+		private static extern bool InvalidateRect(IntPtr hwnd, IntPtr rect, bool erase);
+
 		private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
 		private const int DWMWA_USE_IMMERSIVE_DARK_MODE_OLD = 19;
 		private const int WM_NCACTIVATE = 0x0086;
+		private const int WM_PAINT = 0x000F;
+		private const int WM_ERASEBKGND = 0x0014;
+		private const int WM_MOUSEMOVE = 0x0200;
+		private const int WM_LBUTTONDOWN = 0x0201;
+		private const int WM_LBUTTONUP = 0x0202;
+		private const int WM_MOUSELEAVE = 0x02A3;
 		private const int WM_REFLECT_NOTIFY = 0x2000 + 0x004E;
 		private const int NM_CUSTOMDRAW = -12;
 		private const int CDDS_ITEMPREPAINT = 0x00010001;
+		private const int CDDS_PREPAINT = 0x00000001;
+		private const int CDDS_POSTPAINT = 0x00000002;
+		private const int CDRF_NOTIFYPOSTPAINT = 0x00000010;
+		private const int LVCDI_GROUP = 1;
 		private const int CDIS_SELECTED = 0x0001;
 		private const int LVM_GETHEADER = 0x1000 + 31;
+		private const int BOX_TEXT_GAP = 3; // (between the box of a check box and its text)
 
 		// (the notification with which a list asks the colors of an item, as Windows lays it out)
 		[StructLayout(LayoutKind.Sequential)]
@@ -71,7 +97,27 @@ namespace CodeImp.DoomBuilder.Windows
 		private struct NMCUSTOMDRAW { public NMHDR hdr; public int dwDrawStage; public IntPtr hdc; public int left, top, right, bottom; public IntPtr dwItemSpec; public int uItemState; public IntPtr lItemlParam; }
 
 		[StructLayout(LayoutKind.Sequential)]
-		private struct NMLVCUSTOMDRAW { public NMCUSTOMDRAW nmcd; public int clrText; public int clrTextBk; }
+		private struct NMLVCUSTOMDRAW
+		{
+			public NMCUSTOMDRAW nmcd;
+			public int clrText, clrTextBk, iSubItem, dwItemType, clrFace, iIconEffect, iIconPhase, iPartId, iStateId;
+			public RECT rcText;
+			public int uAlign;
+		}
+
+		[StructLayout(LayoutKind.Sequential)]
+		private struct RECT { public int left, top, right, bottom; }
+
+		[StructLayout(LayoutKind.Sequential)]
+		private struct PAINTSTRUCT
+		{
+			public IntPtr hdc;
+			public int erase;
+			public RECT paint;
+			public int restore;
+			public int incupdate;
+			[MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)] public byte[] reserved;
+		}
 
 		private static readonly int codeoffset = Marshal.OffsetOf(typeof(NMHDR), "code").ToInt32();
 		private static readonly int stageoffset = Marshal.OffsetOf(typeof(NMCUSTOMDRAW), "dwDrawStage").ToInt32();
@@ -79,6 +125,11 @@ namespace CodeImp.DoomBuilder.Windows
 		private static readonly int itemoffset = Marshal.OffsetOf(typeof(NMCUSTOMDRAW), "dwItemSpec").ToInt32();
 		private static readonly int textoffset = Marshal.OffsetOf(typeof(NMLVCUSTOMDRAW), "clrText").ToInt32();
 		private static readonly int textbackoffset = Marshal.OffsetOf(typeof(NMLVCUSTOMDRAW), "clrTextBk").ToInt32();
+		private static readonly int itemtypeoffset = Marshal.OffsetOf(typeof(NMLVCUSTOMDRAW), "dwItemType").ToInt32();
+		private static readonly int textrectoffset = Marshal.OffsetOf(typeof(NMLVCUSTOMDRAW), "rcText").ToInt32();
+		private static readonly int hdcoffset = Marshal.OffsetOf(typeof(NMCUSTOMDRAW), "hdc").ToInt32();
+		private static readonly PropertyInfo groupid = typeof(ListViewGroup).GetProperty("ID", BindingFlags.Instance | BindingFlags.NonPublic);
+		private static Font groupfont;
 
 		#endregion
 
@@ -97,14 +148,16 @@ namespace CodeImp.DoomBuilder.Windows
 			public bool tabs;
 			public bool[] tabstyles;
 			public int hottab = -1;
-			public IntPtr updown;
+			public UpDownPainter updown;
+			public Dictionary<string, Color> colorproperties;
 			public bool link;
 			public Color linkcolor, visitedcolor;
 			public bool strip;
 			public ToolStripRenderMode rendermode;
 			public ToolStripRenderer renderer;
 			public string wintheme;
-			public ListPainter painter;
+			public ItemPainter painter;
+			public bool gridlines;
 			public bool grid;
 			public Color gridback, gridcolor;
 		}
@@ -122,6 +175,39 @@ namespace CodeImp.DoomBuilder.Windows
 		private static readonly ConditionalWeakTable<object, GridColors> grids = new ConditionalWeakTable<object, GridColors>();
 		private static readonly Dictionary<int, SolidBrush> brushes = new Dictionary<int, SolidBrush>();
 		private static readonly Dictionary<int, Pen> pens = new Dictionary<int, Pen>();
+		private static readonly ConditionalWeakTable<Image, Image> lightimages = new ConditionalWeakTable<Image, Image>();
+
+		// The tab controls that draw themselves, with the dark colors of those of their colors that are of the
+		// system (the tabs of the documents of the script editor, the tabs of its errors and results)
+		private static readonly Dictionary<string, Dictionary<string, Color>> tabcolors = new Dictionary<string, Dictionary<string, Color>>
+		{
+			{ "VSTabControl", new Dictionary<string, Color> { { "ActiveColor", Accent }, { "HighlightColor", Hover }, { "BackTabColor", Back }, { "BorderColor", Border }, { "TextColor", Text } } },
+			{ "TabControlEX", new Dictionary<string, Color> { { "TabColor", MenuBack }, { "SelectedTabColor", Back }, { "HotColor", Hover }, { "FlatBorderColor", Border } } },
+		};
+
+		// The colors of the text of the script editor while the theme is dark: those of the preset "Dark theme"
+		// of the preferences (PreferencesForm, scriptcolorpresets)
+		private static readonly Dictionary<int, PixelColor> scriptcolors = new Dictionary<int, PixelColor>
+		{
+			{ ColorCollection.SCRIPTBACKGROUND, new PixelColor(255, 34, 40, 42) },
+			{ ColorCollection.LINENUMBERS, new PixelColor(255, 63, 78, 73) },
+			{ ColorCollection.PLAINTEXT, new PixelColor(255, 241, 242, 243) },
+			{ ColorCollection.COMMENTS, new PixelColor(255, 102, 116, 123) },
+			{ ColorCollection.KEYWORDS, new PixelColor(255, 103, 140, 177) },
+			{ ColorCollection.PROPERTIES, PixelColor.FromColor(Color.LightSkyBlue) },
+			{ ColorCollection.LITERALS, new PixelColor(255, 255, 205, 34) },
+			{ ColorCollection.CONSTANTS, new PixelColor(255, 147, 199, 99) },
+			{ ColorCollection.STRINGS, new PixelColor(255, 236, 118, 0) },
+			{ ColorCollection.INCLUDES, new PixelColor(255, 160, 130, 189) },
+			{ ColorCollection.SCRIPTINDICATOR, new PixelColor(255, 211, 209, 85) },
+			{ ColorCollection.SCRIPTBRACEHIGHLIGHT, new PixelColor(255, 135, 211, 85) },
+			{ ColorCollection.SCRIPTBADBRACEHIGHLIGHT, new PixelColor(255, 150, 58, 70) },
+			{ ColorCollection.SCRIPTWHITESPACE, new PixelColor(255, 241, 242, 243) },
+			{ ColorCollection.SCRIPTFOLDFORE, new PixelColor(255, 37, 92, 111) },
+			{ ColorCollection.SCRIPTFOLDBACK, new PixelColor(255, 41, 49, 52) },
+			{ ColorCollection.SCRIPTSELECTIONFORE, new PixelColor(255, 255, 255, 255) },
+			{ ColorCollection.SCRIPTSELECTIONBACK, new PixelColor(255, 71, 71, 71) },
+		};
 		private static ToolStripRenderer renderer;
 		private static bool active;
 		private static bool changing;
@@ -188,11 +274,19 @@ namespace CodeImp.DoomBuilder.Windows
 			if(saved.TryGetValue(form, out s) != active) Set(form, active);
 		}
 
-		// The windows that follow the theme (the script editor comes later; the window of a crash only
-		// shows what went wrong)
+		// The windows that follow the theme (not the window of a crash: it only shows what went wrong)
 		private static bool Follows(Form form)
 		{
-			return !(form is ScriptEditorForm) && !(form is ExceptionDialog);
+			return !(form is ExceptionDialog);
+		}
+
+		// A color of the text of the script editor: the dark one while the theme is dark, the one of the
+		// preferences otherwise
+		internal static PixelColor ScriptColor(int index)
+		{
+			PixelColor color;
+			if(active && scriptcolors.TryGetValue(index, out color)) return color;
+			return General.Colors.Colors[index];
 		}
 
 		// The title bar of a window dark or light (Windows 10 version 2004 and later; earlier versions
@@ -301,7 +395,7 @@ namespace CodeImp.DoomBuilder.Windows
 			c.BackColorChanged += OnBackColorChanged;
 			ToolStrip strip = c as ToolStrip;
 			if(strip != null) strip.ItemAdded += OnItemAdded;
-			if((c is Label) || ((c is Button) && !(c is CheckBox) && !(c is RadioButton))) c.Paint += OnDisabledPaint;
+			if((c is Label) || (c is ButtonBase)) c.Paint += OnDisabledPaint;
 		}
 
 		private static void OnControlAdded(object sender, ControlEventArgs e)
@@ -362,13 +456,15 @@ namespace CodeImp.DoomBuilder.Windows
 
 		// Windows Forms draws the text of a label or of a button that is not enabled a little darker than
 		// its background: on a dark one it cannot be read. With the dark theme it is drawn again in the
-		// gray of a text that is not available (a button only when it has no picture).
+		// gray of a text that is not available (a button only when it has no picture). The text of a check
+		// box or of a radio button is a dark gray: it is drawn again too.
 		private static void OnDisabledPaint(object sender, PaintEventArgs e)
 		{
 			Control c = (Control)sender;
 			if(!active || c.Enabled || string.IsNullOrEmpty(c.Text)) return;
 			Saved s;
 			if(!saved.TryGetValue(c, out s)) return;
+			if((c is CheckBox) || (c is RadioButton)) { DisabledBoxText((ButtonBase)c, e.Graphics); return; }
 
 			Rectangle area = c.ClientRectangle;
 			ContentAlignment align;
@@ -409,6 +505,42 @@ namespace CodeImp.DoomBuilder.Windows
 			TextRenderer.DrawText(e.Graphics, c.Text, c.Font, text, DimText, flags);
 		}
 
+		// The text of a check box or of a radio button that is not enabled, with its box on the left: what
+		// is right of the box is painted again with the background, and the text in the gray of a text that
+		// is not available, where Windows Forms puts it
+		private static void DisabledBoxText(ButtonBase box, Graphics g)
+		{
+			CheckBox check = box as CheckBox;
+			RadioButton radio = box as RadioButton;
+			ContentAlignment boxalign = (check != null ? check.CheckAlign : radio.CheckAlign);
+			Appearance appearance = (check != null ? check.Appearance : radio.Appearance);
+			if((appearance != Appearance.Normal) || (boxalign != ContentAlignment.MiddleLeft) || (box.RightToLeft == RightToLeft.Yes)
+				|| (box.FlatStyle == FlatStyle.System) || (box.Image != null) || !Application.RenderWithVisualStyles) return;
+
+			Size glyph = (check != null ? CheckBoxRenderer.GetGlyphSize(g, System.Windows.Forms.VisualStyles.CheckBoxState.UncheckedDisabled) : RadioButtonRenderer.GetGlyphSize(g, System.Windows.Forms.VisualStyles.RadioButtonState.UncheckedDisabled));
+			int left = glyph.Width + BOX_TEXT_GAP;
+			Rectangle area = box.ClientRectangle;
+			Rectangle text = new Rectangle(left, area.Y + box.Padding.Top, area.Width - left - box.Padding.Right, area.Height - box.Padding.Vertical);
+			Color back = Back;
+			for(Control p = box; p != null; p = p.Parent) if(p.BackColor.A == 255) { back = p.BackColor; break; }
+			using(SolidBrush brush = new SolidBrush(back)) g.FillRectangle(brush, left, area.Y, area.Width - left, area.Height);
+
+			TextFormatFlags flags = TextFormatFlags.TextBoxControl | TextFormatFlags.WordBreak;
+			if(!box.UseMnemonic) flags |= TextFormatFlags.NoPrefix;
+			switch(box.TextAlign)
+			{
+				case ContentAlignment.TopCenter: flags |= TextFormatFlags.HorizontalCenter; break;
+				case ContentAlignment.TopRight: flags |= TextFormatFlags.Right; break;
+				case ContentAlignment.MiddleLeft: flags |= TextFormatFlags.VerticalCenter; break;
+				case ContentAlignment.MiddleCenter: flags |= TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter; break;
+				case ContentAlignment.MiddleRight: flags |= TextFormatFlags.VerticalCenter | TextFormatFlags.Right; break;
+				case ContentAlignment.BottomLeft: flags |= TextFormatFlags.Bottom; break;
+				case ContentAlignment.BottomCenter: flags |= TextFormatFlags.Bottom | TextFormatFlags.HorizontalCenter; break;
+				case ContentAlignment.BottomRight: flags |= TextFormatFlags.Bottom | TextFormatFlags.Right; break;
+			}
+			TextRenderer.DrawText(g, box.Text, box.Font, text, DimText, flags);
+		}
+
 		// What Windows keeps in the window of a control (its theme, the title bar of a window, how a
 		// list draws its items) is given again when that window is made again
 		private static void OnHandleCreated(object sender, EventArgs e)
@@ -417,7 +549,7 @@ namespace CodeImp.DoomBuilder.Windows
 			if(!active || !saved.TryGetValue(sender, out s)) return;
 			Control c = (Control)sender;
 			if(s.wintheme != null) SetWindowTheme(c.Handle, s.wintheme, null);
-			if(s.painter != null) s.painter.Attach((ListView)c);
+			if(s.painter != null) s.painter.Attach(c);
 			Form form = c as Form;
 			if(form != null) SetTitleBar(form, true);
 		}
@@ -534,6 +666,9 @@ namespace CodeImp.DoomBuilder.Windows
 		// This changes a control and keeps what it was
 		private static void Change(Control c, Saved s)
 		{
+			// (a tab page loses its look of Windows when it gets a color: it is known before)
+			bool pagevisual = (c is TabPage) && ((TabPage)c).UseVisualStyleBackColor;
+
 			// (first the grids: the color of a grid sets the one of its cells, which are kept apart)
 			DataGridView grid = c as DataGridView;
 			if(grid != null)
@@ -620,18 +755,23 @@ namespace CodeImp.DoomBuilder.Windows
 			}
 
 			TabPage page = c as TabPage;
-			if((page != null) && page.UseVisualStyleBackColor)
+			if((page != null) && pagevisual)
 			{
 				s.tabpage = true;
 				page.UseVisualStyleBackColor = false;
-				if(!s.back) { s.back = true; s.backset = IsSet(serializeback, c); s.backcolor = page.BackColor; }
-				page.BackColor = Back;
+				if(!s.back)
+				{
+					s.back = true;
+					s.backset = IsSet(serializeback, c);
+					s.backcolor = page.BackColor;
+					page.BackColor = Back;
+				}
 			}
 
 			// The tabs of a window are drawn here (Windows draws them light whatever their colors; the
-			// side panels and the script editor draw theirs)
+			// tab controls that draw themselves get dark colors)
 			TabControl tabs = c as TabControl;
-			if((tabs != null) && !(tabs is DockersTabsControl) && !(tabs is VSTabControl) && (tabs.Alignment == TabAlignment.Top) && (tabs.Appearance == TabAppearance.Normal) && (getstyle != null) && (setstyle != null))
+			if((tabs != null) && (tabs.GetType() == typeof(TabControl)) && (tabs.Alignment == TabAlignment.Top) && (tabs.Appearance == TabAppearance.Normal) && (getstyle != null) && (setstyle != null))
 			{
 				s.tabs = true;
 				s.tabstyles = new bool[tabstyles.Length];
@@ -643,6 +783,21 @@ namespace CodeImp.DoomBuilder.Windows
 				tabs.Paint += OnTabsPaint;
 				tabs.MouseMove += OnTabsMouseMove;
 				tabs.MouseLeave += OnTabsMouseLeave;
+			}
+			Dictionary<string, Color> darkcolors;
+			if((tabs != null) && tabcolors.TryGetValue(tabs.GetType().Name, out darkcolors))
+			{
+				s.colorproperties = new Dictionary<string, Color>();
+				foreach(KeyValuePair<string, Color> dc in darkcolors)
+				{
+					PropertyInfo property = tabs.GetType().GetProperty(dc.Key, BindingFlags.Instance | BindingFlags.Public);
+					if((property == null) || (property.PropertyType != typeof(Color)) || !property.CanWrite) continue;
+					Color color = (Color)property.GetValue(tabs, null);
+					if(!color.IsSystemColor) continue;
+					s.colorproperties.Add(dc.Key, color);
+					property.SetValue(tabs, dc.Value, null);
+				}
+				tabs.Invalidate();
 			}
 
 			// Links that did not choose their color get a light blue (the blue of Windows cannot be read on
@@ -671,12 +826,18 @@ namespace CodeImp.DoomBuilder.Windows
 			if((c is TreeView) || (c is ListView) || (c is TextBoxBase) || (c is ListBox) || (c is ScrollBar) || (c is DataGridView)) s.wintheme = "DarkMode_Explorer";
 			if((s.wintheme != null) && c.IsHandleCreated) SetWindowTheme(c.Handle, s.wintheme, null);
 
-			// A list shows the items to which its code gives a color of the system with the dark one
+			// A list or a tree shows the items to which its code gives a color of the system with the dark one
+			// (and a list its grid lines dark: Windows draws them light)
 			ListView list = c as ListView;
-			if(list != null)
+			if((list != null) && list.GridLines)
 			{
-				s.painter = new ListPainter();
-				if(list.IsHandleCreated) s.painter.Attach(list);
+				s.gridlines = true;
+				list.GridLines = false;
+			}
+			if((c is ListView) || (c is TreeView))
+			{
+				s.painter = new ItemPainter { Lines = s.gridlines };
+				if(c.IsHandleCreated) s.painter.Attach(c);
 			}
 		}
 
@@ -711,7 +872,13 @@ namespace CodeImp.DoomBuilder.Windows
 				tabs.MouseMove -= OnTabsMouseMove;
 				tabs.MouseLeave -= OnTabsMouseLeave;
 				for(int i = 0; i < tabstyles.Length; i++) SetStyle(tabs, tabstyles[i], s.tabstyles[i]);
-				if(s.updown != IntPtr.Zero) SetWindowTheme(s.updown, null, null);
+				if(s.updown != null) s.updown.Detach();
+				tabs.Invalidate();
+			}
+			if((s.colorproperties != null) && (tabs != null))
+			{
+				foreach(KeyValuePair<string, Color> dc in s.colorproperties)
+					tabs.GetType().GetProperty(dc.Key, BindingFlags.Instance | BindingFlags.Public).SetValue(tabs, dc.Value, null);
 				tabs.Invalidate();
 			}
 
@@ -749,6 +916,7 @@ namespace CodeImp.DoomBuilder.Windows
 			}
 
 			if(s.painter != null) s.painter.Detach();
+			if(s.gridlines && (c is ListView)) ((ListView)c).GridLines = true;
 			if((s.wintheme != null) && c.IsHandleCreated) SetWindowTheme(c.Handle, null, null);
 		}
 
@@ -779,14 +947,74 @@ namespace CodeImp.DoomBuilder.Windows
 			for(int i = 0; i < tabs.TabCount; i++) if(i != tabs.SelectedIndex) DrawTab(g, tabs, s, i, false);
 			if((tabs.SelectedIndex >= 0) && (tabs.SelectedIndex < tabs.TabCount)) DrawTab(g, tabs, s, tabs.SelectedIndex, true);
 
-			// The arrows that scroll the tabs when they do not fit get the dark look of Windows
+			// The arrows that scroll the tabs when they do not fit are drawn here too
 			if(tabs.IsHandleCreated)
 			{
 				IntPtr updown = FindWindowEx(tabs.Handle, IntPtr.Zero, "msctls_updown32", null);
-				if((updown != IntPtr.Zero) && (updown != s.updown))
+				if((updown != IntPtr.Zero) && ((s.updown == null) || (s.updown.Handle != updown)))
 				{
-					s.updown = updown;
-					SetWindowTheme(updown, "DarkMode_Explorer", null);
+					if(s.updown != null) s.updown.Detach();
+					s.updown = new UpDownPainter();
+					s.updown.Attach(updown);
+				}
+			}
+		}
+
+		// The arrows that scroll the tabs (Windows draws them light whatever the theme of their window)
+		internal class UpDownPainter : NativeWindow
+		{
+			internal void Attach(IntPtr updown)
+			{
+				AssignHandle(updown);
+				InvalidateRect(updown, IntPtr.Zero, true);
+			}
+
+			internal void Detach()
+			{
+				IntPtr updown = this.Handle;
+				if(updown == IntPtr.Zero) return;
+				ReleaseHandle();
+				InvalidateRect(updown, IntPtr.Zero, true);
+			}
+
+			protected override void WndProc(ref Message m)
+			{
+				if(active && (m.Msg == WM_ERASEBKGND)) { m.Result = new IntPtr(1); return; }
+				if(active && (m.Msg == WM_PAINT))
+				{
+					PAINTSTRUCT ps;
+					IntPtr hdc = BeginPaint(m.HWnd, out ps);
+					try
+					{
+						RECT rc;
+						GetClientRect(m.HWnd, out rc);
+						using(Graphics g = Graphics.FromHdc(hdc)) Draw(g, new Rectangle(0, 0, rc.right - rc.left, rc.bottom - rc.top));
+					}
+					finally { EndPaint(m.HWnd, ref ps); }
+					m.Result = IntPtr.Zero;
+					return;
+				}
+				base.WndProc(ref m);
+
+				// (Windows draws a pressed arrow at once: they are drawn again)
+				if(active && ((m.Msg == WM_LBUTTONDOWN) || (m.Msg == WM_LBUTTONUP) || (m.Msg == WM_MOUSEMOVE) || (m.Msg == WM_MOUSELEAVE)) && (this.Handle != IntPtr.Zero))
+					InvalidateRect(this.Handle, IntPtr.Zero, false);
+			}
+
+			private static void Draw(Graphics g, Rectangle area)
+			{
+				int half = area.Width / 2;
+				Rectangle[] buttons = { new Rectangle(area.X, area.Y, half, area.Height), new Rectangle(area.X + half, area.Y, area.Width - half, area.Height) };
+				for(int i = 0; i < 2; i++)
+				{
+					Rectangle b = buttons[i];
+					using(SolidBrush brush = new SolidBrush(Hover)) g.FillRectangle(brush, b);
+					using(Pen pen = new Pen(Border)) g.DrawRectangle(pen, b.X, b.Y, b.Width - 1, b.Height - 1);
+					int cx = b.X + b.Width / 2, cy = b.Y + b.Height / 2, size = Math.Max(2, Math.Min(b.Width, b.Height) / 5);
+					Point[] arrow = (i == 0)
+						? new[] { new Point(cx + size / 2, cy - size), new Point(cx + size / 2, cy + size), new Point(cx - size / 2 - 1, cy) }
+						: new[] { new Point(cx - size / 2, cy - size), new Point(cx - size / 2, cy + size), new Point(cx + size / 2 + 1, cy) };
+					using(SolidBrush brush = new SolidBrush(Text)) g.FillPolygon(brush, arrow);
 				}
 			}
 		}
@@ -843,17 +1071,22 @@ namespace CodeImp.DoomBuilder.Windows
 
 		#region ================== Lists and grids
 
-		// A list asks the colors of each item before drawing it, and Windows Forms answers with the colors
-		// that the code gave the item. This changes the answer when it is a color of the system to the dark
-		// one, without changing the items (some code reads their colors back).
-		internal class ListPainter : NativeWindow
+		// A list or a tree asks the colors of each item before drawing it, and Windows Forms answers with the
+		// colors that the code gave the item. This changes the answer when it is a color of the system to the
+		// dark one, without changing the items (some code reads their colors back). The titles of the groups of
+		// a list are drawn again in a light blue (Windows draws them in a dark blue).
+		internal class ItemPainter : NativeWindow
 		{
+			private Control owner;
 			private ListView list;
+			internal bool Lines;
 
-			internal void Attach(ListView list)
+			internal void Attach(Control owner)
 			{
-				this.list = list;
-				if(this.Handle == IntPtr.Zero) AssignHandle(list.Handle);
+				this.owner = owner;
+				this.list = owner as ListView;
+				if(this.Handle == IntPtr.Zero) AssignHandle(owner.Handle);
+				if(list == null) return;
 				IntPtr header = SendMessage(list.Handle, LVM_GETHEADER, IntPtr.Zero, IntPtr.Zero);
 				if(header != IntPtr.Zero) SetWindowTheme(header, "DarkMode_ItemsView", null);
 			}
@@ -865,8 +1098,8 @@ namespace CodeImp.DoomBuilder.Windows
 				{
 					IntPtr header = SendMessage(list.Handle, LVM_GETHEADER, IntPtr.Zero, IntPtr.Zero);
 					if(header != IntPtr.Zero) SetWindowTheme(header, null, null);
-					list.Invalidate();
 				}
+				if((owner != null) && owner.IsHandleCreated) owner.Invalidate();
 			}
 
 			protected override void WndProc(ref Message m)
@@ -874,7 +1107,19 @@ namespace CodeImp.DoomBuilder.Windows
 				base.WndProc(ref m);
 				if((m.Msg != WM_REFLECT_NOTIFY) || !active || (m.LParam == IntPtr.Zero)) return;
 				if(Marshal.ReadInt32(m.LParam, codeoffset) != NM_CUSTOMDRAW) return;
-				if((Marshal.ReadInt32(m.LParam, stageoffset) & CDDS_ITEMPREPAINT) != CDDS_ITEMPREPAINT) return;
+				int stage = Marshal.ReadInt32(m.LParam, stageoffset);
+				if((list != null) && (Marshal.ReadInt32(m.LParam, itemtypeoffset) == LVCDI_GROUP))
+				{
+					if(stage == CDDS_PREPAINT) m.Result = new IntPtr(m.Result.ToInt32() | CDRF_NOTIFYPOSTPAINT);
+					else if(stage == CDDS_POSTPAINT) DrawGroupTitle(m.LParam);
+					return;
+				}
+				if((list != null) && Lines)
+				{
+					if(stage == CDDS_PREPAINT) { m.Result = new IntPtr(m.Result.ToInt32() | CDRF_NOTIFYPOSTPAINT); return; }
+					if(stage == CDDS_POSTPAINT) { DrawLines(m.LParam); return; }
+				}
+				if((stage & CDDS_ITEMPREPAINT) != CDDS_ITEMPREPAINT) return;
 				int text = Marshal.ReadInt32(m.LParam, textoffset);
 				int back = Marshal.ReadInt32(m.LParam, textbackoffset);
 				int newtext = MapColorRef(text, true);
@@ -892,6 +1137,59 @@ namespace CodeImp.DoomBuilder.Windows
 				Marshal.WriteInt32(m.LParam, stateoffset, state & ~CDIS_SELECTED);
 				Marshal.WriteInt32(m.LParam, textoffset, ColorTranslator.ToWin32(Text));
 				Marshal.WriteInt32(m.LParam, textbackoffset, ColorTranslator.ToWin32(Checked));
+			}
+
+			// The grid lines of a list: under each row (and the rows that would follow), and between columns
+			private void DrawLines(IntPtr lparam)
+			{
+				IntPtr hdc = Marshal.ReadIntPtr(lparam, hdcoffset);
+				if((hdc == IntPtr.Zero) || (list.View != View.Details)) return;
+				Rectangle client = list.ClientRectangle;
+				int top = 0, height = 0, left = 0;
+				IntPtr header = SendMessage(list.Handle, LVM_GETHEADER, IntPtr.Zero, IntPtr.Zero);
+				RECT hr;
+				if((header != IntPtr.Zero) && GetClientRect(header, out hr)) top = hr.bottom;
+				if(list.Items.Count > 0)
+				{
+					Rectangle first = list.GetItemRect(0);
+					height = first.Height;
+					left = first.Left;
+					if(list.TopItem != null) top = list.TopItem.Bounds.Top;
+				}
+				else height = list.Font.Height + 4;
+				using(Graphics g = Graphics.FromHdc(hdc))
+				using(Pen pen = new Pen(Border))
+				{
+					if(height > 0) for(int y = top + height - 1; y < client.Bottom; y += height) g.DrawLine(pen, client.Left, y, client.Right, y);
+					int x = left;
+					foreach(ColumnHeader column in list.Columns.Cast<ColumnHeader>().OrderBy(col => col.DisplayIndex))
+					{
+						x += column.Width;
+						g.DrawLine(pen, x - 1, top, x - 1, client.Bottom);
+					}
+				}
+			}
+
+			// The title of a group, drawn again over the one of Windows
+			private void DrawGroupTitle(IntPtr lparam)
+			{
+				if(groupid == null) return;
+				int id = Marshal.ReadIntPtr(lparam, itemoffset).ToInt32();
+				string title = null;
+				foreach(ListViewGroup group in list.Groups) if((int)groupid.GetValue(group, null) == id) { title = group.Header; break; }
+				if(string.IsNullOrEmpty(title)) return;
+				RECT rc = (RECT)Marshal.PtrToStructure(new IntPtr(lparam.ToInt64() + textrectoffset), typeof(RECT));
+				Rectangle area = Rectangle.FromLTRB(rc.left, rc.top, rc.right, rc.bottom);
+				IntPtr hdc = Marshal.ReadIntPtr(lparam, hdcoffset);
+				if((area.Width <= 0) || (area.Height <= 0) || (hdc == IntPtr.Zero)) return;
+				if(groupfont == null) groupfont = new Font("Segoe UI", 9.75f);
+				using(Graphics g = Graphics.FromHdc(hdc))
+				{
+					// (the text of Windows is covered with some room: its font is not quite this one)
+					Size size = TextRenderer.MeasureText(g, title, groupfont, area.Size, TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
+					using(SolidBrush back = new SolidBrush(list.BackColor)) g.FillRectangle(back, area.X, area.Y, Math.Min(area.Width, size.Width * 5 / 4 + 8), area.Height);
+					TextRenderer.DrawText(g, title, groupfont, area, Link, TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
+				}
 			}
 
 			private static int MapColorRef(int colorref, bool text)
@@ -980,6 +1278,57 @@ namespace CodeImp.DoomBuilder.Windows
 				e.ArrowColor = ((e.Item == null) || e.Item.Enabled ? Text : DimText);
 				base.OnRenderArrow(e);
 			}
+
+			// A picture that is mostly black or dark gray lines on a transparent background (it cannot be seen
+			// on a dark background) is drawn with its grays turned the other way round
+			protected override void OnRenderItemImage(ToolStripItemImageRenderEventArgs e)
+			{
+				Image light = (e.Image != null ? LightImage(e.Image) : null);
+				if((light == null) || ReferenceEquals(light, e.Image)) { base.OnRenderItemImage(e); return; }
+				base.OnRenderItemImage(new ToolStripItemImageRenderEventArgs(e.Graphics, e.Item, light, e.ImageRectangle));
+			}
+		}
+
+		// The picture to draw on a dark background instead of a picture (the same when it can be seen)
+		internal static Image LightImage(Image image)
+		{
+			Image light;
+			if(lightimages.TryGetValue(image, out light)) return light;
+			light = image;
+			Bitmap source = image as Bitmap;
+			if((source != null) && (source.Width <= 64) && (source.Height <= 64))
+			{
+				try
+				{
+					// Mostly black or dark gray, on a transparent background? (a picture with a background of its
+					// own is seen)
+					int opaque = 0, dark = 0;
+					for(int y = 0; y < source.Height; y++)
+						for(int x = 0; x < source.Width; x++)
+						{
+							Color c = source.GetPixel(x, y);
+							if(c.A < 128) continue;
+							opaque++;
+							if((c.GetBrightness() < 0.3f) && (c.GetSaturation() < 0.25f || c.GetBrightness() < 0.1f)) dark++;
+						}
+					if((opaque > 0) && (dark * 2 >= opaque) && (opaque * 4 <= source.Width * source.Height * 3))
+					{
+						Bitmap result = new Bitmap(source.Width, source.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+						for(int y = 0; y < source.Height; y++)
+							for(int x = 0; x < source.Width; x++)
+							{
+								Color c = source.GetPixel(x, y);
+								if((c.GetSaturation() < 0.25f) || (c.GetBrightness() < 0.1f))
+									c = Color.FromArgb(c.A, 255 - c.R, 255 - c.G, 255 - c.B);
+								result.SetPixel(x, y, c);
+							}
+						light = result;
+					}
+				}
+				catch(Exception) { light = image; }
+			}
+			lightimages.Add(image, light);
+			return light;
 		}
 
 		private class DarkColorTable : ProfessionalColorTable

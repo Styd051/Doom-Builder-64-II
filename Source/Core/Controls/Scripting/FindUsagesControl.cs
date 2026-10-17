@@ -203,7 +203,7 @@ namespace CodeImp.DoomBuilder.Controls.Scripting
 				
 				// Draw line number
 				string linenum = "Line " + result.LineIndex + ": ";
-				TextRenderer.DrawText(e.Graphics, linenum, findusagestree.Font, location, SystemColors.GrayText);
+				TextRenderer.DrawText(e.Graphics, linenum, findusagestree.Font, location, DarkTheme.Map(SystemColors.GrayText)); // styd. DarkTheme.Map: the dark color while the theme is dark
 
 				//TECH: TextFormatFlags are ignored when using TextRenderer.MeasureText override without IDeviceContext
 				location.X += TextRenderer.MeasureText(e.Graphics, linenum, findusagestree.Font, preferredsize, TextFormatFlags.NoPadding).Width;
@@ -218,7 +218,7 @@ namespace CodeImp.DoomBuilder.Controls.Scripting
 
 				// Draw matching text
 				string match = result.Line.Substring(result.MatchStart, result.MatchEnd - result.MatchStart);
-				TextRenderer.DrawText(e.Graphics, match, findusagestree.Font, location, SystemColors.HotTrack);
+				TextRenderer.DrawText(e.Graphics, match, findusagestree.Font, location, DarkTheme.Map(SystemColors.HotTrack));
 				location.X += TextRenderer.MeasureText(e.Graphics, match, findusagestree.Font, preferredsize, TextFormatFlags.NoPadding).Width;
 
 				// Draw text after match
