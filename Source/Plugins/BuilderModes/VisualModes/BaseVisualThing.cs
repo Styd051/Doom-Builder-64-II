@@ -358,6 +358,7 @@ namespace CodeImp.DoomBuilder.BuilderModes
 					RenderPass = RenderPass.Mask;
 				}
 				doom64nightmare = nightmare;
+				doom64icon = ((Thing.Type == 0) || (Thing.Type == 89)) && !nightmare;
 				doom64ghost = ghost || (spawntics >= 0);
             }
 

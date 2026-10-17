@@ -1112,6 +1112,45 @@ namespace CodeImp.DoomBuilder.Rendering
 			return SHADERPASS_DOOM64_LIQUID;
 		}
 
+		// styd. The pass and the color of the icon of a Doom 64 camera or trigger, given the pass that it
+		// would be drawn with. The icon is white: the highlight, which is added to the color of a thing,
+		// cannot be seen on it. Aimed at or selected, it is drawn by the highlight pass that takes its
+		// color from World3D.VertexColor (6, or 14 with the fog), with the color of the highlight or of
+		// the selection and the opacity of the thing: its picture is multiplied by that color, then the
+		// glow is added as on any other thing.
+		private int SetDoom64IconPass(VisualThing t, int wantedshaderpass, ref Color4 vertexcolor)
+		{
+			bool ishighlighted = (t == highlighted) && showhighlight, isselected = t.Selected && showselection;
+			if(!ishighlighted && !isselected) return wantedshaderpass;
+
+			Color4 color = CalculateHighlightColor(ishighlighted, isselected);
+			float factor = Doom64BrightnessFactor();
+			vertexcolor = new Color4(new Color4(t.VertexColor).Alpha, color.Red / factor, color.Green / factor, color.Blue / factor);
+			return ((wantedshaderpass >= 8) ? 14 : 6);
+		}
+
+		// styd. The glow of the highlight or of the selection on the icon of a Doom 64 camera or trigger.
+		// The display brightness makes the whole view stronger after it is drawn: the icon has its color
+		// and its glow made weaker by as much, so that it shows the colors of the highlight and of the
+		// selection, as it would without the display brightness.
+		private Color4 Doom64IconGlow(VisualThing t)
+		{
+			Color4 color = CalculateHighlightColor((t == highlighted) && showhighlight, t.Selected && showselection);
+			color.Alpha /= Doom64BrightnessFactor();
+			return color;
+		}
+
+		// styd. How much the display brightness makes the view stronger (see RenderDoom64Brightness)
+		private float Doom64BrightnessFactor()
+		{
+			if(!General.Map.DOOM64 || fullbrightness) return 1f;
+			float brightness = General.Clamp(General.Settings.Doom64DisplayBrightness, 0f, 2f);
+			float factor = 1f;
+			foreach(float part in new float[] { Math.Min(brightness, 1f), brightness - 1f })
+				if(part > 0f) factor *= 1f + (int)(part * 255f) / 255f;
+			return factor;
+		}
+
 		// This performs a single render pass
 		private void RenderSinglePass(Dictionary<ImageData, List<VisualGeometry>> geopass, Dictionary<ImageData, List<VisualThing>> thingspass)
 		{
@@ -1302,6 +1341,10 @@ namespace CodeImp.DoomBuilder.Rendering
 								vertexcolor = new Color4();
 							}
 
+							// styd. A camera or a trigger of Doom 64 aimed at or selected gets the color of
+							// the highlight or of the selection
+							if(t.Doom64Icon) wantedshaderpass = SetDoom64IconPass(t, wantedshaderpass, ref vertexcolor);
+
 							// styd. A thing in a sector of Doom 64 that has a light at this time gets it
 							wantedshaderpass += SetDoom64LightPass(t, wantedshaderpass);
 
@@ -1325,6 +1368,7 @@ namespace CodeImp.DoomBuilder.Rendering
 							if(t.Thing.Sector != null) graphics.Shaders.World3D.LightColor = (doom64fog ? doom64fogcolor : t.Thing.Sector.FogColor); // styd
 							graphics.Shaders.World3D.VertexColor = vertexcolor;
 							graphics.Shaders.World3D.HighlightColor = CalculateHighlightColor((t == highlighted) && showhighlight, (t.Selected && showselection));
+							if(t.Doom64Icon) graphics.Shaders.World3D.HighlightColor = Doom64IconGlow(t); // styd
 
                             // [ZZ] check if we want stencil
                             graphics.Shaders.World3D.StencilColor = t.StencilColor.ToColorValue();
@@ -1673,6 +1717,10 @@ namespace CodeImp.DoomBuilder.Rendering
 							vertexcolor = new Color4();
 						}
 
+						// styd. A camera or a trigger of Doom 64 aimed at or selected gets the color of
+						// the highlight or of the selection
+						if(t.Doom64Icon) wantedshaderpass = SetDoom64IconPass(t, wantedshaderpass, ref vertexcolor);
+
 						// styd. A thing in a sector of Doom 64 that has a light at this time gets it
 						wantedshaderpass += SetDoom64LightPass(t, wantedshaderpass);
 
@@ -1700,6 +1748,7 @@ namespace CodeImp.DoomBuilder.Rendering
 						graphics.Shaders.World3D.LightColor = (doom64fog ? doom64fogcolor : t.Thing.Sector.FogColor); // styd
 						graphics.Shaders.World3D.VertexColor = vertexcolor;
 						graphics.Shaders.World3D.HighlightColor = CalculateHighlightColor((t == highlighted) && showhighlight, (t.Selected && showselection));
+						if(t.Doom64Icon) graphics.Shaders.World3D.HighlightColor = Doom64IconGlow(t); // styd
 
                         // [ZZ] check if we want stencil
                         graphics.Shaders.World3D.StencilColor = t.StencilColor.ToColorValue();

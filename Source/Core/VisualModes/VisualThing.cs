@@ -106,6 +106,9 @@ namespace CodeImp.DoomBuilder.VisualModes
 
 		// styd. Doom 64: the thing has the Nightmare flag, which has a way of its own to be drawn
 		protected bool doom64nightmare;
+
+		// styd. Doom 64: the thing is a camera or a trigger, drawn as a white icon of the editor
+		protected bool doom64icon;
 		
 		#endregion
 		
@@ -150,6 +153,7 @@ namespace CodeImp.DoomBuilder.VisualModes
 
 		// styd
 		public bool Doom64Nightmare { get { return doom64nightmare; } }
+		public bool Doom64Icon { get { return doom64icon; } }
 
         // [ZZ] this is used for spotlights
         public Vector3 VectorLookAt
