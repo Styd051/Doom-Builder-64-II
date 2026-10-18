@@ -3,8 +3,8 @@
 A map editor for **Doom 64** (the Doom 64 map format of Doom64 EX and the 2020 remaster), built on
 [GZDoom Builder (Bugfix)](https://github.com/UltimateDoomBuilder/UltimateDoomBuilder/tree/last_slimdx) R3112.
 
-It replaces the first Doom Builder 64 II, which was based on Doom Builder 2 (r1302): the Doom 64 code of
-Kaiser's Doom Builder 64 and of Doom Builder 64 II was ported into GZDoom Builder (Bugfix), so the editor now has
+It replaces the first Doom Builder 64, which was based on Doom Builder 2 (r1302): the Doom 64 code of
+Kaiser's Doom Builder 64 was ported into GZDoom Builder (Bugfix), so the editor now has
 its drawing tools, visual mode, script editor and plugins. Doom, Boom, Heretic, Hexen and UDMF maps can still be
 edited: Doom 64 is one more map format.
 
@@ -44,5 +44,6 @@ edited: Doom 64 is one more map format.
 - Doom Builder 64 was made by Kaiser (villsa).
 - GZDoom Builder was made by MaxED; GZDoom Builder (Bugfix) is maintained by ZZYZX.
 - Doom Builder 2 was made by Pascal vd Heiden (CodeImp).
+- Logo and background was made by Hieronymus
 
 Doom Builder 64 II is released under the GNU General Public License (see `Build/GPL.txt`).
