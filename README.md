@@ -45,5 +45,6 @@ edited: Doom 64 is one more map format.
 - GZDoom Builder was made by MaxED; GZDoom Builder (Bugfix) is maintained by ZZYZX.
 - Doom Builder 2 was made by Pascal vd Heiden (CodeImp).
 - Logo and background was made by Hieronymus
+- Erick194 for having Reverse Engineering DOOM64 RE, which served as my reference for the source code of the original Doom 64 engine for Doom Builder 64 II.
 
 Doom Builder 64 II is released under the GNU General Public License (see `Build/GPL.txt`).
