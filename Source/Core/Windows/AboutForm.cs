@@ -41,8 +41,8 @@ namespace CodeImp.DoomBuilder.Windows
 #endif
 
 #if !DEBUG
-			// styd: the title is the name of the editor alone; the revision is that of its base, named in the credits
-			version.Text = Application.ProductName;
+			// styd: the title is the name and the version of the editor; the revision is that of its base, named in the credits
+			version.Text = Application.ProductName + " V" + Application.ProductVersion;
 #endif
 
 			// styd: the base this editor is built on, with its revision

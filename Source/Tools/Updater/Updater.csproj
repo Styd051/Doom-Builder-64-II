@@ -118,6 +118,7 @@
     </Reference>
     <Reference Include="System.Data" />
     <Reference Include="System.Drawing" />
+    <Reference Include="System.IO.Compression" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
   </ItemGroup>
@@ -146,11 +147,9 @@
       <DesignTime>True</DesignTime>
     </Compile>
     <None Include="app.config" />
-    <None Include="Updater.ini">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
     <Compile Include="Helpers\TaskbarProgress.cs" />
     <Compile Include="Helpers\Webdata.cs" />
+    <Compile Include="Helpers\EditorProcess.cs" />
     <Compile Include="UpdateBlockedForm.cs">
       <SubType>Form</SubType>
     </Compile>

@@ -5,12 +5,12 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("GZDoom Builder Updater")]
+[assembly: AssemblyTitle("Doom Builder 64 II Updater")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("GZDoom Builder Updater")]
-[assembly: AssemblyCopyright("Copyright © MaxED 2016")]
+[assembly: AssemblyProduct("Doom Builder 64 II Updater")]
+[assembly: AssemblyCopyright("Copyright © MaxED 2016, Styd051 2026")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 

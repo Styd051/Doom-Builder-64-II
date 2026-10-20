@@ -50,6 +50,7 @@ namespace CodeImp.DoomBuilder.Windows
 			this.vertexScale = new CodeImp.DoomBuilder.Controls.TransparentTrackBar();
 			this.cbSynchCameras = new System.Windows.Forms.CheckBox();
 			this.darktheme = new System.Windows.Forms.CheckBox();
+			this.checkforupdates = new System.Windows.Forms.CheckBox();
 			this.showtexturesizes = new System.Windows.Forms.CheckBox();
 			this.scriptontop = new System.Windows.Forms.CheckBox();
 			this.zoomfactor = new CodeImp.DoomBuilder.Controls.TransparentTrackBar();
@@ -278,6 +279,7 @@ namespace CodeImp.DoomBuilder.Windows
 			groupBox1.Controls.Add(this.vertexScale);
 			groupBox1.Controls.Add(this.cbSynchCameras);
 			groupBox1.Controls.Add(this.darktheme);
+			groupBox1.Controls.Add(this.checkforupdates);
 			groupBox1.Controls.Add(this.showtexturesizes);
 			groupBox1.Controls.Add(this.scriptontop);
 			groupBox1.Controls.Add(this.zoomfactor);
@@ -421,6 +423,16 @@ namespace CodeImp.DoomBuilder.Windows
 			this.darktheme.TabIndex = 55;
 			this.darktheme.Text = "Dark theme";
 			this.darktheme.UseVisualStyleBackColor = true;
+			// 
+			// checkforupdates
+			// 
+			this.checkforupdates.AutoSize = true;
+			this.checkforupdates.Location = new System.Drawing.Point(16, 392);
+			this.checkforupdates.Name = "checkforupdates";
+			this.checkforupdates.Size = new System.Drawing.Size(160, 17);
+			this.checkforupdates.TabIndex = 56;
+			this.checkforupdates.Text = "Check for updates at startup";
+			this.checkforupdates.UseVisualStyleBackColor = true;
 			// 
 			// showtexturesizes
 			// 
@@ -2610,6 +2622,7 @@ namespace CodeImp.DoomBuilder.Windows
 		private CodeImp.DoomBuilder.Controls.TransparentTrackBar tbDynLightCount;
 		private System.Windows.Forms.CheckBox cbSynchCameras;
 		private System.Windows.Forms.CheckBox darktheme;
+		private System.Windows.Forms.CheckBox checkforupdates;
 		private System.Windows.Forms.CheckBox cbStretchView;
 		private System.Windows.Forms.ToolTip toolTip1;
 		private CodeImp.DoomBuilder.Controls.TransparentTrackBar vertexScale;

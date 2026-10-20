@@ -9,3 +9,6 @@ obj
 /Build/Plugins/*.dll
 /Build/Builder.pdb
 /Build/Builder.exe.config
+/Build/Updater.exe
+/Build/Updater.exe.config
+/Source/Tools/Updater/bin

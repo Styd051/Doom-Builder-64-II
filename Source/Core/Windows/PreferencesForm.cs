@@ -104,6 +104,7 @@ namespace CodeImp.DoomBuilder.Windows
 			toolbar_gzdoom.Checked = General.Settings.GZToolbarGZDoom;
 			cbSynchCameras.Checked = General.Settings.GZSynchCameras;
 			darktheme.Checked = General.Settings.DarkTheme; // styd
+			checkforupdates.Checked = General.Settings.CheckForUpdates; // styd (mxd)
 			tbDynLightCount.Value = General.Clamp(General.Settings.GZMaxDynamicLights / 16, tbDynLightCount.Minimum, tbDynLightCount.Maximum);
 			labelDynLightCount.Text = General.Settings.GZMaxDynamicLights.ToString();
 			cbStretchView.Checked = General.Settings.GZStretchView;
@@ -425,6 +426,7 @@ namespace CodeImp.DoomBuilder.Windows
 			//mxd
 			General.Settings.GZSynchCameras = cbSynchCameras.Checked;
 			General.Settings.DarkTheme = darktheme.Checked; // styd
+			General.Settings.CheckForUpdates = checkforupdates.Checked; // styd (mxd)
 			General.Settings.GZMaxDynamicLights = tbDynLightCount.Value * 16;
 			General.Settings.FilterAnisotropy = D3DDevice.AF_STEPS[anisotropicfiltering.Value];
 			General.Settings.AntiAliasingSamples = D3DDevice.AA_STEPS[antialiasing.Value];

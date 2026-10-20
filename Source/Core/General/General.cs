@@ -730,6 +730,9 @@ namespace CodeImp.DoomBuilder
 					}
 				}
 
+				// styd: check for a new version of Doom Builder 64 II (mxd); not in a session without a window
+				if(General.Settings.CheckForUpdates && !delaymainwindow) UpdateChecker.PerformCheck(false);
+
 				// Run application from the main window
 				Application.Run(mainwindow);
 			}

@@ -5,10 +5,10 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Reflection;
-using System.Security.AccessControl;
-using System.Security.Principal;
 using System.Threading;
 using System.Windows.Forms;
 using SharpCompress.Archives;
@@ -18,22 +18,30 @@ using SharpCompress.Readers;
 
 namespace mxd.GZDBUpdater
 {
-    public partial class MainForm : Form
+	// styd: the updater of Doom Builder 64 II. The editor starts it from a folder of its own (so that it can replace
+	// the Updater.exe of the editor too) with the folder of the editor and the release to install:
+	//   -app <folder> -version <version> -url <file of the release> -size <bytes> -page <page of the release>
+	// It downloads the file, unpacks it, has the editor closed, installs the files (the replaced files are kept
+	// aside, and put back if anything fails) and starts the editor again.
+	public partial class MainForm : Form
 	{
 		#region ======================== Variables
 
-		private string processToEnd = string.Empty;
-		private string downloadFile = string.Empty;
-        private string platform = string.Empty;
-		private const string revisionwildcard = "[REVNUM]";
-        private const string platformwildcard = "[PLATFORM]";
-		private string URL = string.Empty;
-        private readonly string updateFolder = Application.StartupPath + @"\_update\";
-		private string appFileName = string.Empty;
-	    private static BackgroundWorker worker;
-	    private static bool appclosing;
-	    private static MainForm me;
-		private const string MESSAGEBOX_TITLE = "GZDoom Builder Updater";
+		private const string processToEnd = "Builder";
+		private const string appFileName = "Builder.exe";
+		private string appFolder = string.Empty;
+		private string URL = string.Empty; // The page of the release, to download it manually
+		private string packageUrl = string.Empty;
+		private long packageSize;
+		private Version version;
+		private readonly string updateFolder = Path.Combine(Application.StartupPath, "_update") + "\\";
+		private static BackgroundWorker worker;
+		private static bool appclosing;
+		private static bool installing;
+		private static bool keepbackup;
+		private static MainForm me;
+		private IntPtr handle;
+		private const string MESSAGEBOX_TITLE = "Doom Builder 64 II Updater";
 
 		#endregion
 
@@ -42,36 +50,36 @@ namespace mxd.GZDBUpdater
 		private delegate void SetLabelCallback(Label label, string text);
 		private delegate void UpdateProgressBarCallback(ByteArgs args, int step, int totalsteps);
 		private delegate void CloseDelegate();
+		private delegate DialogResult AskDelegate();
 
 		#endregion
 
 		#region ======================== Properties
 
 		public static string ErrorDescription;
-	    public static bool AppClosing { get { return appclosing; } }
-	    public static Icon AppIcon { get { return me.Icon; } }
+		public static bool AppClosing { get { return appclosing; } }
+		public static Icon AppIcon { get { return me.Icon; } }
 
-	    #endregion
+		private string PackageFile { get { return updateFolder + "package" + (packageUrl.EndsWith(".7z", StringComparison.OrdinalIgnoreCase) ? ".7z" : ".zip"); } }
+		private string StagingFolder { get { return updateFolder + "files\\"; } }
+		private string BackupFolder { get { return updateFolder + "backup\\"; } }
+
+		#endregion
 
 		#region ======================== Constructor
 
 		public MainForm()
-        {
-            if(!CheckPremissions(Application.StartupPath))
-            {
-                ErrorDescription = "Update failed: your user account does not have write access to the destination folder \"" + Application.StartupPath + "\"\n\nMove the editor to a folder with write access,\nor run the updater as Administrator.";
-                InvokeClose();
-            }
-            else if(!File.Exists("Updater.ini"))
-			{
-				ErrorDescription = "Unable to locate 'Updater.ini'...";
-				InvokeClose();
-			}
-            else if(!LoadConfig("Updater.ini"))
+		{
+			if(!ReadArguments(Environment.GetCommandLineArgs()))
 			{
 				InvokeClose();
 			}
-    		else
+			else if(!CheckPremissions(appFolder))
+			{
+				ErrorDescription = "Update failed: your user account does not have write access to the destination folder \"" + appFolder + "\"\n\nMove the editor to a folder with write access,\nor run the editor as Administrator.";
+				InvokeClose();
+			}
+			else
 			{
 				me = this;
 				InitializeComponent();
@@ -82,24 +90,34 @@ namespace mxd.GZDBUpdater
 
 		#region ======================== Updater thread
 
-	    private void BackgroundWorker(object sender, DoWorkEventArgs e)
-        {
-			UpdateLabel(label1, "1/6: Checking revisions...");
+		private void BackgroundWorker(object sender, DoWorkEventArgs e)
+		{
+			UpdateLabel(label1, "1/6: Checking version...");
 			if(!UpdateRequired())
 			{
 				e.Cancel = true;
 				return;
 			}
-            PreDownload();
+			PreDownload();
 
 			UpdateLabel(label1, "2/6: Downloading Update...");
 			Webdata.BytesDownloaded += WebdataOnBytesDownloaded;
-            if(!Webdata.SaveWebFile(URL, downloadFile, updateFolder))
-            {
-                e.Cancel = true;
-				Webdata.BytesDownloaded -= WebdataOnBytesDownloaded;
+			bool downloaded = Webdata.SaveWebFile(packageUrl, packageSize, PackageFile);
+			Webdata.BytesDownloaded -= WebdataOnBytesDownloaded;
+			if(!downloaded)
+			{
+				e.Cancel = true;
 				return;
-            }
+			}
+
+			// The package is checked and unpacked before the editor is closed
+			UpdateLabel(label1, "3/6: Decompressing package...");
+			Thread.Sleep(500);
+			if(!Unpack(PackageFile, StagingFolder))
+			{
+				e.Cancel = true;
+				return;
+			}
 
 			// Check if the editor is running...
 			if(!EditorClosed())
@@ -109,20 +127,19 @@ namespace mxd.GZDBUpdater
 				return;
 			}
 
-			UpdateLabel(label1, "4/6: Decompressing package...");
-            Thread.Sleep(500);
-			if(!Unpack(updateFolder + downloadFile, Application.StartupPath))
+			UpdateLabel(label1, "5/6: Moving files...");
+			Thread.Sleep(500);
+			installing = true;
+			bool moved = MoveFiles(StagingFolder);
+			installing = false;
+			if(!moved)
 			{
 				e.Cancel = true;
 				return;
 			}
 
-			UpdateLabel(label1, "5/6: Moving files...");
-            Thread.Sleep(500);
-            MoveFiles();
-            
 			UpdateLabel(label1, "6/6: Wrapping up...");
-            Thread.Sleep(500);
+			Thread.Sleep(500);
 			PostDownload();
 		}
 
@@ -130,24 +147,20 @@ namespace mxd.GZDBUpdater
 		{
 			try
 			{
-				// Gather processes...
-				List<Process> toclose = GetProcesses(processToEnd);
-
-				// Ask the user how to proceed...
-				if(toclose.Count > 0)
+				while(EditorProcess.GetProcesses(processToEnd, appFolder).Count > 0)
 				{
-					TaskbarProgress.SetState(this.Handle, TaskbarProgress.TaskbarStates.Paused);
-					UpdateBlockedForm form = new UpdateBlockedForm();
-					switch(form.ShowDialog(this))
-					{
-						case DialogResult.Cancel: return false;
-						case DialogResult.OK:
-							UpdateLabel(label1, "3/6: Stopping " + processToEnd);
-							Thread.Sleep(50);
-							toclose = GetProcesses(processToEnd); // Re-gather processes
-							foreach(Process p in toclose) if(p != null) p.Kill();
-							return true;
-					}
+					// Ask the user how to proceed...
+					TaskbarProgress.SetState(handle, TaskbarProgress.TaskbarStates.Paused);
+					DialogResult result = (DialogResult)this.Invoke(new AskDelegate(AskToCloseEditor));
+					TaskbarProgress.SetState(handle, TaskbarProgress.TaskbarStates.Normal);
+					if(result != DialogResult.OK || appclosing) return false;
+
+					// styd: the editor is closed as with its close button: it asks to save the map. It is never killed.
+					UpdateLabel(label1, "4/6: Closing the editor...");
+					if(EditorProcess.CloseAndWait(processToEnd, appFolder, EditorProcess.CLOSE_TIMEOUT, () => appclosing)) break;
+					if(appclosing) return false;
+
+					// Still running: the closing was canceled in the editor. Ask again.
 				}
 			}
 			catch(Exception ex)
@@ -159,23 +172,15 @@ namespace mxd.GZDBUpdater
 			return true;
 		}
 
-		private static List<Process> GetProcesses(string processToEnd)
-	    {
-			Process[] processes = Process.GetProcesses();
-			List<Process> toclose = new List<Process>();
-
-			// Gather all running editor processes...
-			foreach(Process process in processes)
+		private DialogResult AskToCloseEditor()
+		{
+			using(UpdateBlockedForm form = new UpdateBlockedForm())
 			{
-				if(process.ProcessName == processToEnd 
-					&& Path.GetDirectoryName(process.MainModule.FileName) == Application.StartupPath)
-					toclose.Add(process);
+				return form.ShowDialog(this);
 			}
+		}
 
-			return toclose;
-	    }
-
-	    private static void StopBackgroundWorker()
+		private static void StopBackgroundWorker()
 		{
 			if(worker != null && !worker.CancellationPending)
 			{
@@ -238,208 +243,301 @@ namespace mxd.GZDBUpdater
 				Close();
 			}
 		}
-		
-		private bool UpdateRequired()
+
+		// The editor gives the folder of the editor and the release to install
+		private bool ReadArguments(string[] args)
 		{
-			// Get local revision number
-			int localrev = -1;
-			if(File.Exists(appFileName))
-			{
-				var info = FileVersionInfo.GetVersionInfo(appFileName);
-				localrev = info.ProductPrivatePart;
-			}
-			
-			// Get remote revision number
-			int remoterev;
-			using(MemoryStream stream = Webdata.DownloadWebFile(Path.Combine(URL, "Versions.txt")))
-			{
-				if(stream == null)
-				{
-					if(string.IsNullOrEmpty(ErrorDescription)) ErrorDescription = "Failed to retrieve remote revision info.";
-					return false;
-				}
+			Dictionary<string, string> values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+			for(int i = 1; i + 1 < args.Length; i += 2) values[args[i]] = args[i + 1];
 
-				string s;
-				using(StreamReader reader = new StreamReader(stream))
-				{
-					s = reader.ReadLine(); // First line should be editor revision
-				}
-
-				if(!int.TryParse(s, out remoterev))
-				{
-					ErrorDescription = "Failed to retrieve remote revision number.";
-					return false;
-				}
-			}
-
-			// Replace wildcard with remoterev
-			downloadFile = downloadFile.Replace(revisionwildcard, remoterev.ToString());
-            downloadFile = downloadFile.Replace(platformwildcard, platform.ToString());
-
-            if (remoterev > 0 && remoterev <= localrev)
-			{
-				URL = string.Empty;
-				ErrorDescription = "Your version is up to date!";
-			}
-			return remoterev > localrev;
-		}
-
-		private bool LoadConfig(string filename)
-		{
-			string[] lines = File.ReadAllLines(filename);
-			foreach (string line in lines)
-			{
-				if(line.StartsWith("URL"))
-				{
-					URL = line.Substring(3).Trim();
-				} 
-				else if(line.StartsWith("FileName"))
-				{
-					appFileName = line.Substring(8).Trim();
-					processToEnd = Path.GetFileNameWithoutExtension(appFileName);
-				}
-				else if(line.StartsWith("UpdateName"))
-				{
-					downloadFile = line.Substring(10).Trim();
-				}
-                else if(line.StartsWith("Platform"))
-                {
-                    platform = line.Substring(9).Trim();
-                }
-			}
+			string value;
+			if(values.TryGetValue("-app", out value)) appFolder = value.TrimEnd('\\');
+			if(values.TryGetValue("-url", out value)) packageUrl = value;
+			if(values.TryGetValue("-page", out value)) URL = value;
+			if(values.TryGetValue("-size", out value)) long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out packageSize);
+			if(values.TryGetValue("-version", out value)) version = EditorProcess.ParseVersion(value);
 
 			// Sanity cheks
-			if(string.IsNullOrEmpty(URL))
+			if(string.IsNullOrEmpty(appFolder) || string.IsNullOrEmpty(packageUrl) || version == null)
 			{
-				ErrorDescription = "URL is not specified in " + filename + "!";
+				URL = string.Empty;
+				ErrorDescription = "The updater is started by Doom Builder 64 II (Help -> Check for updates...).";
 				return false;
 			}
 
-			if(string.IsNullOrEmpty(appFileName) || string.IsNullOrEmpty(processToEnd))
+			if(!File.Exists(Path.Combine(appFolder, appFileName)))
 			{
-				ErrorDescription = "FileName is not specified in " + filename + "!";
-				return false;
-			}
-
-			if(string.IsNullOrEmpty(downloadFile) || !downloadFile.Contains(revisionwildcard))
-			{
-				ErrorDescription = "UpdateName is invalid or not specified in " + filename + "!";
+				ErrorDescription = "Unable to locate '" + appFileName + "' in \"" + appFolder + "\"...";
 				return false;
 			}
 
 			return true;
 		}
 
-        private bool Unpack(string file, string unZipTo)
-        {
-            try
-            {
-				using(IArchive arc = ArchiveFactory.Open(file))
+		private bool UpdateRequired()
+		{
+			// Get local version (styd: the version of Doom Builder 64 II; an older editor only has a revision)
+			FileVersionInfo info = FileVersionInfo.GetVersionInfo(Path.Combine(appFolder, appFileName));
+			Version localversion = (info.ProductVersion != info.FileVersion ? EditorProcess.ParseVersion(info.ProductVersion) : null);
+
+			if(localversion != null && version <= localversion)
+			{
+				URL = string.Empty;
+				ErrorDescription = "Your version is up to date!";
+				return false;
+			}
+
+			return true;
+		}
+
+		// Unpacks the files of the folder of the package that holds Builder.exe
+		private bool Unpack(string file, string unZipTo)
+		{
+			try
+			{
+				if(Directory.Exists(unZipTo)) Directory.Delete(unZipTo, true);
+				Directory.CreateDirectory(unZipTo);
+
+				if(file.EndsWith(".7z", StringComparison.OrdinalIgnoreCase))
 				{
-					if(!arc.IsComplete)
+					using(IArchive arc = ArchiveFactory.Open(file))
 					{
-						ErrorDescription = "Update failed: downloaded file is not complete...";
-						return false;
-					}
+						if(!arc.IsComplete)
+						{
+							ErrorDescription = "Update failed: downloaded file is not complete...";
+							return false;
+						}
 
-					IReader reader = arc.ExtractAllEntries();
+						// Find the folder of the editor
+						List<string> keys = new List<string>();
+						IReader reader = arc.ExtractAllEntries();
+						while(reader.MoveToNextEntry()) keys.Add((reader.Entry.IsDirectory ? reader.Entry.Key.TrimEnd('/', '\\') + "/" : reader.Entry.Key));
+						string root = FindRoot(keys);
+						if(root == null) return false;
 
-					// Get number of files...
-					int curentry = 0;
-					int totalentries = arc.NumEntries;
-
-					string ourname = Path.GetFileName(Process.GetCurrentProcess().MainModule.FileName);
-
-					// Unpack all
-					ExtractionOptions options = new ExtractionOptions {ExtractFullPath = true, Overwrite = true};
-					while(reader.MoveToNextEntry())
-					{
-						if(appclosing) break;
-						if(reader.Entry.IsDirectory || Path.GetFileName(reader.Entry.Key) == ourname) continue; // Don't try to overrite ourselves...
-						reader.WriteEntryToDirectory(unZipTo, options);
-						UpdateProgressBar(new ByteArgs { Downloaded = curentry++, Total = totalentries }, 1, 2);
+						// Unpack it
+						int curentry = 0;
+						reader = arc.ExtractAllEntries();
+						while(reader.MoveToNextEntry())
+						{
+							if(appclosing) return false;
+							string target = TargetPath(reader.Entry.Key, root, unZipTo, reader.Entry.IsDirectory);
+							if(target == null) continue;
+							if(!reader.Entry.IsDirectory)
+							{
+								using(FileStream stream = File.Create(target)) reader.WriteEntryTo(stream);
+							}
+							UpdateProgressBar(new ByteArgs { Downloaded = curentry++, Total = keys.Count }, 1, 2);
+						}
 					}
 				}
-            } 
-			catch(Exception e) 
-			{ 
+				else
+				{
+					using(ZipArchive arc = new ZipArchive(File.OpenRead(file), ZipArchiveMode.Read))
+					{
+						List<string> keys = new List<string>();
+						foreach(ZipArchiveEntry entry in arc.Entries) keys.Add(entry.FullName);
+						string root = FindRoot(keys);
+						if(root == null) return false;
+
+						int curentry = 0;
+						foreach(ZipArchiveEntry entry in arc.Entries)
+						{
+							if(appclosing) return false;
+							bool isdirectory = entry.FullName.EndsWith("/") || entry.FullName.EndsWith("\\");
+							string target = TargetPath(entry.FullName, root, unZipTo, isdirectory);
+							if(target == null) continue;
+							if(!isdirectory)
+							{
+								using(Stream source = entry.Open())
+								using(FileStream stream = File.Create(target))
+									source.CopyTo(stream);
+							}
+							UpdateProgressBar(new ByteArgs { Downloaded = curentry++, Total = keys.Count }, 1, 2);
+						}
+					}
+				}
+			}
+			catch(Exception e)
+			{
 				ErrorDescription = "Update failed: failed to unpack the update...\n" + e.Message;
 				return false;
 			}
 
-	        return true;
-        }
+			return true;
+		}
 
-        private static bool CheckPremissions(string path)
-        {
-            try
-            {
-                DirectoryInfo di = new DirectoryInfo(path);
-                DirectorySecurity acl = di.GetAccessControl();
-                AuthorizationRuleCollection rules = acl.GetAccessRules(true, true, typeof(NTAccount));
+		// The folder of the package that holds Builder.exe ("" when it is at the top), or null when there is none
+		private static string FindRoot(List<string> keys)
+		{
+			string root = null;
+			foreach(string key in keys)
+			{
+				string path = key.Replace('\\', '/');
+				int slash = path.LastIndexOf('/');
+				if(!string.Equals(path.Substring(slash + 1), appFileName, StringComparison.OrdinalIgnoreCase)) continue;
 
-                WindowsIdentity currentUser = WindowsIdentity.GetCurrent();
-                WindowsPrincipal principal = new WindowsPrincipal(currentUser);
-                foreach(AuthorizationRule rule in rules)
-                {
-                    FileSystemAccessRule fsAccessRule = rule as FileSystemAccessRule;
-                    if(fsAccessRule == null) continue;
+				string folder = path.Substring(0, slash + 1);
+				if(root == null || folder.Length < root.Length) root = folder;
+			}
 
-                    if((fsAccessRule.FileSystemRights & FileSystemRights.WriteData) > 0)
-                    {
-                        NTAccount ntAccount = rule.IdentityReference as NTAccount;
-                        if(ntAccount == null) continue;
-                        if(principal.IsInRole(ntAccount.Value)) return true;
-                    }
-                }
-            }
-            catch(UnauthorizedAccessException) { }
+			if(root == null) ErrorDescription = "Update failed: the downloaded file is not a package of Doom Builder 64 II (there is no " + appFileName + " in it)...";
+			return root;
+		}
 
-            return false;
-        }
+		// Where an entry of the package goes (its folders are made), or null when it is not in the folder of the editor
+		private static string TargetPath(string key, string root, string folder, bool isdirectory)
+		{
+			string path = key.Replace('\\', '/');
+			if(!path.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return null;
+			string relative = path.Substring(root.Length).Trim('/');
+			if(relative.Length == 0) return null;
 
-	    private void PreDownload()
-        {
-            if(!Directory.Exists(updateFolder)) Directory.CreateDirectory(updateFolder);
-        }
+			// Nothing may go outside of the folder
+			foreach(string part in relative.Split('/'))
+			{
+				if(part.Length == 0 || part == "." || part == ".." || part.IndexOf(':') != -1)
+					throw new InvalidDataException("invalid path in the package: \"" + key + "\"");
+			}
 
-        private void PostDownload()
-        {
-            if(!File.Exists(appFileName))
-            {
-	            ErrorDescription = "Unable to located updated executable ('" + appFileName + "')";
+			string target = Path.Combine(folder, relative.Replace('/', '\\'));
+			Directory.CreateDirectory(isdirectory ? target : Path.GetDirectoryName(target));
+			return target;
+		}
+
+		private static bool CheckPremissions(string path)
+		{
+			// styd: a file is made and removed (the rules of a folder do not tell everything)
+			try
+			{
+				string file = Path.Combine(path, "_updater_write_test.tmp");
+				using(File.Create(file)) { }
+				File.Delete(file);
+				return true;
+			}
+			catch(Exception)
+			{
+				return false;
+			}
+		}
+
+		private void PreDownload()
+		{
+			if(!Directory.Exists(updateFolder)) Directory.CreateDirectory(updateFolder);
+		}
+
+		private void PostDownload()
+		{
+			string file = Path.Combine(appFolder, appFileName);
+			if(!File.Exists(file))
+			{
+				ErrorDescription = "Unable to located updated executable ('" + file + "')";
 				return;
-            }
+			}
 
 			if(appclosing) return;
-			Process.Start(new ProcessStartInfo { FileName = appFileName });
-        }
+			Process.Start(new ProcessStartInfo { FileName = file, WorkingDirectory = appFolder });
+		}
 
-        private void WrapUp()
-        {
-			if(Directory.Exists(updateFolder)) Directory.Delete(updateFolder, true);
-        }
+		private void WrapUp()
+		{
+			try
+			{
+				if(keepbackup)
+				{
+					// The files that could not be put back are still there: only the rest goes
+					if(Directory.Exists(StagingFolder)) Directory.Delete(StagingFolder, true);
+					if(File.Exists(PackageFile)) File.Delete(PackageFile);
+				}
+				else if(Directory.Exists(updateFolder))
+				{
+					Directory.Delete(updateFolder, true);
+				}
+			}
+			catch(Exception) { }
+		}
 
-        private void MoveFiles()
-        {
-			DirectoryInfo di = new DirectoryInfo(updateFolder);
-            FileInfo[] files = di.GetFiles();
+		// Copies the unpacked files to the folder of the editor; the replaced files are kept, to put them back if anything fails
+		private bool MoveFiles(string staging)
+		{
+			List<string> replaced = new List<string>();
+			List<string> added = new List<string>();
+			string backup = BackupFolder;
 
-            foreach(FileInfo fi in files)
-            {
-				if(fi.Name != downloadFile) File.Copy(updateFolder + fi.Name, Application.StartupPath + fi.Name, true);
-            }
-        }
+			try
+			{
+				string[] files = Directory.GetFiles(staging, "*", SearchOption.AllDirectories);
+				for(int i = 0; i < files.Length; i++)
+				{
+					string relative = files[i].Substring(staging.Length);
+					string target = Path.Combine(appFolder, relative);
+
+					// The load order of the plugins is the user's (the installer does not replace it either)
+					if(File.Exists(target) && string.Equals(relative, @"Plugins\Loadorder.cfg", StringComparison.OrdinalIgnoreCase)) continue;
+
+					Directory.CreateDirectory(Path.GetDirectoryName(target));
+					if(File.Exists(target))
+					{
+						string kept = Path.Combine(backup, relative);
+						Directory.CreateDirectory(Path.GetDirectoryName(kept));
+						File.Copy(target, kept, true);
+						replaced.Add(relative);
+					}
+					else
+					{
+						added.Add(relative);
+					}
+
+					File.Copy(files[i], target, true);
+					UpdateProgressBar(new ByteArgs { Downloaded = i, Total = files.Length }, 1, 2);
+				}
+
+				// Empty folders too
+				foreach(string folder in Directory.GetDirectories(staging, "*", SearchOption.AllDirectories))
+					Directory.CreateDirectory(Path.Combine(appFolder, folder.Substring(staging.Length)));
+			}
+			catch(Exception e)
+			{
+				// Put everything back
+				List<string> failed = new List<string>();
+				foreach(string relative in replaced)
+				{
+					try { File.Copy(Path.Combine(backup, relative), Path.Combine(appFolder, relative), true); }
+					catch(Exception) { failed.Add(relative); }
+				}
+				foreach(string relative in added)
+				{
+					try { File.Delete(Path.Combine(appFolder, relative)); }
+					catch(Exception) { }
+				}
+
+				ErrorDescription = "Update failed: failed to install the files of the update...\n" + e.Message;
+				if(failed.Count == 0)
+				{
+					ErrorDescription += "\n\nThe editor was left as it was.";
+				}
+				else
+				{
+					keepbackup = true;
+					ErrorDescription += "\n\n" + failed.Count + " file(s) of the editor could not be put back. They are kept in \"" + backup + "\":\n" + string.Join("\n", failed.GetRange(0, Math.Min(10, failed.Count)));
+				}
+
+				return false;
+			}
+
+			return true;
+		}
 
 		private void UpdateProgressBar(ByteArgs e, int step, int totalsteps)
-        {
+		{
 			if(progressbar.InvokeRequired)
 			{
 				UpdateProgressBarCallback d = UpdateProgressBar;
 				progressbar.Invoke(d, new object[] { e, step, totalsteps });
-			} 
-			else 
+			}
+			else
 			{
+				if(e.Total <= 0) return;
 				int stepsize = (int)Math.Round((float)progressbar.Maximum / totalsteps);
 				float ratio = (float)e.Downloaded / e.Total;
 				int val = (int)Math.Floor(stepsize * step + stepsize * ratio);
@@ -460,8 +558,9 @@ namespace mxd.GZDBUpdater
 
 		private void MainForm_Load(object sender, EventArgs e)
 		{
-			Version version = Assembly.GetEntryAssembly().GetName().Version;
-			this.Text += " v" + version.Major + "." + version.Revision.ToString("#00");
+			Version assemblyversion = Assembly.GetEntryAssembly().GetName().Version;
+			this.Text += " v" + assemblyversion.Major + "." + assemblyversion.Revision.ToString("#00");
+			handle = this.Handle;
 
 			worker = new BackgroundWorker();
 			worker.DoWork += BackgroundWorker;
@@ -472,6 +571,9 @@ namespace mxd.GZDBUpdater
 
 		private void cancel_Click(object sender, EventArgs e)
 		{
+			// styd: the files are being replaced: that ends first
+			if(installing) return;
+
 			ErrorDescription = string.Empty;
 			appclosing = true;
 			StopBackgroundWorker();
@@ -480,6 +582,13 @@ namespace mxd.GZDBUpdater
 
 		private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
 		{
+			// styd: the files are being replaced: that ends first
+			if(installing && e.CloseReason == CloseReason.UserClosing)
+			{
+				e.Cancel = true;
+				return;
+			}
+
 			appclosing = true;
 			StopBackgroundWorker();
 		}

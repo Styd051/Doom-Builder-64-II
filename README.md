@@ -39,6 +39,13 @@ edited: Doom 64 is one more map format.
 - Open `Builder.sln` in Visual Studio (the .NET Framework 4.6.1 targeting pack is required) and build the
   Release configuration for x86. The editor is built into the `Build` folder.
 
+**Making a release:**
+- Set the version of the release in `Source/Core/Properties/AssemblyInfo.cs`
+  (`[assembly: AssemblyInformationalVersion("1.1.0")]`), then build the Release configuration for x86.
+- Zip the `Build` folder (with `Updater.exe`) and publish it on GitHub as a release whose tag is the same version
+  (`V1.1.0`), with the `.zip` file attached. "Check for updates" in the editor compares its version with the tags
+  of the releases, then downloads and installs the `.zip` file of the newest one.
+
 **Credits:**
 - Doom Builder 64 II is modified and maintained by Styd051.
 - Doom Builder 64 was made by Kaiser (villsa).

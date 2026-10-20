@@ -31,5 +31,10 @@ using CodeImp.DoomBuilder;
 //      Revision
 //
 [assembly: AssemblyVersion("2.3.0.3112")]
+
+// styd: the version of Doom Builder 64 II. Change it before building a release, and give the release on GitHub
+// the same number as its tag (V1.1.0 for 1.1.0): the editor compares it with the tags of the releases to find
+// an update. The version above is the revision of GZDoom Builder Bugfix, the base of the editor: keep it.
+[assembly: AssemblyInformationalVersion("1.0.0")]
 [assembly: NeutralResourcesLanguageAttribute("en")]
 [assembly: AssemblyHash("37c52b4")]

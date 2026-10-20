@@ -3354,6 +3354,12 @@ namespace CodeImp.DoomBuilder.Windows
 			itemhelpeditmode.Enabled = (General.Map != null && General.Editing.Mode != null);
 		}
 
+		//mxd. Check updates clicked
+		private void itemhelpcheckupdates_Click(object sender, EventArgs e)
+		{
+			UpdateChecker.PerformCheck(true);
+		}
+
 		//mxd. Github issues clicked
 		private void itemhelpissues_Click(object sender, EventArgs e)
 		{
@@ -4656,6 +4662,31 @@ namespace CodeImp.DoomBuilder.Windows
 			}
 		}
 		
+		#endregion
+
+		#region ================== Updater (mxd)
+
+		private delegate void UpdateAvailableCallback(UpdateInfo info);
+		internal void UpdateAvailable(UpdateInfo info)
+		{
+			if(this.InvokeRequired)
+			{
+				UpdateAvailableCallback d = UpdateAvailable;
+				this.Invoke(d, new object[] { info });
+			} 
+			else 
+			{
+				// Show the window
+				UpdateForm form = new UpdateForm(info);
+				form.FormClosing += delegate
+				{
+					// Update ignored version (styd: a version of Doom Builder 64 II)
+					General.Settings.IgnoredUpdateVersion = (form.IgnoreThisUpdate ? UpdateChecker.VersionText(info.Version) : string.Empty);
+				};
+				form.Show(this);
+			}
+		}
+
 		#endregion
 
 		#region ================== Graphics (mxd)

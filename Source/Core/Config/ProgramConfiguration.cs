@@ -126,6 +126,8 @@ namespace CodeImp.DoomBuilder.Config
 		private Doom64SpawnerMode doom64SpawnerThings; // styd
 		private bool doom64SpawnPreviewOnAim; // styd
 		private bool darkTheme; // styd
+		private bool checkforupdates; // styd (mxd)
+		private string ignoredupdateversion; // styd
 		private bool doom64SwitchPreviewOnAim; // styd
 		private float doom64DisplayBrightness; // styd
 		private bool gzToolbarGZDoom;
@@ -256,6 +258,8 @@ namespace CodeImp.DoomBuilder.Config
 		public Doom64SpawnerMode Doom64SpawnerThings { get { return doom64SpawnerThings; } internal set { doom64SpawnerThings = value; } } // styd
 		public bool Doom64SpawnPreviewOnAim { get { return doom64SpawnPreviewOnAim; } internal set { doom64SpawnPreviewOnAim = value; } } // styd
 		public bool DarkTheme { get { return darkTheme; } internal set { darkTheme = value; } } // styd
+		internal bool CheckForUpdates { get { return checkforupdates; } set { checkforupdates = value; } } // styd (mxd)
+		internal string IgnoredUpdateVersion { get { return ignoredupdateversion; } set { ignoredupdateversion = value; } } // styd
 		public bool Doom64SwitchPreviewOnAim { get { return doom64SwitchPreviewOnAim; } internal set { doom64SwitchPreviewOnAim = value; } } // styd
 		public float Doom64DisplayBrightness { get { return doom64DisplayBrightness; } internal set { doom64DisplayBrightness = value; } } // styd
 		public bool GZToolbarGZDoom { get { return gzToolbarGZDoom; } internal set { gzToolbarGZDoom = value; } }
@@ -396,6 +400,8 @@ namespace CodeImp.DoomBuilder.Config
 				doom64SpawnerThings = (Doom64SpawnerMode)General.Clamp(cfg.ReadSetting("doom64spawnerthings", (int)Doom64SpawnerMode.GHOST), 0, 2); // styd
 				doom64SpawnPreviewOnAim = cfg.ReadSetting("doom64spawnpreviewonaim", true); // styd
 				darkTheme = cfg.ReadSetting("darktheme", false); // styd
+				checkforupdates = cfg.ReadSetting("checkforupdates", true); // styd (mxd)
+				ignoredupdateversion = cfg.ReadSetting("ignoredupdateversion", string.Empty); // styd
 				doom64SwitchPreviewOnAim = cfg.ReadSetting("doom64switchpreviewonaim", true); // styd
 				doom64DisplayBrightness = General.Clamp(cfg.ReadSetting("doom64displaybrightness", 1.0f), 0.0f, 2.0f); // styd
 				gzToolbarGZDoom = cfg.ReadSetting("gztoolbargzdoom", true);
@@ -517,6 +523,8 @@ namespace CodeImp.DoomBuilder.Config
 			cfg.WriteSetting("doom64spawnerthings", (int)doom64SpawnerThings); // styd
 			cfg.WriteSetting("doom64spawnpreviewonaim", doom64SpawnPreviewOnAim); // styd
 			cfg.WriteSetting("darktheme", darkTheme); // styd
+			cfg.WriteSetting("checkforupdates", checkforupdates); // styd (mxd)
+			cfg.WriteSetting("ignoredupdateversion", ignoredupdateversion); // styd
 			cfg.WriteSetting("doom64switchpreviewonaim", doom64SwitchPreviewOnAim); // styd
 			cfg.WriteSetting("doom64displaybrightness", doom64DisplayBrightness); // styd
 			cfg.WriteSetting("gzsynchcameras", gzSynchCameras);
