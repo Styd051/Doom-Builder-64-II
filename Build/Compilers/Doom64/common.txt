@@ -158,3 +158,16 @@
 #define Blue_Artifact_Switch(tag)                       91:tag
 #define Purple_Artifact_Switch(tag)                     92:tag
 #define Start_Light_Strobing(tag)                       17:tag
+
+//
+// OLD NAMES (the first common.txt of BLAM), so that older scripts still compile;
+// Floor_RaiseToNearest was 30 there: it is 119 above (30 is Floor_RaiseToTexture)
+//
+#define Ceiling_RaiseCrushOnce(tag)                     25:tag
+#define Ceiling_RaiseCrush2(tag)                        44:tag
+#define Plat_DownWaitUp24(tag)                          66:tag
+#define Plat_DownWaitUp32(tag)                          67:tag
+#define Thing_ModifyFlags(tid)                          93:tid
+#define Floor_RaiseToNearest2(tag)                      119:tag
+#define Thing_Dissolve(tid)                             242:tid
+#define Teleport_Stomp(tid)                             249:tid

@@ -35,7 +35,18 @@ namespace CodeImp.DoomBuilder.Compilers
 
 		private const string BLAM_ERROR_FILE = "blam_err.txt";
 
+		// An error in a script is two lines in the error file: "file : message", then "(line = N, pos = M)"
+		private const string ERROR_FILE_SEPARATOR = " : ";
+		private static readonly Regex errorlineregex = new Regex("^\\(line = ([0-9]+), pos = [0-9]+\\)$", RegexOptions.CultureInvariant);
+
 		private static readonly Regex includeregex = new Regex("^\\s*#include\\s+\"([^\"]+)\"", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+
+		#endregion
+
+		#region ================== Variables
+
+		// The include files next to the map that were copied to the temporary directory, by their name in #include
+		private readonly Dictionary<string, string> mapincludes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
 		#endregion
 
@@ -76,9 +87,58 @@ namespace CodeImp.DoomBuilder.Compilers
 				string mapfile = Path.Combine(sourcedir, name);
 				string tempfile = Path.Combine(this.tempdir.FullName, name);
 				if(File.Exists(mapfile) && (string.Compare(Path.GetFullPath(mapfile), Path.GetFullPath(tempfile), true) != 0))
+				{
 					File.Copy(mapfile, tempfile, true);
+					mapincludes[name] = Path.GetFullPath(mapfile);
+				}
 
 				if(File.Exists(tempfile)) CopyMapIncludes(tempfile, sourcedir, done);
+			}
+		}
+
+		// The file of an error. BLAM gives the script by the name it was given (%FI), and an include file with the
+		// directory of -i (%PT) before its name: that is the include next to the map if it was copied there,
+		// otherwise the one that comes with the compiler.
+		private string GetErrorFile(string file)
+		{
+			if(string.Compare(file, inputfile, true) == 0) return Path.Combine(this.workingdir, inputfile);
+
+			string temppath = this.tempdir.FullName + Path.DirectorySeparatorChar;
+			if(!file.StartsWith(temppath, StringComparison.OrdinalIgnoreCase)) return file;
+
+			string name = file.Substring(temppath.Length);
+			string mapfile;
+			if(mapincludes.TryGetValue(name, out mapfile)) return mapfile;
+
+			string compilerfile = Path.Combine(info.Path, name);
+			return (File.Exists(compilerfile) ? compilerfile : file);
+		}
+
+		// This reports the errors of the lines of the error file. An error in a script has its file and its line;
+		// an error of the program itself (a file it cannot write...) is one line, given for the script.
+		private void ReportErrors(string[] lines)
+		{
+			string inputpath = Path.Combine(this.workingdir, inputfile);
+
+			for(int i = 0; i < lines.Length; i++)
+			{
+				if(lines[i].Trim().Length == 0) continue;
+
+				int separator = lines[i].IndexOf(ERROR_FILE_SEPARATOR, StringComparison.Ordinal);
+				Match m = (i + 1 < lines.Length ? errorlineregex.Match(lines[i + 1].Trim()) : Match.Empty);
+				int linenumber;
+
+				if(separator > 0 && m.Success && int.TryParse(m.Groups[1].Value, out linenumber))
+				{
+					// BLAM counts the lines from 1
+					ReportError(new CompilerError(lines[i].Substring(separator + ERROR_FILE_SEPARATOR.Length),
+						GetErrorFile(lines[i].Substring(0, separator)), linenumber - 1));
+					i++;
+				}
+				else
+				{
+					ReportError(new CompilerError(lines[i], inputpath));
+				}
 			}
 		}
 
@@ -145,9 +205,7 @@ namespace CodeImp.DoomBuilder.Compilers
 			{
 				try
 				{
-					// Every line is an error
-					foreach(string line in File.ReadAllLines(errfile))
-						ReportError(new CompilerError(line, Path.Combine(this.workingdir, inputfile)));
+					ReportErrors(File.ReadAllLines(errfile));
 				}
 				catch(Exception e)
 				{
