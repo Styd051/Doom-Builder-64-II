@@ -435,48 +435,48 @@ namespace CodeImp.DoomBuilder.Windows
             // 
             // lightindexlabel
             // 
-            this.lightindexlabel.AutoSize = true;
-            this.lightindexlabel.Location = new System.Drawing.Point(102, 20);
+            this.lightindexlabel.Location = new System.Drawing.Point(101, 20);
             this.lightindexlabel.Name = "lightindexlabel";
-            this.lightindexlabel.Size = new System.Drawing.Size(33, 13);
+            this.lightindexlabel.Size = new System.Drawing.Size(45, 14);
             this.lightindexlabel.TabIndex = 0;
             this.lightindexlabel.Text = "Index";
+            this.lightindexlabel.TextAlign = System.Drawing.ContentAlignment.TopCenter;
             // 
             // lightcolorlabel
             // 
-            this.lightcolorlabel.AutoSize = true;
-            this.lightcolorlabel.Location = new System.Drawing.Point(154, 20);
+            this.lightcolorlabel.Location = new System.Drawing.Point(150, 20);
             this.lightcolorlabel.Name = "lightcolorlabel";
-            this.lightcolorlabel.Size = new System.Drawing.Size(33, 13);
+            this.lightcolorlabel.Size = new System.Drawing.Size(42, 14);
             this.lightcolorlabel.TabIndex = 1;
             this.lightcolorlabel.Text = "Color";
+            this.lightcolorlabel.TextAlign = System.Drawing.ContentAlignment.TopCenter;
             // 
             // lighthexlabel
             // 
-            this.lighthexlabel.AutoSize = true;
             this.lighthexlabel.Location = new System.Drawing.Point(196, 20);
             this.lighthexlabel.Name = "lighthexlabel";
-            this.lighthexlabel.Size = new System.Drawing.Size(33, 13);
+            this.lighthexlabel.Size = new System.Drawing.Size(58, 14);
             this.lighthexlabel.TabIndex = 2;
             this.lighthexlabel.Text = "Hex";
+            this.lighthexlabel.TextAlign = System.Drawing.ContentAlignment.TopCenter;
             // 
             // lighttaglabel
             // 
-            this.lighttaglabel.AutoSize = true;
             this.lighttaglabel.Location = new System.Drawing.Point(264, 20);
             this.lighttaglabel.Name = "lighttaglabel";
-            this.lighttaglabel.Size = new System.Drawing.Size(33, 13);
+            this.lighttaglabel.Size = new System.Drawing.Size(48, 14);
             this.lighttaglabel.TabIndex = 3;
             this.lighttaglabel.Text = "Tag";
+            this.lighttaglabel.TextAlign = System.Drawing.ContentAlignment.TopCenter;
             // 
             // lightintensitylabel
             // 
-            this.lightintensitylabel.AutoSize = true;
-            this.lightintensitylabel.Location = new System.Drawing.Point(362, 20);
+            this.lightintensitylabel.Location = new System.Drawing.Point(364, 20);
             this.lightintensitylabel.Name = "lightintensitylabel";
-            this.lightintensitylabel.Size = new System.Drawing.Size(33, 13);
+            this.lightintensitylabel.Size = new System.Drawing.Size(50, 14);
             this.lightintensitylabel.TabIndex = 4;
             this.lightintensitylabel.Text = "Intensity";
+            this.lightintensitylabel.TextAlign = System.Drawing.ContentAlignment.TopCenter;
             // 
             // ceilingcolor
             // 
